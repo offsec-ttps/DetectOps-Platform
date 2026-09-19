@@ -1,0 +1,91 @@
+# SAR + GOAD Integration: Splunk Universal Forwarder Extension
+# Installs Sysmon and Splunk UF on GOAD Domain Controller,
+# forwarding logs to the SAR Splunk SIEM instance.
+#
+# Run with GOAD's venv: ~/.goad/.venv/bin/ansible-playbook
+
+- name: Install Sysmon on GOAD Domain Controller
+  hosts: splunk_forwarder_targets
+  tasks:
+    - name: Create ansible working directory
+      win_file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - 'c:\Program Files\ansible'
+        - 'c:\ProgramData\ansible\log'
+
+    - name: Check if Sysmon is already installed
+      win_stat:
+        path: 'c:\Program Files\ansible\sysmon'
+      register: sysmon_check
+
+    - name: Download Sysmon
+      win_get_url:
+        url: "{{ sysmon_download_url }}"
+        dest: 'c:\Program Files\ansible\Sysmon.zip'
+        timeout: 120
+      when: not sysmon_check.stat.exists
+
+    - name: Extract Sysmon
+      win_unzip:
+        src: 'c:\Program Files\ansible\Sysmon.zip'
+        dest: 'c:\Program Files\ansible\sysmon'
+        creates: 'c:\Program Files\ansible\sysmon\Sysmon64.exe'
+      when: not sysmon_check.stat.exists
+
+    - name: Add Sysmon to PATH
+      win_path:
+        elements: 'c:\Program Files\ansible\sysmon'
+      when: not sysmon_check.stat.exists
+
+    - name: Copy Sysmon configuration
+      win_copy:
+        src: "{{ playbook_dir }}/roles/splunk_uf_windows/files/sysmonconfig.xml"
+        dest: 'c:\Program Files\ansible\sysmonconfig.xml'
+
+    - name: Install Sysmon with configuration
+      win_command: '"c:\Program Files\ansible\sysmon\Sysmon64.exe" -accepteula -i "c:\Program Files\ansible\sysmonconfig.xml"'
+      register: sysmon_install
+      failed_when: sysmon_install.rc not in [0, 1]
+
+    - name: Enable Sysmon event log channel
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WINEVT\\Channels\\Microsoft-Windows-Sysmon/Operational"
+        value: "{{ item.value }}"
+        datatype: dword
+        data: "{{ item.data }}"
+      loop:
+        - { value: "Enabled", data: 1 }
+        - { value: "MaxSize", data: 315801600 }
+        - { value: "Retention", data: 0 }
+
+    - name: Enable PowerShell ScriptBlock and Module logging
+      win_regedit:
+        key: "{{ item.key }}"
+        value: "{{ item.value }}"
+        datatype: "{{ item.type }}"
+        data: "{{ item.data }}"
+      loop:
+        - key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging"
+          value: "EnableScriptBlockLogging"
+          type: dword
+          data: 1
+        - key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging"
+          value: "EnableModuleLogging"
+          type: dword
+          data: 1
+        - key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging\\ModuleNames"
+          value: "*"
+          type: string
+          data: "*"
+
+- name: Install Splunk Universal Forwarder on GOAD Domain Controller
+  hosts: splunk_forwarder_targets
+  roles:
+    - { role: 'splunk_uf_windows', tags: 'splunk_uf' }
+  vars:
+    splunk_indexer_ip: "{{ splunk_server_ip | default('10.0.1.12') }}"
+    splunk_indexer_port: "{{ splunk_server_port | default('9997') }}"
+    splunk_mgmt_port: "{{ splunk_server_mgmt_port | default('8089') }}"
+    splunk_admin_password: "{{ splunk_uf_password | default('I-l1ke-Attack-Range!') }}"

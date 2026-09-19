@@ -1,0 +1,27 @@
+# Uninstall Splunk Universal Forwarder from GOAD Windows machines
+
+- name: Remove Splunk Universal Forwarder
+  hosts: splunk_forwarder_targets
+  tasks:
+    - name: Stop SplunkForwarder service
+      win_service:
+        name: SplunkForwarder
+        state: stopped
+      ignore_errors: yes
+
+    - name: Uninstall Splunk UF
+      win_package:
+        product_id: '{product-id}'
+        state: absent
+        arguments: '/quiet'
+      ignore_errors: yes
+
+    - name: Remove Splunk UF directory
+      win_file:
+        path: 'C:\Program Files\SplunkUniversalForwarder'
+        state: absent
+      ignore_errors: yes
+
+    - name: Uninstall Sysmon
+      win_command: '"c:\Program Files\ansible\sysmon\Sysmon64.exe" -u'
+      ignore_errors: yes

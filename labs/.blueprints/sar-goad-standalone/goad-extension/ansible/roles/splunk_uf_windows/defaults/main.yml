@@ -1,0 +1,17 @@
+---
+# Splunk Universal Forwarder version and download URL
+splunk_uf_version: "9.1.2"
+splunk_uf_win_url: "https://download.splunk.com/products/universalforwarder/releases/{{ splunk_uf_version }}/windows/splunkforwarder-{{ splunk_uf_version }}-b6b9c8185839-x64-release.msi"
+
+# SAR Splunk server connection defaults (overridden by install.yml vars)
+splunk_indexer_ip: "10.0.1.12"
+splunk_indexer_port: "9997"
+splunk_mgmt_port: "8089"
+splunk_admin_password: "I-l1ke-Attack-Range!"
+
+# Sysmon
+sysmon_download_url: "https://download.sysinternals.com/files/Sysmon.zip"
+
+# Splunk index names
+splunk_win_index: "win"
+splunk_dns_index: "dns"

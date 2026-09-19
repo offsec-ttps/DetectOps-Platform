@@ -1,0 +1,14 @@
+node_modules
+.next
+.next-dev.pid
+.git
+graphify-out
+labs
+sar-goad-standalone
+bas-agent
+**/*.log
+.env
+.env.local
+dev.db
+prisma/dev.db
+.uploads

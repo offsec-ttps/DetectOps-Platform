@@ -1,0 +1,13 @@
+---
+# Splunk Universal Forwarder installation and configuration for GOAD Windows machines
+# Mirrors SAR's windows_universal_forwarder role, adapted for GOAD extension system
+
+- include_tasks: install_splunk_uf.yml
+- include_tasks: configure_outputs.yml
+- include_tasks: configure_deployment_client.yml
+- include_tasks: configure_inputs.yml
+
+- name: Restart Splunk Universal Forwarder
+  win_command: splunk.exe restart
+  args:
+    chdir: 'C:\Program Files\SplunkUniversalForwarder\bin\'

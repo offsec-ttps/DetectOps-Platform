@@ -1,0 +1,7 @@
+# Splunk Deployment Client configuration
+# Connects to SAR Splunk deployment server for app management
+
+[deployment-client]
+
+[target-broker:deploymentServer]
+targetUri={{ splunk_indexer_ip }}:{{ splunk_mgmt_port }}

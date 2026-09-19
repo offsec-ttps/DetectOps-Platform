@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "detectops-detections": {
+      "type": "streamable-http",
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer dmcp_REPLACE_WITH_YOUR_KEY"
+      }
+    }
+  }
+}

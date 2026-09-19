@@ -1,0 +1,9 @@
+{
+    "name": "splunk_forwarder",
+    "description": "Install Splunk Universal Forwarder on all Windows machines and forward logs to SAR Splunk SIEM",
+    "machines": [],
+    "compatibility": [
+        "*"
+    ],
+    "impact": "install splunk universal forwarder and sysmon on all windows domain machines, forwarding to external SAR splunk server"
+}

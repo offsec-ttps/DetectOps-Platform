@@ -1,0 +1,294 @@
+# Curated list of open-source offensive tools seeded into the Build Forge catalog.
+#
+# The `scripts/seed-offensive-tools.ts` script reads this file and idempotently
+# upserts one BuildRepo row per entry. Safe to re-run.
+#
+# Fields:
+#   owner            GitHub organisation or user
+#   repo             GitHub repository name
+#   language         Build pipeline key — one of: go | rust | csharp | python | powershell | custom
+#   description      One-line summary shown on Build Forge card
+#   category         Grouping for UI filter: credential-access | recon | lateral-movement |
+#                    post-exploitation | command-and-control | defense-evasion | payload
+#   mitre_techniques Array of MITRE ATT&CK technique IDs
+#   risk_level       low | medium | high — high-risk tools get a red badge + confirmation
+#   default_branch   Optional — defaults to "main" if unset
+#
+# DEFENSIVE USE ONLY. Every tool here is open-source and widely published.
+# This catalog exists so blue teams can build detections against the same
+# artifacts attackers use.
+
+tools:
+  # ── Credential access ───────────────────────────────────────────────────────
+  - owner: GhostPack
+    repo: Rubeus
+    language: csharp
+    description: C# toolkit for raw Kerberos interaction (TGT request, AS-REP roasting, S4U, pass-the-ticket)
+    category: credential-access
+    mitre_techniques: [T1558.003, T1550.002, T1558.004, T1550.003]
+    risk_level: high
+
+  - owner: gentilkiwi
+    repo: mimikatz
+    language: custom
+    description: The canonical Windows credential-dumping tool — LSASS scraping, Kerberos tickets, DCSync
+    category: credential-access
+    mitre_techniques: [T1003.001, T1003.006, T1550.002, T1558]
+    risk_level: high
+
+  - owner: AlessandroZ
+    repo: LaZagne
+    language: python
+    description: Post-exploitation credential recovery from browsers, mail clients, wifi, etc.
+    category: credential-access
+    mitre_techniques: [T1555, T1555.003, T1552.001]
+    risk_level: high
+
+  - owner: GhostPack
+    repo: SharpDPAPI
+    language: csharp
+    description: C# port of Mimikatz's DPAPI functionality — decrypt masterkeys, credentials, vaults
+    category: credential-access
+    mitre_techniques: [T1555.003, T1555.004]
+    risk_level: high
+
+  - owner: GhostPack
+    repo: Seatbelt
+    language: csharp
+    description: Safety-check tool that gathers host/user situational-awareness info (creds adjacent)
+    category: credential-access
+    mitre_techniques: [T1082, T1033, T1012]
+    risk_level: medium
+
+  # ── Recon ───────────────────────────────────────────────────────────────────
+  - owner: SpecterOps
+    repo: SharpHound
+    language: csharp
+    description: Official C# data collector for BloodHound — Active Directory graph reconnaissance
+    category: recon
+    mitre_techniques: [T1482, T1087.002, T1069.002]
+    risk_level: medium
+    default_branch: "2.X"
+
+  - owner: PowerShellMafia
+    repo: PowerSploit
+    language: powershell
+    description: PowerView + PowerUp + other PS offensive modules (primarily AD recon)
+    category: recon
+    mitre_techniques: [T1482, T1087.002, T1069.002, T1033]
+    risk_level: medium
+
+  - owner: GhostPack
+    repo: SharpUp
+    language: csharp
+    description: C# port of PowerUp — Windows privilege escalation checks
+    category: recon
+    mitre_techniques: [T1068, T1082]
+    risk_level: medium
+
+  - owner: sense-of-security
+    repo: ADRecon
+    language: powershell
+    description: Extensive Active Directory data collection and reporting in PowerShell
+    category: recon
+    mitre_techniques: [T1482, T1087.002]
+    risk_level: low
+
+  - owner: tevora-threat
+    repo: SharpView
+    language: csharp
+    description: C# port of PowerView for AD enumeration
+    category: recon
+    mitre_techniques: [T1482, T1087.002, T1069.002]
+    risk_level: medium
+
+  # ── Lateral movement ────────────────────────────────────────────────────────
+  - owner: fortra
+    repo: impacket
+    language: python
+    description: Collection of Python classes for network protocols (psexec, wmiexec, smbexec, secretsdump)
+    category: lateral-movement
+    mitre_techniques: [T1021.002, T1047, T1003.006, T1021.003]
+    risk_level: medium
+
+  - owner: Pennyw0rth
+    repo: NetExec
+    language: python
+    description: Maintained successor to CrackMapExec — SMB/WinRM/MSSQL/LDAP pentesting Swiss army knife
+    category: lateral-movement
+    mitre_techniques: [T1021.002, T1021.006, T1110.001]
+    risk_level: medium
+
+  - owner: GhostPack
+    repo: SharpWMI
+    language: csharp
+    description: C# implementation of WMI functionality for offensive purposes
+    category: lateral-movement
+    mitre_techniques: [T1047, T1021.003]
+    risk_level: medium
+
+  - owner: anthemtotheego
+    repo: SharpExec
+    language: csharp
+    description: C# offensive remote execution alternative to psexec/wmiexec/SMBExec/WINRM
+    category: lateral-movement
+    mitre_techniques: [T1021.002, T1021.006, T1047]
+    risk_level: high
+
+  - owner: juliourena
+    repo: SharpNoPSExec
+    language: csharp
+    description: Get file execution over SMB without creating a service
+    category: lateral-movement
+    mitre_techniques: [T1021.002]
+    risk_level: high
+
+  # ── Post-exploitation ───────────────────────────────────────────────────────
+  - owner: cybersectroll
+    repo: SharpPersistSD
+    language: csharp
+    description: Windows persistence via Security Descriptor manipulation — scheduled tasks / WMI / registry
+    category: post-exploitation
+    mitre_techniques: [T1053.005, T1546.003, T1547.001]
+    risk_level: high
+
+  - owner: TheWover
+    repo: donut
+    language: c
+    description: Shellcode generation from .NET assemblies / DLLs / EXEs — position-independent code
+    category: post-exploitation
+    mitre_techniques: [T1055, T1620]
+    risk_level: high
+
+  - owner: cobbr
+    repo: SharpSploit
+    language: csharp
+    description: .NET post-exploitation library — creds, recon, execution primitives
+    category: post-exploitation
+    mitre_techniques: [T1055, T1003, T1087]
+    risk_level: high
+
+  - owner: CCob
+    repo: SharpBlock
+    language: csharp
+    description: Method of bypassing EDR by blocking EDR callback registration
+    category: defense-evasion
+    mitre_techniques: [T1562.001, T1562]
+    risk_level: high
+
+  - owner: PwnDexter
+    repo: SharpEDRChecker
+    language: csharp
+    description: Lightweight EDR/AV scanner — enumerates running EDR products and hooks
+    category: defense-evasion
+    mitre_techniques: [T1518.001]
+    risk_level: low
+
+  # ── Command-and-control ─────────────────────────────────────────────────────
+  - owner: BishopFox
+    repo: sliver
+    language: go
+    description: Open-source cross-platform adversary-emulation C2 framework — single Go binary server
+    category: command-and-control
+    mitre_techniques: [T1071.001, T1573, T1105]
+    risk_level: high
+
+  - owner: its-a-feature
+    repo: Mythic
+    language: python
+    description: Multi-agent C2 framework with Docker-based agents and GUI (very-open-source)
+    category: command-and-control
+    mitre_techniques: [T1071.001, T1573, T1132]
+    risk_level: high
+
+  - owner: nettitude
+    repo: PoshC2
+    language: python
+    description: Proxy-aware C2 in PowerShell/C#/Python — lightweight, scriptable
+    category: command-and-control
+    mitre_techniques: [T1071.001, T1573.002]
+    risk_level: high
+
+  - owner: cobbr
+    repo: Covenant
+    language: csharp
+    description: .NET command-and-control framework with multi-user collaboration and Grunt implants
+    category: command-and-control
+    mitre_techniques: [T1071.001, T1573.002, T1059.003]
+    risk_level: high
+
+  - owner: HavocFramework
+    repo: Havoc
+    language: c
+    description: Modern, modular, post-exploitation C2 framework in C/C++ and PowerShell
+    category: command-and-control
+    mitre_techniques: [T1071.001, T1573]
+    risk_level: high
+
+  # ── Defense evasion / payload ────────────────────────────────────────────────
+  - owner: danielbohannon
+    repo: Invoke-Obfuscation
+    language: powershell
+    description: PowerShell command/script obfuscator — token/AST/string transforms
+    category: defense-evasion
+    mitre_techniques: [T1027, T1059.001, T1140]
+    risk_level: medium
+
+  - owner: djhohnstein
+    repo: SharpChromium
+    language: csharp
+    description: C# tool to retrieve Chromium browser cookies, history, saved logins
+    category: defense-evasion
+    mitre_techniques: [T1555.003, T1539]
+    risk_level: medium
+
+  - owner: r3motecontrol
+    repo: Ghostpack-CompiledBinaries
+    language: custom
+    description: Pre-compiled GhostPack binaries (Rubeus, Seatbelt, SharpDump, etc.) for quick testing
+    category: defense-evasion
+    mitre_techniques: [T1106]
+    risk_level: medium
+    default_branch: master
+    prebuilt_meta_repo: true
+
+  - owner: Kudaes
+    repo: DInvoke_rs
+    language: rust
+    description: Rust port of DInvoke — dynamic invocation of Windows APIs bypassing EDR hooks
+    category: defense-evasion
+    mitre_techniques: [T1055, T1562.001]
+    risk_level: high
+
+  - owner: Flangvik
+    repo: NetLoader
+    language: csharp
+    description: Loads + patches + executes .NET payloads with EDR/AMSI/ETW bypass
+    category: defense-evasion
+    mitre_techniques: [T1055, T1562.001, T1027]
+    risk_level: high
+
+  # ── Compiled-binaries meta-repos ────────────────────────────────────────────
+  # These are repos whose purpose is to distribute READY-TO-USE prebuilt
+  # binaries. Marked with `prebuilt_meta_repo: true` so the UI can surface a
+  # "Download prebuilt" action without even looking at GitHub Releases.
+
+  - owner: Flangvik
+    repo: SharpCollection
+    language: custom
+    description: Nightly-built collection of precompiled C# offensive binaries organized by .NET framework version
+    category: post-exploitation
+    mitre_techniques: [T1059.003, T1106]
+    risk_level: high
+    default_branch: master
+    prebuilt_meta_repo: true
+
+  - owner: matterpreter
+    repo: OffensiveCSharp
+    language: csharp
+    description: Collection of offensive C# tooling (Shhmon, SharpFinder, SharpMove, Watson, etc.) — source for each tool
+    category: post-exploitation
+    mitre_techniques: [T1082, T1087, T1012, T1069]
+    risk_level: high
+    default_branch: master
+

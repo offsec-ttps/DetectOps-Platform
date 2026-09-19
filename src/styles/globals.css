@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@source not "../../labs/**";
+@source not "../../sar-goad-standalone/**";
+@source not "../../scripts/**";
+
+@theme {
+  --color-background: #0a0e1a;
+  --color-foreground: #e2e8f0;
+  --color-card: #111827;
+  --color-card-hover: #1a2236;
+  --color-border: #1e293b;
+  --color-border-subtle: #162032;
+  --color-muted: #64748b;
+  --color-muted-foreground: #94a3b8;
+  --color-accent: #3b82f6;
+  --color-accent-muted: #1e3a5f;
+  --color-success: #22c55e;
+  --color-success-muted: #14532d;
+  --color-warning: #f59e0b;
+  --color-warning-muted: #78350f;
+  --color-danger: #ef4444;
+  --color-danger-muted: #7f1d1d;
+  --color-info: #06b6d4;
+  --color-info-muted: #164e63;
+  --color-purple: #a855f7;
+  --color-purple-muted: #581c87;
+  --color-sidebar: #070b14;
+  --color-sidebar-active: #111d35;
+  --color-sidebar-hover: #0d1526;
+  --color-input: #1e293b;
+  --color-input-focus: #2563eb;
+
+  --color-severity-critical: #ef4444;
+  --color-severity-high: #f97316;
+  --color-severity-medium: #f59e0b;
+  --color-severity-low: #3b82f6;
+  --color-severity-info: #64748b;
+
+  --color-status-active: #22c55e;
+  --color-status-draft: #64748b;
+  --color-status-review: #f59e0b;
+  --color-status-testing: #a855f7;
+  --color-status-deprecated: #ef4444;
+  --color-status-archived: #475569;
+
+  --color-coverage-none: #1e293b;
+  --color-coverage-low: #7f1d1d;
+  --color-coverage-partial: #78350f;
+  --color-coverage-good: #14532d;
+  --color-coverage-full: #22c55e;
+
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* Code editor base */
+.code-editor {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+/* MITRE ATT&CK matrix cells */
+.matrix-cell {
+  transition: all 0.15s ease;
+}
+.matrix-cell:hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+/* Agent pulse animation */
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.agent-active {
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}

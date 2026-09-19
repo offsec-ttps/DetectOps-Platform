@@ -1,0 +1,1279 @@
+{
+  "timestamp": "2026-03-29T10:04:32.417Z",
+  "routes": [
+    {
+      "path": "/",
+      "filePath": "src/app/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/__layout__",
+      "filePath": "src/app/(dashboard)/layout.tsx",
+      "type": "layout",
+      "isDynamic": false
+    },
+    {
+      "path": "/__layout__",
+      "filePath": "src/app/layout.tsx",
+      "type": "layout",
+      "isDynamic": false
+    },
+    {
+      "path": "/agentic-sync",
+      "filePath": "src/app/(dashboard)/agentic-sync/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/agents",
+      "filePath": "src/app/(dashboard)/agents/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/analytics",
+      "filePath": "src/app/(dashboard)/analytics/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/api/agents",
+      "filePath": "src/app/api/agents/route.ts",
+      "type": "api",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/elastic/rules",
+      "filePath": "src/app/api/community/elastic/rules/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/elastic/rules/:id",
+      "filePath": "src/app/api/community/elastic/rules/[id]/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/api/community/elastic/rules/:id/download",
+      "filePath": "src/app/api/community/elastic/rules/[id]/download/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/api/community/elastic/summary",
+      "filePath": "src/app/api/community/elastic/summary/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/elastic/sync",
+      "filePath": "src/app/api/community/elastic/sync/route.ts",
+      "type": "api",
+      "methods": [
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/sigmahq/rules",
+      "filePath": "src/app/api/community/sigmahq/rules/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/sigmahq/rules/:id",
+      "filePath": "src/app/api/community/sigmahq/rules/[id]/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/api/community/sigmahq/rules/:id/download",
+      "filePath": "src/app/api/community/sigmahq/rules/[id]/download/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/api/community/sigmahq/summary",
+      "filePath": "src/app/api/community/sigmahq/summary/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/community/sigmahq/sync",
+      "filePath": "src/app/api/community/sigmahq/sync/route.ts",
+      "type": "api",
+      "methods": [
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/detections",
+      "filePath": "src/app/api/detections/route.ts",
+      "type": "api",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/docs/generate",
+      "filePath": "src/app/api/docs/generate/route.ts",
+      "type": "api",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/emulations",
+      "filePath": "src/app/api/emulations/route.ts",
+      "type": "api",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/metrics",
+      "filePath": "src/app/api/metrics/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/sar/status",
+      "filePath": "src/app/api/sar/status/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/api/threat-models",
+      "filePath": "src/app/api/threat-models/route.ts",
+      "type": "api",
+      "methods": [
+        "GET"
+      ],
+      "isDynamic": false
+    },
+    {
+      "path": "/atomic-tests",
+      "filePath": "src/app/(dashboard)/atomic-tests/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/campaign-designer",
+      "filePath": "src/app/(dashboard)/campaign-designer/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/cicd",
+      "filePath": "src/app/(dashboard)/cicd/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/community",
+      "filePath": "src/app/(dashboard)/community/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/community/:source/:id",
+      "filePath": "src/app/(dashboard)/community/[source]/[id]/page.tsx",
+      "type": "page",
+      "isDynamic": true,
+      "params": [
+        "source",
+        "id"
+      ]
+    },
+    {
+      "path": "/community/elastic",
+      "filePath": "src/app/(dashboard)/community/elastic/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/community/sigmahq",
+      "filePath": "src/app/(dashboard)/community/sigmahq/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/community/sigmahq/:id",
+      "filePath": "src/app/(dashboard)/community/sigmahq/[id]/page.tsx",
+      "type": "page",
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/data-lakes",
+      "filePath": "src/app/(dashboard)/data-lakes/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/detection-validation",
+      "filePath": "src/app/(dashboard)/detection-validation/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/detections",
+      "filePath": "src/app/(dashboard)/detections/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/detections/:id",
+      "filePath": "src/app/(dashboard)/detections/[id]/page.tsx",
+      "type": "page",
+      "isDynamic": true,
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "path": "/docs",
+      "filePath": "src/app/(dashboard)/docs/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/emulation",
+      "filePath": "src/app/(dashboard)/emulation/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/environment-manager",
+      "filePath": "src/app/(dashboard)/environment-manager/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/execution-logs",
+      "filePath": "src/app/(dashboard)/execution-logs/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/mcp-registry",
+      "filePath": "src/app/(dashboard)/mcp-registry/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/orchestrator",
+      "filePath": "src/app/(dashboard)/orchestrator/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/overview",
+      "filePath": "src/app/(dashboard)/overview/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/pipelines",
+      "filePath": "src/app/(dashboard)/pipelines/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/pr-management",
+      "filePath": "src/app/(dashboard)/pr-management/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/reporting",
+      "filePath": "src/app/(dashboard)/reporting/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/rule-workspace",
+      "filePath": "src/app/(dashboard)/rule-workspace/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/settings",
+      "filePath": "src/app/(dashboard)/settings/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/sigmagen",
+      "filePath": "src/app/(dashboard)/sigmagen/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/threat-intel",
+      "filePath": "src/app/(dashboard)/threat-intel/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    },
+    {
+      "path": "/threat-modeling",
+      "filePath": "src/app/(dashboard)/threat-modeling/page.tsx",
+      "type": "page",
+      "isDynamic": false
+    }
+  ],
+  "apiEndpoints": [
+    {
+      "route": "/api/agents",
+      "method": "GET",
+      "filePath": "src/app/api/agents/route.ts",
+      "description": "List/Get agents",
+      "queryParams": []
+    },
+    {
+      "route": "/api/agents",
+      "method": "POST",
+      "filePath": "src/app/api/agents/route.ts",
+      "description": "Create/Trigger agents"
+    },
+    {
+      "route": "/api/community/elastic/rules",
+      "method": "GET",
+      "filePath": "src/app/api/community/elastic/rules/route.ts",
+      "description": "List/Get rules",
+      "queryParams": [
+        "page",
+        "page_size",
+        "text_search",
+        "severity",
+        "type",
+        "platform",
+        "mitre_technique",
+        "change_status",
+        "sort_by",
+        "sort_dir"
+      ]
+    },
+    {
+      "route": "/api/community/elastic/rules/:id",
+      "method": "GET",
+      "filePath": "src/app/api/community/elastic/rules/[id]/route.ts",
+      "description": "List/Get :id",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/elastic/rules/:id/download",
+      "method": "GET",
+      "filePath": "src/app/api/community/elastic/rules/[id]/download/route.ts",
+      "description": "List/Get download",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/elastic/summary",
+      "method": "GET",
+      "filePath": "src/app/api/community/elastic/summary/route.ts",
+      "description": "List/Get summary",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/elastic/sync",
+      "method": "POST",
+      "filePath": "src/app/api/community/elastic/sync/route.ts",
+      "description": "Create/Trigger sync"
+    },
+    {
+      "route": "/api/community/sigmahq/rules",
+      "method": "GET",
+      "filePath": "src/app/api/community/sigmahq/rules/route.ts",
+      "description": "List/Get rules",
+      "queryParams": [
+        "page",
+        "page_size",
+        "text_search",
+        "status",
+        "level",
+        "tag",
+        "mitre_technique",
+        "logsource_product",
+        "change_status",
+        "sort_by",
+        "sort_dir"
+      ]
+    },
+    {
+      "route": "/api/community/sigmahq/rules/:id",
+      "method": "GET",
+      "filePath": "src/app/api/community/sigmahq/rules/[id]/route.ts",
+      "description": "List/Get :id",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/sigmahq/rules/:id/download",
+      "method": "GET",
+      "filePath": "src/app/api/community/sigmahq/rules/[id]/download/route.ts",
+      "description": "List/Get download",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/sigmahq/summary",
+      "method": "GET",
+      "filePath": "src/app/api/community/sigmahq/summary/route.ts",
+      "description": "List/Get summary",
+      "queryParams": []
+    },
+    {
+      "route": "/api/community/sigmahq/sync",
+      "method": "POST",
+      "filePath": "src/app/api/community/sigmahq/sync/route.ts",
+      "description": "Create/Trigger sync"
+    },
+    {
+      "route": "/api/detections",
+      "method": "GET",
+      "filePath": "src/app/api/detections/route.ts",
+      "description": "List/Get detections",
+      "queryParams": []
+    },
+    {
+      "route": "/api/detections",
+      "method": "POST",
+      "filePath": "src/app/api/detections/route.ts",
+      "description": "Create/Trigger detections"
+    },
+    {
+      "route": "/api/docs/generate",
+      "method": "GET",
+      "filePath": "src/app/api/docs/generate/route.ts",
+      "description": "List/Get generate",
+      "queryParams": []
+    },
+    {
+      "route": "/api/docs/generate",
+      "method": "POST",
+      "filePath": "src/app/api/docs/generate/route.ts",
+      "description": "Create/Trigger generate"
+    },
+    {
+      "route": "/api/emulations",
+      "method": "GET",
+      "filePath": "src/app/api/emulations/route.ts",
+      "description": "List/Get emulations",
+      "queryParams": []
+    },
+    {
+      "route": "/api/emulations",
+      "method": "POST",
+      "filePath": "src/app/api/emulations/route.ts",
+      "description": "Create/Trigger emulations"
+    },
+    {
+      "route": "/api/metrics",
+      "method": "GET",
+      "filePath": "src/app/api/metrics/route.ts",
+      "description": "List/Get metrics",
+      "queryParams": []
+    },
+    {
+      "route": "/api/sar/status",
+      "method": "GET",
+      "filePath": "src/app/api/sar/status/route.ts",
+      "description": "── Route handler ──",
+      "queryParams": []
+    },
+    {
+      "route": "/api/threat-models",
+      "method": "GET",
+      "filePath": "src/app/api/threat-models/route.ts",
+      "description": "List/Get threat-models",
+      "queryParams": []
+    }
+  ],
+  "components": [
+    {
+      "name": "Badge",
+      "filePath": "src/components/ui/badge.tsx",
+      "category": "ui",
+      "exports": [
+        "Badge"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "Button",
+      "filePath": "src/components/ui/button.tsx",
+      "category": "ui",
+      "exports": [
+        "Button"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "Card",
+      "filePath": "src/components/ui/card.tsx",
+      "category": "ui",
+      "exports": [
+        "Card",
+        "CardHeader",
+        "CardTitle",
+        "CardDescription",
+        "CardContent",
+        "CardFooter"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "CodeBlock",
+      "filePath": "src/components/ui/code-block.tsx",
+      "category": "ui",
+      "exports": [
+        "CodeBlock"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "DashboardShell",
+      "filePath": "src/components/layout/dashboard-shell.tsx",
+      "category": "layout",
+      "exports": [
+        "DashboardShell"
+      ],
+      "dependencies": [
+        "./sidebar"
+      ]
+    },
+    {
+      "name": "EmptyState",
+      "filePath": "src/components/ui/empty-state.tsx",
+      "category": "ui",
+      "exports": [
+        "EmptyState"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "index",
+      "filePath": "src/components/layout/index.ts",
+      "category": "layout",
+      "exports": [],
+      "dependencies": [
+        "./sidebar",
+        "./dashboard-shell"
+      ]
+    },
+    {
+      "name": "index",
+      "filePath": "src/components/ui/index.ts",
+      "category": "ui",
+      "exports": [],
+      "dependencies": [
+        "./badge",
+        "./button",
+        "./card",
+        "./code-block",
+        "./metric-card",
+        "./tabs",
+        "./empty-state",
+        "./loading"
+      ]
+    },
+    {
+      "name": "MetricCard",
+      "filePath": "src/components/ui/metric-card.tsx",
+      "category": "ui",
+      "exports": [
+        "MetricCard"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "Sidebar",
+      "filePath": "src/components/layout/sidebar.tsx",
+      "category": "layout",
+      "exports": [
+        "Sidebar",
+        "TopBar"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "Spinner",
+      "filePath": "src/components/ui/loading.tsx",
+      "category": "ui",
+      "exports": [
+        "Spinner",
+        "SkeletonLine",
+        "SkeletonCard",
+        "FullPageLoading"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    },
+    {
+      "name": "Tabs",
+      "filePath": "src/components/ui/tabs.tsx",
+      "category": "ui",
+      "exports": [
+        "Tabs",
+        "TabsList",
+        "TabsTrigger",
+        "TabsContent"
+      ],
+      "dependencies": [
+        "@/lib/utils"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "AgentRun",
+      "kind": "interface",
+      "exported": true,
+      "line": 643
+    },
+    {
+      "name": "AgentRunStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 622
+    },
+    {
+      "name": "AgentStep",
+      "kind": "interface",
+      "exported": true,
+      "line": 630
+    },
+    {
+      "name": "AgentType",
+      "kind": "type",
+      "exported": true,
+      "line": 620
+    },
+    {
+      "name": "AgentWorkflowConfig",
+      "kind": "interface",
+      "exported": true,
+      "line": 661
+    },
+    {
+      "name": "ApprovalPolicy",
+      "kind": "type",
+      "exported": true,
+      "line": 659
+    },
+    {
+      "name": "Asset",
+      "kind": "interface",
+      "exported": true,
+      "line": 116
+    },
+    {
+      "name": "AssetType",
+      "kind": "type",
+      "exported": true,
+      "line": 105
+    },
+    {
+      "name": "ATHFDocument",
+      "kind": "interface",
+      "exported": true,
+      "line": 546
+    },
+    {
+      "name": "AttackPathStep",
+      "kind": "interface",
+      "exported": true,
+      "line": 132
+    },
+    {
+      "name": "CALDERAAbility",
+      "kind": "interface",
+      "exported": true,
+      "line": 319
+    },
+    {
+      "name": "CALDERAAdversaryProfile",
+      "kind": "interface",
+      "exported": true,
+      "line": 330
+    },
+    {
+      "name": "CIJob",
+      "kind": "interface",
+      "exported": true,
+      "line": 440
+    },
+    {
+      "name": "CommunityRule",
+      "kind": "interface",
+      "exported": true,
+      "line": 274
+    },
+    {
+      "name": "CommunitySource",
+      "kind": "type",
+      "exported": true,
+      "line": 267
+    },
+    {
+      "name": "CoverageMatrixEntry",
+      "kind": "interface",
+      "exported": true,
+      "line": 595
+    },
+    {
+      "name": "Criticality",
+      "kind": "type",
+      "exported": true,
+      "line": 114
+    },
+    {
+      "name": "DataLakeConfig",
+      "kind": "interface",
+      "exported": true,
+      "line": 704
+    },
+    {
+      "name": "DataLakeType",
+      "kind": "type",
+      "exported": true,
+      "line": 702
+    },
+    {
+      "name": "DetectionDebtItem",
+      "kind": "interface",
+      "exported": true,
+      "line": 608
+    },
+    {
+      "name": "DetectionLifecyclePhase",
+      "kind": "type",
+      "exported": true,
+      "line": 178
+    },
+    {
+      "name": "DetectionMetrics",
+      "kind": "interface",
+      "exported": true,
+      "line": 573
+    },
+    {
+      "name": "DetectionRule",
+      "kind": "interface",
+      "exported": true,
+      "line": 207
+    },
+    {
+      "name": "DetectionStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 163
+    },
+    {
+      "name": "EmulationFramework",
+      "kind": "type",
+      "exported": true,
+      "line": 296
+    },
+    {
+      "name": "EmulationTest",
+      "kind": "interface",
+      "exported": true,
+      "line": 298
+    },
+    {
+      "name": "HuntReport",
+      "kind": "interface",
+      "exported": true,
+      "line": 558
+    },
+    {
+      "name": "ImportStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 272
+    },
+    {
+      "name": "IntegrationConfig",
+      "kind": "interface",
+      "exported": true,
+      "line": 466
+    },
+    {
+      "name": "IntegrationStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 464
+    },
+    {
+      "name": "IntegrationType",
+      "kind": "type",
+      "exported": true,
+      "line": 453
+    },
+    {
+      "name": "LabEnvironment",
+      "kind": "interface",
+      "exported": true,
+      "line": 342
+    },
+    {
+      "name": "LabType",
+      "kind": "type",
+      "exported": true,
+      "line": 340
+    },
+    {
+      "name": "LOCKEntry",
+      "kind": "interface",
+      "exported": true,
+      "line": 530
+    },
+    {
+      "name": "LOCKSection",
+      "kind": "interface",
+      "exported": true,
+      "line": 519
+    },
+    {
+      "name": "LogSource",
+      "kind": "interface",
+      "exported": true,
+      "line": 186
+    },
+    {
+      "name": "MDEAlert",
+      "kind": "interface",
+      "exported": true,
+      "line": 503
+    },
+    {
+      "name": "MDEHuntingQuery",
+      "kind": "interface",
+      "exported": true,
+      "line": 493
+    },
+    {
+      "name": "MetricSnapshot",
+      "kind": "interface",
+      "exported": true,
+      "line": 588
+    },
+    {
+      "name": "MITREMapping",
+      "kind": "interface",
+      "exported": true,
+      "line": 192
+    },
+    {
+      "name": "OODAPhase",
+      "kind": "type",
+      "exported": true,
+      "line": 726
+    },
+    {
+      "name": "OODAStatus",
+      "kind": "interface",
+      "exported": true,
+      "line": 728
+    },
+    {
+      "name": "Permission",
+      "kind": "type",
+      "exported": true,
+      "line": 17
+    },
+    {
+      "name": "PipelineProcessor",
+      "kind": "type",
+      "exported": true,
+      "line": 676
+    },
+    {
+      "name": "PipelineRun",
+      "kind": "interface",
+      "exported": true,
+      "line": 425
+    },
+    {
+      "name": "PipelineRunStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 423
+    },
+    {
+      "name": "PipelineStage",
+      "kind": "interface",
+      "exported": true,
+      "line": 415
+    },
+    {
+      "name": "PipelineStageStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 413
+    },
+    {
+      "name": "PipelineStageType",
+      "kind": "type",
+      "exported": true,
+      "line": 406
+    },
+    {
+      "name": "PipelineTransform",
+      "kind": "interface",
+      "exported": true,
+      "line": 678
+    },
+    {
+      "name": "PlatformQuery",
+      "kind": "interface",
+      "exported": true,
+      "line": 201
+    },
+    {
+      "name": "Role",
+      "kind": "interface",
+      "exported": true,
+      "line": 40
+    },
+    {
+      "name": "Severity",
+      "kind": "type",
+      "exported": true,
+      "line": 171
+    },
+    {
+      "name": "SplunkSavedSearch",
+      "kind": "interface",
+      "exported": true,
+      "line": 480
+    },
+    {
+      "name": "STIXObject",
+      "kind": "interface",
+      "exported": true,
+      "line": 87
+    },
+    {
+      "name": "STIXObjectType",
+      "kind": "type",
+      "exported": true,
+      "line": 78
+    },
+    {
+      "name": "Tactic",
+      "kind": "interface",
+      "exported": true,
+      "line": 50
+    },
+    {
+      "name": "Technique",
+      "kind": "interface",
+      "exported": true,
+      "line": 60
+    },
+    {
+      "name": "TelemetryPipeline",
+      "kind": "interface",
+      "exported": true,
+      "line": 684
+    },
+    {
+      "name": "TestRun",
+      "kind": "interface",
+      "exported": true,
+      "line": 381
+    },
+    {
+      "name": "TestRunResult",
+      "kind": "interface",
+      "exported": true,
+      "line": 360
+    },
+    {
+      "name": "TestRunStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 358
+    },
+    {
+      "name": "TestRunStep",
+      "kind": "interface",
+      "exported": true,
+      "line": 373
+    },
+    {
+      "name": "ThreatModel",
+      "kind": "interface",
+      "exported": true,
+      "line": 143
+    },
+    {
+      "name": "UseCase",
+      "kind": "interface",
+      "exported": true,
+      "line": 242
+    },
+    {
+      "name": "UseCaseStatus",
+      "kind": "type",
+      "exported": true,
+      "line": 240
+    },
+    {
+      "name": "User",
+      "kind": "interface",
+      "exported": true,
+      "line": 28
+    },
+    {
+      "name": "UserRole",
+      "kind": "type",
+      "exported": true,
+      "line": 8
+    }
+  ],
+  "dataFlows": [
+    {
+      "from": "API /api/community/elastic/rules/:id/download",
+      "to": "DB communityElasticRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/elastic/rules/:id",
+      "to": "DB communityElasticRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/elastic/rules",
+      "to": "DB communityElasticRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/elastic/summary",
+      "to": "DB communitySource",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/sigmahq/rules/:id/download",
+      "to": "DB communitySigmaRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/sigmahq/rules/:id",
+      "to": "DB communitySigmaRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/sigmahq/rules",
+      "to": "DB communitySigmaRule",
+      "label": "GET"
+    },
+    {
+      "from": "API /api/community/sigmahq/summary",
+      "to": "DB communitySource",
+      "label": "GET"
+    },
+    {
+      "from": "Page /community/:source/:id",
+      "to": "API /api/community/elastic/rules/:param",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/elastic",
+      "to": "API /api/community/elastic/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/elastic",
+      "to": "API /api/community/elastic/rules",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/elastic",
+      "to": "API /api/community/elastic/sync",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/sigmahq/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/elastic/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/sigmahq/rules",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/elastic/rules",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/sigmahq/sync",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/elastic/sync",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/sigmahq/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community",
+      "to": "API /api/community/elastic/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/sigmahq/:id",
+      "to": "API /api/community/sigmahq/rules/:param",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/sigmahq",
+      "to": "API /api/community/sigmahq/summary",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/sigmahq",
+      "to": "API /api/community/sigmahq/rules",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /community/sigmahq",
+      "to": "API /api/community/sigmahq/sync",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /docs",
+      "to": "API /api/docs/generate",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /docs",
+      "to": "API /api/docs/generate",
+      "label": "fetch"
+    },
+    {
+      "from": "Page /environment-manager",
+      "to": "API /api/sar/status",
+      "label": "fetch"
+    }
+  ],
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.6.0",
+    "@prisma/client": "^7.6.0",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "better-sqlite3": "^12.8.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.3.1",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^1.7.0",
+    "mermaid": "^11.13.0",
+    "next": "^16.2.1",
+    "postcss": "^8.5.8",
+    "prisma": "^7.6.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
+    "smol-toml": "^1.6.1",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "uuid": "^13.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.21.0"
+  },
+  "pageCount": 31,
+  "apiCount": 21,
+  "componentCount": 12,
+  "typeCount": 68
+}

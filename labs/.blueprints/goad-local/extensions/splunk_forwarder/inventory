@@ -1,0 +1,11 @@
+; EXTENSION : SPLUNK_FORWARDER ------------------------------------------
+; No new machines needed - this extension only installs agents on existing domain machines
+
+; All domain machines get Splunk UF + Sysmon
+[splunk_forwarder_targets]
+dc01
+ws01
+
+[sysmon_targets]
+dc01
+ws01

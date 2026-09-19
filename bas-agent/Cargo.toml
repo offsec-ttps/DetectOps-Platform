@@ -1,0 +1,36 @@
+[package]
+name = "bas-agent"
+version = "0.2.2"
+edition = "2021"
+description = "DetectOps BAS fleet agent — enrolls and runs version-pinned Atomic Red Team tests on the endpoint it is deployed to (defensive breach-and-attack-simulation)."
+license = "Apache-2.0"
+
+[[bin]]
+name = "bas_agent"
+path = "src/main.rs"
+
+[dependencies]
+# Blocking HTTP with rustls (no OpenSSL system dep → small static-ish cross-platform binary).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+sysinfo = "0.32"
+clap = { version = "4", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+wait-timeout = "0.2"   # hard runtime cap on the spawned executor
+ed25519-dalek = "2"    # verify control-plane job signatures
+base64 = "0.22"
+
+# Windows-only: real SCM service registration + dispatcher. Cargo only resolves
+# this for Windows targets, so the Linux/macOS build never sees it.
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.7"
+
+[profile.release]
+opt-level = "z"     # optimise for size — negligible footprint is the goal
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

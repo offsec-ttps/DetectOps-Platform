@@ -1,0 +1,152 @@
+site_name: DetectOps Docs
+site_description: >-
+  End-to-end Detection Engineering & Adversary Simulation platform, mapped to
+  MITRE ATT&CK — documented section-by-section to mirror the dashboard.
+site_author: DetectOps
+repo_url: https://github.com/your-org/detection-platform
+edit_uri: ""
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    # Left: collapsible section/subsection tree that mirrors the dashboard.
+    - navigation.indexes      # a section header is itself a clickable landing page
+    - navigation.top          # back-to-top button
+    - navigation.instant      # SPA-style navigation
+    - navigation.instant.progress
+    - navigation.footer       # prev/next links
+    # Right: page table of contents.
+    - toc.follow
+    # Content niceties.
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+# analysis.json is a data artifact emitted by the in-app docs-agent, not a page.
+# mcp/README.md is a pre-existing guide with links outside docs/; its content is
+# covered by the MCP Server page + the MCP Deploy Guide.
+exclude_docs: |
+  generated/analysis.json
+  requirements.txt
+  mcp/README.md
+
+# The nav below MIRRORS the dashboard sidebar (src/components/layout/sidebar.tsx):
+# each dashboard section is a collapsible group; each menu item is a page.
+nav:
+  - Home: index.md
+  - Getting Started:
+      - getting-started/index.md
+      - Prerequisites: getting-started/prerequisites.md
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Architecture: getting-started/architecture.md
+  - Overview: overview.md
+  - Engineering:
+      - engineering/index.md
+      - Threat Modeling: engineering/threat-modeling.md
+      - Threat Intel Ingestion: content/threat-aggregator.md
+      - SigmaGen AI: content/sigmagen-ai.md
+      - Rule Workspace: engineering/rule-workspace.md
+      - Atomic Test Library: content/atomic-test-library.md
+      - Community Content: content/community-content.md
+  - Preparation:
+      - preparation/index.md
+      - Deploy:
+          - labs/deploy-hub.md
+          - Local Lab: labs/local-lab.md
+          - Cloud Lab: labs/cloud-lab.md
+          - Fleet Server: labs/fleet-server.md
+          - SAR + GOAD Integration: sar-goad-integration/README.md
+      - Attack Simulations: simulation/attack-simulations.md
+      - Module Marketplace: system/module-marketplace.md
+      - Detection Lab (advanced): preparation/detection-lab.md
+  - Simulation:
+      - simulation/index.md
+      - Simulation Framework: simulation/simulation-framework.md
+      - Campaign Designer: simulation/campaign-designer.md
+      - Enterprise Environments: simulation/enterprise-environments.md
+      - Enterprise Use Cases: simulation/enterprise-use-cases.md
+      - Custom Simulation Builder: simulation/custom-simulation-builder.md
+      - Replay Catalog: simulation/replay-catalog.md
+      - Build Forge: simulation/build-forge.md
+      - Execution Logs: simulation/execution-logs.md
+  - Detection:
+      - detection/index.md
+      - Detections: engineering/detections.md
+      - Detection Packs: detection/detection-packs.md
+      - Detection Validation: detection/detection-validation.md
+  - GitHub Operations:
+      - operations/github-operations.md
+      - PR Management: operations/pr-management.md
+      - Agentic Sync: operations/agentic-sync.md
+      - CI/CD: operations/cicd.md
+  - Infrastructure:
+      - operations/infrastructure.md
+      - Pipelines: operations/pipelines.md
+      - Data Lakes: operations/data-lakes.md
+      - OpenTide Orchestrator: operations/orchestrator.md
+  - Intelligence:
+      - operations/intelligence.md
+      - Reporting: operations/reporting.md
+      - Agents: operations/agents.md
+      - Analytics: operations/analytics.md
+  - System:
+      - system/index.md
+      - MCP Registry: system/mcp-server.md
+      - Integrations: system/integrations.md
+      - Documentation: system/documentation.md
+      - Settings: system/settings.md
+      - LLM Providers: system/llm-providers.md
+      - MCP Servers: system/mcp-servers.md
+  - Manage Labs:
+      - Manage Labs: labs/manage-labs.md
+  - Reference:
+      - reference/index.md
+      - CLI (detectops): reference/cli.md
+      - API Reference: reference/api.md
+      - MCP Deploy Guide: mcp/DEPLOY.md
+      - Community Content Roadmap: community-content-expansion/README.md

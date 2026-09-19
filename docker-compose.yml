@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  # ── Next.js Frontend ──
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - SENTINELFLOW_API_URL=http://backend:8000
+    depends_on:
+      - backend
+
+  # ── SentinelFlow FastAPI Backend ──
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Splunk Attack Range API (SAR) ──
+  # Uncomment to run SAR locally via Docker
+  # sar-api:
+  #   image: splunk/attack_range:latest
+  #   ports:
+  #     - "4000:4000"
+  #   volumes:
+  #     - sar-data:/opt/attack_range
+  #   environment:
+  #     - SAR_MODE=api
+
+# volumes:
+#   sar-data:

@@ -1,0 +1,15 @@
+{
+  "//": "Claude Desktop config. Remote Streamable-HTTP MCP servers are added via mcp-remote until native remote support is enabled. Replace the key with one minted from the MCP Server console (/mcp-registry).",
+  "mcpServers": {
+    "detectops-detections": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://localhost:3000/api/mcp",
+        "--header",
+        "Authorization: Bearer dmcp_REPLACE_WITH_YOUR_KEY"
+      ]
+    }
+  }
+}

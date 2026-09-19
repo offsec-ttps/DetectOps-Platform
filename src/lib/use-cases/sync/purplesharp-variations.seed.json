@@ -1,0 +1,582 @@
+[
+  {
+    "technique_id": "T1003.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Lsass Memory Dump Win Api"
+      },
+      {
+        "n": 2,
+        "label": "Lsass Memory Dump Rundll32"
+      }
+    ],
+    "technique_name": "OS Credential Dumping: LSASS Memory"
+  },
+  {
+    "technique_id": "T1007",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Service Discovery"
+  },
+  {
+    "technique_id": "T1012",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Query Registry"
+  },
+  {
+    "technique_id": "T1016",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Network Configuration Discovery"
+  },
+  {
+    "technique_id": "T1018",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Remote System Discovery Cmd"
+      },
+      {
+        "n": 2,
+        "label": "Remote System Discovery Power Shell"
+      }
+    ],
+    "technique_name": "Remote System Discovery"
+  },
+  {
+    "technique_id": "T1021.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Create Remote Service On Hosts"
+      },
+      {
+        "n": 2,
+        "label": "Create Remote Service On Hosts"
+      },
+      {
+        "n": 3,
+        "label": "Modify Remote Service On Hosts"
+      }
+    ],
+    "technique_name": "Remote Services: SMB/Windows Admin Shares"
+  },
+  {
+    "technique_id": "T1021.006",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Remote Services: Windows Remote Management"
+  },
+  {
+    "technique_id": "T1033",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Owner/User Discovery"
+  },
+  {
+    "technique_id": "T1046",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Network Service Discovery"
+  },
+  {
+    "technique_id": "T1047",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Windows Management Instrumentation"
+  },
+  {
+    "technique_id": "T1049",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Network Connections Discovery"
+  },
+  {
+    "technique_id": "T1053",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Create Sch Task On Hosts Cmdline"
+      }
+    ],
+    "technique_name": "Scheduled Task/Job"
+  },
+  {
+    "technique_id": "T1053.005",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Scheduled Task/Job: Scheduled Task"
+  },
+  {
+    "technique_id": "T1055.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Process Injection: Portable Executable Injection"
+  },
+  {
+    "technique_id": "T1055.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Process Injection: Thread Execution Hijacking"
+  },
+  {
+    "technique_id": "T1055.004",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Process Injection: Asynchronous Procedure Call"
+  },
+  {
+    "technique_id": "T1059.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Execute Power Shell Cmd"
+      },
+      {
+        "n": 2,
+        "label": "Execute Power Shell Cmd Encoded"
+      }
+    ],
+    "technique_name": "Command and Scripting Interpreter: PowerShell"
+  },
+  {
+    "technique_id": "T1059.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Command and Scripting Interpreter: Windows Command Shell"
+  },
+  {
+    "technique_id": "T1059.005",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Command and Scripting Interpreter: Visual Basic"
+  },
+  {
+    "technique_id": "T1059.007",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Command and Scripting Interpreter: JavaScript"
+  },
+  {
+    "technique_id": "T1069.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "T1069.001"
+  },
+  {
+    "technique_id": "T1069.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Domain Group Discovery Cmd"
+      },
+      {
+        "n": 2,
+        "label": "Domain Group Discovery Power Shell"
+      }
+    ],
+    "technique_name": "T1069.002"
+  },
+  {
+    "technique_id": "T1070.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Clear Security Event Log N E T"
+      }
+    ],
+    "technique_name": "Indicator Removal: Clear Windows Event Logs"
+  },
+  {
+    "technique_id": "T1082",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Information Discovery"
+  },
+  {
+    "technique_id": "T1083",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Local File And Directory Discovery"
+      }
+    ],
+    "technique_name": "File and Directory Discovery"
+  },
+  {
+    "technique_id": "T1087.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Local Account Discovery Cmd"
+      },
+      {
+        "n": 2,
+        "label": "Local Account Discovery Power Shell"
+      }
+    ],
+    "technique_name": "T1087.001"
+  },
+  {
+    "technique_id": "T1087.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Domain Account Discovery Cmd"
+      },
+      {
+        "n": 2,
+        "label": "Domain Account Discovery Power Shell"
+      }
+    ],
+    "technique_name": "T1087.002"
+  },
+  {
+    "technique_id": "T1105",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Download File Power Shell"
+      },
+      {
+        "n": 2,
+        "label": "Download File Bits Admin"
+      }
+    ],
+    "technique_name": "T1105"
+  },
+  {
+    "technique_id": "T1110.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Local Domain Password Spray"
+      }
+    ],
+    "technique_name": "Brute Force: Password Spraying"
+  },
+  {
+    "technique_id": "T1124",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Time Discovery"
+  },
+  {
+    "technique_id": "T1134.004",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Access Token Manipulation: Parent PID Spoofing"
+  },
+  {
+    "technique_id": "T1135",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Network Share Enumeration Cmd Local"
+      },
+      {
+        "n": 2,
+        "label": "Network Share Enumeration Cmd Remote"
+      }
+    ],
+    "technique_name": "Network Share Discovery"
+  },
+  {
+    "technique_id": "T1136.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Create Local Account Api"
+      }
+    ],
+    "technique_name": "Create Account: Local Account"
+  },
+  {
+    "technique_id": "T1140",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Deobfuscate/Decode Files or Information"
+  },
+  {
+    "technique_id": "T1197",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "BITS Jobs"
+  },
+  {
+    "technique_id": "T1201",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Password Policy Discovery"
+  },
+  {
+    "technique_id": "T1218.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: CMSTP"
+  },
+  {
+    "technique_id": "T1218.004",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: InstallUtil"
+  },
+  {
+    "technique_id": "T1218.005",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: Mshta"
+  },
+  {
+    "technique_id": "T1218.009",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: Regsvcs/Regasm"
+  },
+  {
+    "technique_id": "T1218.010",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: Regsvr32"
+  },
+  {
+    "technique_id": "T1218.011",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Signed Binary Proxy Execution: Rundll32"
+  },
+  {
+    "technique_id": "T1220",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "XSL Script Processing"
+  },
+  {
+    "technique_id": "T1482",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Domain Trust Discovery Cmd"
+      }
+    ],
+    "technique_name": "Domain Trust Discovery"
+  },
+  {
+    "technique_id": "T1518.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "T1518.001"
+  },
+  {
+    "technique_id": "T1543.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Create Windows Service Api"
+      }
+    ],
+    "technique_name": "Create or Modify System Process: Windows Service"
+  },
+  {
+    "technique_id": "T1546.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "WMI Event Subscription"
+  },
+  {
+    "technique_id": "T1547.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "Create Registry Run Key N E T"
+      }
+    ],
+    "technique_name": "Registry Run Keys / Startup Folder"
+  },
+  {
+    "technique_id": "T1558.003",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Steal or Forge Kerberos Tickets: Kerberoasting"
+  },
+  {
+    "technique_id": "T1562.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Impair Defenses: Disable or Modify Tools"
+  },
+  {
+    "technique_id": "T1564.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "Hide Artifacts: Hidden Users"
+  },
+  {
+    "technique_id": "T1569.002",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "System Services: Service Execution"
+  },
+  {
+    "technique_id": "T1570",
+    "variations": [
+      {
+        "n": 1,
+        "label": ""
+      }
+    ],
+    "technique_name": "T1570"
+  },
+  {
+    "technique_id": "T1614.001",
+    "variations": [
+      {
+        "n": 1,
+        "label": "System Language Discovery Cmd"
+      }
+    ],
+    "technique_name": "T1614.001"
+  }
+]

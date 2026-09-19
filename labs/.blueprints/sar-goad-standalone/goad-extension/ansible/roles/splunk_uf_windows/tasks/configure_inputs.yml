@@ -1,0 +1,33 @@
+---
+- name: Create inputs app directory
+  win_file:
+    path: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_inputs\local'
+    state: directory
+
+- name: Deploy Windows Event Log inputs configuration
+  win_copy:
+    src: win_event_log_inputs.conf
+    dest: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_inputs\local\inputs.conf'
+  notify: Restart SplunkForwarder
+
+- name: Create Sysmon inputs app directory
+  win_file:
+    path: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_sysmon_inputs\local'
+    state: directory
+
+- name: Deploy Sysmon inputs configuration
+  win_copy:
+    src: sysmon_inputs.conf
+    dest: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_sysmon_inputs\local\inputs.conf'
+  notify: Restart SplunkForwarder
+
+- name: Create PowerShell inputs app directory
+  win_file:
+    path: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_powershell_inputs\local'
+    state: directory
+
+- name: Deploy PowerShell inputs configuration
+  win_copy:
+    src: powershell_inputs.conf
+    dest: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_powershell_inputs\local\inputs.conf'
+  notify: Restart SplunkForwarder

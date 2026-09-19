@@ -1,0 +1,268 @@
+# SAR + GOAD Integration: Splunk Universal Forwarder Extension
+# =============================================================
+# Play 1: Install Sysmon + enable logging on ALL Windows machines (DC01 + WS01)
+# Play 2: Configure WEF Collector on DC01 (receives events from WS01)
+# Play 3: Configure WEF Source on WS01 (forwards events to DC01)
+# Play 4: Install Splunk UF on DC01 (forwards everything to SAR Splunk)
+#
+# Run with GOAD's venv: ~/.goad/.venv/bin/ansible-playbook
+
+# ── Play 1: Sysmon + Logging on all machines ──
+- name: Install Sysmon and enable logging on all GOAD Windows machines
+  hosts: sysmon_targets
+  tasks:
+    - name: Create ansible working directory
+      win_file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - 'c:\Program Files\ansible'
+        - 'c:\ProgramData\ansible\log'
+
+    - name: Check if Sysmon executable exists
+      win_stat:
+        path: 'c:\Program Files\ansible\sysmon\Sysmon64.exe'
+      register: sysmon_exe_check
+
+    - name: Check if Sysmon service is running
+      win_service:
+        name: Sysmon64
+      register: sysmon_svc
+      ignore_errors: yes
+
+    - name: Copy Sysmon zip from controller (no internet needed on target)
+      win_copy:
+        src: "{{ playbook_dir }}/roles/splunk_uf_windows/files/Sysmon.zip"
+        dest: 'c:\Program Files\ansible\Sysmon.zip'
+      when: not sysmon_exe_check.stat.exists
+
+    - name: Download Sysmon if copy not available
+      win_get_url:
+        url: "{{ sysmon_download_url }}"
+        dest: 'c:\Program Files\ansible\Sysmon.zip'
+        timeout: 120
+      when: not sysmon_exe_check.stat.exists
+      ignore_errors: yes
+
+    - name: Extract Sysmon
+      win_unzip:
+        src: 'c:\Program Files\ansible\Sysmon.zip'
+        dest: 'c:\Program Files\ansible\sysmon'
+        creates: 'c:\Program Files\ansible\sysmon\Sysmon64.exe'
+      when: not sysmon_exe_check.stat.exists
+
+    - name: Add Sysmon to PATH
+      win_path:
+        elements: 'c:\Program Files\ansible\sysmon'
+      when: not sysmon_exe_check.stat.exists
+
+    - name: Copy Sysmon configuration
+      win_copy:
+        src: "{{ playbook_dir }}/roles/splunk_uf_windows/files/sysmonconfig.xml"
+        dest: 'c:\Program Files\ansible\sysmonconfig.xml'
+
+    - name: Install Sysmon (fresh install)
+      win_command: '"c:\Program Files\ansible\sysmon\Sysmon64.exe" -accepteula -i "c:\Program Files\ansible\sysmonconfig.xml"'
+      when: not (sysmon_svc.exists | default(false))
+      register: sysmon_install
+      failed_when: sysmon_install.rc not in [0, 1]
+
+    - name: Update Sysmon config (already installed)
+      win_command: '"c:\Program Files\ansible\sysmon\Sysmon64.exe" -c "c:\Program Files\ansible\sysmonconfig.xml"'
+      when: sysmon_svc.exists | default(false)
+      register: sysmon_update
+      failed_when: false
+
+    - name: Enable Sysmon event log channel
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WINEVT\\Channels\\Microsoft-Windows-Sysmon/Operational"
+        value: "{{ item.value }}"
+        datatype: dword
+        data: "{{ item.data }}"
+      loop:
+        - { value: "Enabled", data: 1 }
+        - { value: "MaxSize", data: 315801600 }
+        - { value: "Retention", data: 0 }
+
+    - name: Enable PowerShell ScriptBlock logging
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging"
+        value: EnableScriptBlockLogging
+        datatype: dword
+        data: 1
+
+    - name: Enable PowerShell Module logging
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging"
+        value: EnableModuleLogging
+        datatype: dword
+        data: 1
+
+    - name: Enable PowerShell Module logging - all modules
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging\\ModuleNames"
+        value: "*"
+        datatype: string
+        data: "*"
+
+# ── Play 2: Configure DC01 as WEF Collector ──
+- name: Configure Windows Event Forwarding Collector on DC01
+  hosts: splunk_forwarder_targets
+  tasks:
+    - name: Start Windows Event Collector service
+      win_service:
+        name: Wecsvc
+        start_mode: auto
+        state: started
+
+    - name: Ensure WinRM is configured
+      win_shell: winrm quickconfig -q
+      ignore_errors: yes
+
+    - name: Allow unencrypted WinRM for WEF
+      win_shell: 'winrm set winrm/config/service @{AllowUnencrypted="true"}'
+      ignore_errors: yes
+
+    - name: Increase ForwardedEvents log size to 500MB
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WINEVT\\Channels\\ForwardedEvents"
+        value: MaxSize
+        datatype: dword
+        data: 524288000
+
+    - name: Enable ForwardedEvents log
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WINEVT\\Channels\\ForwardedEvents"
+        value: Enabled
+        datatype: dword
+        data: 1
+
+    - name: Create WEF subscription XML
+      win_copy:
+        content: |
+          <Subscription xmlns="http://schemas.microsoft.com/2006/03/windows/events/subscription">
+            <SubscriptionId>GOAD-WS01-All-Events</SubscriptionId>
+            <SubscriptionType>SourceInitiated</SubscriptionType>
+            <Description>Collect all security-relevant events from GOAD workstations</Description>
+            <Enabled>true</Enabled>
+            <Uri>http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog</Uri>
+            <ConfigurationMode>Custom</ConfigurationMode>
+            <Delivery Mode="Push">
+              <Batching>
+                <MaxLatencyTime>60000</MaxLatencyTime>
+              </Batching>
+            </Delivery>
+            <Query>
+              <![CDATA[
+                <QueryList>
+                  <Query Id="0" Path="Security">
+                    <Select Path="Security">*</Select>
+                  </Query>
+                  <Query Id="1" Path="System">
+                    <Select Path="System">*</Select>
+                  </Query>
+                  <Query Id="2" Path="Application">
+                    <Select Path="Application">*</Select>
+                  </Query>
+                  <Query Id="3" Path="Microsoft-Windows-Sysmon/Operational">
+                    <Select Path="Microsoft-Windows-Sysmon/Operational">*</Select>
+                  </Query>
+                  <Query Id="4" Path="Microsoft-Windows-PowerShell/Operational">
+                    <Select Path="Microsoft-Windows-PowerShell/Operational">*</Select>
+                  </Query>
+                  <Query Id="5" Path="Windows PowerShell">
+                    <Select Path="Windows PowerShell">*</Select>
+                  </Query>
+                  <Query Id="6" Path="Microsoft-Windows-WMI-Activity/Operational">
+                    <Select Path="Microsoft-Windows-WMI-Activity/Operational">*</Select>
+                  </Query>
+                  <Query Id="7" Path="Microsoft-Windows-TaskScheduler/Operational">
+                    <Select Path="Microsoft-Windows-TaskScheduler/Operational">*</Select>
+                  </Query>
+                </QueryList>
+              ]]>
+            </Query>
+            <ReadExistingEvents>true</ReadExistingEvents>
+            <TransportName>HTTP</TransportName>
+            <ContentFormat>RenderedText</ContentFormat>
+            <Locale Language="en-US"/>
+            <LogFile>ForwardedEvents</LogFile>
+            <AllowedSourceNonDomainComputers>
+            </AllowedSourceNonDomainComputers>
+            <AllowedSourceDomainComputers>O:NSG:BAD:P(A;;GA;;;DC)S:</AllowedSourceDomainComputers>
+          </Subscription>
+        dest: 'C:\Windows\Temp\wef_subscription.xml'
+
+    - name: Delete existing WEF subscription if present
+      win_shell: wecutil ds GOAD-WS01-All-Events
+      ignore_errors: yes
+
+    - name: Create WEF subscription
+      win_shell: wecutil cs C:\Windows\Temp\wef_subscription.xml
+      register: wec_create
+
+    - name: Verify subscription is active
+      win_shell: wecutil gs GOAD-WS01-All-Events
+      register: wec_status
+
+    - name: Show subscription status
+      debug:
+        var: wec_status.stdout_lines
+
+    - name: Add Network Service to Event Log Readers group (for WEF)
+      win_shell: |
+        net localgroup "Event Log Readers" "NT AUTHORITY\NETWORK SERVICE" /add
+      ignore_errors: yes
+
+# ── Play 3: Configure WS01 as WEF Source ──
+- name: Configure Windows Event Forwarding Source on WS01
+  hosts: wef_sources
+  tasks:
+    - name: Enable WinRM service
+      win_service:
+        name: WinRM
+        start_mode: auto
+        state: started
+
+    - name: Ensure WinRM is configured on WS01
+      win_shell: winrm quickconfig -q
+      ignore_errors: yes
+
+    - name: Allow unencrypted WinRM on WS01 for WEF
+      win_shell: 'winrm set winrm/config/service @{AllowUnencrypted="true"}'
+      ignore_errors: yes
+
+    - name: Set GPO - Configure Event Forwarding target (DC01)
+      win_regedit:
+        key: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\EventLog\\EventForwarding\\SubscriptionManager"
+        value: "1"
+        datatype: string
+        data: "Server=http://{{ hostvars['dc01']['ansible_host'] }}:5985/wsman/SubscriptionManager/WEC,Refresh=60"
+
+    - name: Restart WinRM to apply forwarding config
+      win_service:
+        name: WinRM
+        state: restarted
+
+    - name: Force Group Policy update to activate subscription
+      win_shell: gpupdate /force
+
+    - name: Verify WS01 can resolve DC01
+      win_shell: "Test-NetConnection -ComputerName {{ hostvars['dc01']['ansible_host'] }} -Port 5985"
+      register: ws01_to_dc01
+      ignore_errors: yes
+
+    - name: Show connectivity result
+      debug:
+        var: ws01_to_dc01.stdout_lines
+
+# ── Play 4: Install Splunk UF on DC01 + ForwardedEvents input ──
+- name: Install Splunk Universal Forwarder on DC01
+  hosts: splunk_forwarder_targets
+  roles:
+    - { role: 'splunk_uf_windows', tags: 'splunk_uf' }
+  vars:
+    splunk_indexer_ip: "{{ splunk_server_ip | default('10.0.1.12') }}"
+    splunk_indexer_port: "{{ splunk_server_port | default('9997') }}"
+    splunk_mgmt_port: "{{ splunk_server_mgmt_port | default('8089') }}"
+    splunk_admin_password: "{{ splunk_uf_password | default('I-l1ke-Attack-Range!') }}"

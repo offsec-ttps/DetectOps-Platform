@@ -1,0 +1,10 @@
+---
+# Playbook to run Atomic Red Team techniques using p4t12ick.ar_atomic_red_team role from Ansible Galaxy
+- hosts: "{{ target_host }}"
+  gather_facts: true
+  # Note: become is handled by the role internally for Linux tasks
+  # Windows hosts don't support become, so we don't set it at playbook level
+  vars:
+    ar_atomic_red_team_techniques: "{{ techniques | default([]) }}"
+  roles:
+    - p4t12ick.ar_atomic_red_team

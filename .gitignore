@@ -1,0 +1,78 @@
+# ===================== Dependencies =====================
+node_modules/
+**/node_modules/
+package-lock.json.bak
+
+# ===================== Env / secrets ====================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+**/ssh_keys/
+.bas-signing-key.pem
+
+# ===================== Databases ========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ===================== Build output / caches ============
+.next/
+out/
+dist/
+build/
+/src/generated/prisma
+bas-agent/target/
+bas-agent/dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ===================== Python venvs / caches ============
+**/.venv/
+**/venv/
+**/ansible_venv/
+.venv-docs/
+**/__pycache__/
+*.pyc
+
+# ===================== Docs build =======================
+/site/
+
+# ===================== Runtime state / logs / pids ======
+*.log
+*.pid
+logs/
+.uploads/
+/reports/local/
+
+# ===================== Labs (keep blueprints, drop runtime)
+labs/deployments/
+labs/.cache/
+labs/.deployments-registry.json
+labs/.hec-config.json
+
+# ===================== Cloud lab app runtime ============
+cloud-lab-app/.venv/
+cloud-lab-app/.tmp/
+cloud-lab-app/.pipcache/
+cloud-lab-app/.npmcache/
+cloud-lab-app/app/node_modules/
+cloud-lab-app/app/dist/
+cloud-lab-app/**/__pycache__/
+cloud-lab-app/*.pid
+cloud-lab-app/*.log
+cloud-lab-app/ssh_keys/
+
+# ===================== Graphify output ==================
+graphify-out/
+
+# ===================== Presentation decks (not code) ====
+*.pptx
+
+# ===================== OS / editor ======================
+.DS_Store
+Thumbs.db

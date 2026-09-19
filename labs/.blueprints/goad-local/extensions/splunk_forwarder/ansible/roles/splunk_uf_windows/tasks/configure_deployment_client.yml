@@ -1,0 +1,11 @@
+---
+- name: Create deployment client app directory
+  win_file:
+    path: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_deploymentclient\local'
+    state: directory
+
+- name: Configure deploymentclient.conf for SAR deployment server
+  win_template:
+    src: deploymentclient.conf.j2
+    dest: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_deploymentclient\local\deploymentclient.conf'
+  notify: Restart SplunkForwarder

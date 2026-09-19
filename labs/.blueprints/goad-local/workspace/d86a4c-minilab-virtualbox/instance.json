@@ -1,0 +1,10 @@
+{
+    "id": "d86a4c-minilab-virtualbox",
+    "lab": "MINILAB",
+    "provider": "virtualbox",
+    "provisioner": "local",
+    "ip_range": "10.0.1",
+    "extensions": [],
+    "status": "installed",
+    "is_default": false
+}

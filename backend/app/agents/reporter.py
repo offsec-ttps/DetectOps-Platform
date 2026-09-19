@@ -1,0 +1,299 @@
+"""Report Agent — LOCK Pattern documentation and GitHub PR automation.
+
+Generates Markdown reports following the LOCK Pattern:
+  Learn:   Technique details and CTI context.
+  Observe: Expected detection query (SPL/KQL).
+  Check:   SAR simulation execution logs and timestamps.
+  Keep:    Reliability score (Rd) and failure classification.
+
+Automation:
+  1. Generate LOCK markdown for each technique.
+  2. Create a feature branch on GitHub.
+  3. Commit all LOCK reports.
+  4. Open a Draft Pull Request for team review.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Optional
+
+from app.clients.github import github_client
+from app.models import (
+    PipelineRun,
+    ReliabilityScore,
+    ReportResult,
+    SimulationResult,
+    ValidationResult,
+)
+
+logger = logging.getLogger(__name__)
+
+# MITRE ATT&CK tactic lookup (subset for common techniques)
+TACTIC_MAP: dict[str, str] = {
+    "T1566": "Initial Access",
+    "T1059": "Execution",
+    "T1204": "Execution",
+    "T1047": "Execution",
+    "T1053": "Execution / Persistence",
+    "T1003": "Credential Access",
+    "T1071": "Command and Control",
+    "T1021": "Lateral Movement",
+    "T1570": "Lateral Movement",
+    "T1105": "Command and Control",
+    "T1547": "Persistence",
+    "T1543": "Persistence",
+    "T1546": "Persistence",
+    "T1068": "Privilege Escalation",
+    "T1082": "Discovery",
+    "T1083": "Discovery",
+    "T1119": "Collection",
+    "T1560": "Collection",
+    "T1048": "Exfiltration",
+    "T1567": "Exfiltration",
+    "T1486": "Impact",
+}
+
+
+def _get_tactic(technique_id: str) -> str:
+    """Look up the primary MITRE ATT&CK tactic for a technique."""
+    base = technique_id.split(".")[0]
+    return TACTIC_MAP.get(base, "Unknown")
+
+
+def generate_lock_report(
+    technique_id: str,
+    simulation: SimulationResult,
+    validations: list[ValidationResult],
+    score: ReliabilityScore,
+    run_id: str,
+) -> str:
+    """Generate a LOCK Pattern Markdown report for a single technique.
+
+    Returns:
+        Markdown string following Learn/Observe/Check/Keep structure.
+    """
+    tactic = _get_tactic(technique_id)
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    # Collect validation details
+    val_sections = []
+    for v in validations:
+        val_sections.append(
+            f"### {v.siem.upper()}\n"
+            f"- **Translated Query:**\n```\n{v.translated_query or 'N/A'}\n```\n"
+            f"- **Result Count:** {v.result_count}\n"
+            f"- **Raw Log Count:** {v.raw_log_count}\n"
+            f"- **Verdict:** `{v.verdict.value}`\n"
+            f"- **Query Time:** {v.query_time_seconds or 'N/A'}s\n"
+            + (f"- **Error:** {v.error}\n" if v.error else "")
+        )
+
+    validation_md = "\n".join(val_sections) if val_sections else "No validation results available.\n"
+
+    # Rd badge
+    if score.rd == 1.0:
+        rd_badge = "validated"
+    elif score.rd > 0:
+        rd_badge = f"partial (Rd={score.rd:.2f})"
+    else:
+        rd_badge = f"failed ({score.failure_class})"
+
+    report = f"""# LOCK Report: {technique_id}
+
+> **Generated:** {now}
+> **Pipeline Run:** `{run_id}`
+> **Technique:** {technique_id} — {tactic}
+> **Reliability:** `Rd = {score.rd:.2f}` ({rd_badge})
+
+---
+
+## Learn
+
+| Field | Value |
+|-------|-------|
+| Technique ID | `{technique_id}` |
+| Tactic | {tactic} |
+| MITRE Reference | https://attack.mitre.org/techniques/{technique_id.replace('.', '/')}/ |
+
+**CTI Context:**
+This technique is commonly used by adversaries for {tactic.lower()} operations.
+Detection engineers should ensure telemetry sources cover the relevant event IDs
+and that detection logic accounts for known evasion variants.
+
+---
+
+## Observe
+
+Expected detection queries translated by pySigma:
+
+{validation_md}
+
+---
+
+## Check
+
+### Simulation Execution
+| Field | Value |
+|-------|-------|
+| Status | `{simulation.status.value}` |
+| Started | {simulation.started_at or 'N/A'} |
+| Finished | {simulation.finished_at or 'N/A'} |
+| Error | {simulation.error or 'None'} |
+
+<details>
+<summary>ART Output</summary>
+
+```
+{simulation.art_output or 'No output captured'}
+```
+
+</details>
+
+---
+
+## Keep
+
+### Detection Reliability Metric
+
+$$R_d = P(Data) \\times P(Logic) \\times P(Ingest) = {score.p_data:.1f} \\times {score.p_logic:.1f} \\times {score.p_ingest:.1f} = {score.rd:.2f}$$
+
+| Component | Value | Description |
+|-----------|-------|-------------|
+| P(Data) | {score.p_data:.1f} | Raw telemetry data was {"present" if score.p_data == 1.0 else "**missing**"} |
+| P(Logic) | {score.p_logic:.1f} | Detection rule {"**triggered**" if score.p_logic == 1.0 else "did not trigger"} |
+| P(Ingest) | {score.p_ingest:.1f} | Data pipeline {"delivered" if score.p_ingest == 1.0 else "**failed to deliver**"} logs |
+
+**Failure Classification:** `{score.failure_class or "None — detection validated"}`
+
+### Action Items
+{_generate_action_items(score)}
+
+---
+
+*Generated by SentinelFlow Pipeline — [Agentic Threat Hunting Framework (ATHF)](https://github.com/acme-corp/detection-rules)*
+"""
+    return report
+
+
+def _generate_action_items(score: ReliabilityScore) -> str:
+    """Generate actionable next steps based on failure classification."""
+    if score.rd == 1.0:
+        return "- [x] Detection validated. No action required.\n- [ ] Consider adding edge-case test variants.\n"
+
+    items = []
+    if score.failure_class == "no_telemetry":
+        items.extend([
+            "- [ ] **Investigate data pipeline:** Check if the relevant EventCode/data source is configured in inputs.conf or the UF.",
+            "- [ ] **Verify log forwarding:** Confirm the Sysmon/WinEventLog data is reaching the indexer.",
+            "- [ ] **Check MDE enrollment:** If testing MDE, verify the endpoint is onboarded and reporting.",
+        ])
+    elif score.failure_class == "not_triggered":
+        items.extend([
+            "- [ ] **Review detection logic:** The translated SPL/KQL query did not match. Check field names, sourcetype, and index.",
+            "- [ ] **Verify Sigma rule fields:** Ensure the Sigma rule's `logsource` and `detection` fields map correctly to the SIEM schema.",
+            "- [ ] **Test query manually:** Run the translated query in the SIEM UI with a broader time window to debug.",
+        ])
+    else:
+        items.extend([
+            "- [ ] **Review simulation logs:** Check if ART executed the technique successfully.",
+            "- [ ] **Re-run validation:** Retry with extended detection window.",
+        ])
+    return "\n".join(items) + "\n"
+
+
+class ReportAgent:
+    """Generates LOCK reports and opens GitHub Draft PRs."""
+
+    async def generate_and_publish(
+        self,
+        pipeline_run: PipelineRun,
+    ) -> ReportResult:
+        """Generate LOCK reports for all techniques and publish to GitHub.
+
+        Args:
+            pipeline_run: The completed pipeline run with all results.
+
+        Returns:
+            ReportResult with branch, PR URL, and generated markdown.
+        """
+        result = ReportResult()
+
+        # Build lookup maps
+        sim_by_id = {s.technique_id: s for s in pipeline_run.simulations}
+        val_by_id: dict[str, list[ValidationResult]] = {}
+        for v in pipeline_run.validations:
+            val_by_id.setdefault(v.technique_id, []).append(v)
+        score_by_id = {s.technique_id: s for s in pipeline_run.scores}
+
+        # Generate LOCK markdown for each technique
+        technique_ids = [s.technique_id for s in pipeline_run.simulations]
+        reports: dict[str, str] = {}
+
+        for tid in technique_ids:
+            sim = sim_by_id.get(tid)
+            vals = val_by_id.get(tid, [])
+            score = score_by_id.get(tid, ReliabilityScore(technique_id=tid))
+
+            if sim:
+                md = generate_lock_report(tid, sim, vals, score, pipeline_run.run_id)
+                reports[tid] = md
+
+        if not reports:
+            result.error = "No reports generated — no simulation results available"
+            return result
+
+        # Combine into summary for the PR body
+        summary_lines = ["## SentinelFlow Validation Summary\n"]
+        summary_lines.append(f"**Pipeline Run:** `{pipeline_run.run_id}`\n")
+        summary_lines.append(f"**Techniques Tested:** {len(technique_ids)}\n")
+        summary_lines.append("\n| Technique | Rd | Verdict |")
+        summary_lines.append("|-----------|-----|---------|")
+        for tid in technique_ids:
+            score = score_by_id.get(tid, ReliabilityScore(technique_id=tid))
+            verdict = score.failure_class or "validated"
+            summary_lines.append(f"| `{tid}` | {score.rd:.2f} | {verdict} |")
+        summary_md = "\n".join(summary_lines)
+
+        # Store the combined markdown
+        all_md = "\n\n---\n\n".join(reports.values())
+        result.lock_markdown = all_md
+
+        # Publish to GitHub
+        try:
+            branch_name = f"lock/{pipeline_run.run_id}"
+            await github_client.create_branch(branch_name)
+            result.branch_name = branch_name
+
+            # Commit each technique report as a separate file
+            for tid, md in reports.items():
+                file_path = f"docs/lock/{tid.replace('.', '_')}.md"
+                await github_client.commit_file(
+                    branch=branch_name,
+                    file_path=file_path,
+                    content=md,
+                    message=f"lock: add validation report for {tid}\n\nPipeline: {pipeline_run.run_id}",
+                )
+
+            # Open Draft PR
+            pr_data = await github_client.create_draft_pr(
+                branch=branch_name,
+                title=f"LOCK Report — {len(technique_ids)} techniques validated ({pipeline_run.run_id[:8]})",
+                body=summary_md,
+            )
+            result.pr_url = pr_data.get("pr_url", "")
+            result.pr_number = pr_data.get("pr_number", 0)
+
+            logger.info(
+                "Published LOCK reports: branch=%s, PR=#%s",
+                branch_name, result.pr_number,
+            )
+        except Exception as e:
+            logger.error("GitHub publish failed: %s", e)
+            result.error = f"GitHub publish failed: {e}"
+
+        return result
+
+
+report_agent = ReportAgent()

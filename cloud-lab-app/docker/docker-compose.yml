@@ -1,0 +1,74 @@
+services:
+  attack_range:
+    profiles:
+      - cli
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: attack_range:all
+    volumes:
+      - ../config:/attack_range/config
+      # Mount templates directory - changes to templates on host will be available in container
+      - ../templates:/attack_range/templates
+      - ../ssh_keys:/attack_range/ssh_keys
+      # Mount apps directory - playbooks may need to install files from apps folder
+      - ../apps:/attack_range/apps
+      # Mount all cloud provider credentials
+      - ${HOME}/.aws:/root/.aws
+      - ${HOME}/.azure:/root/.azure
+      - ${HOME}/.config/gcloud:/root/.config/gcloud
+    entrypoint: ["python3.12", "attack_range.py"]
+    networks:
+      - attack-range-network
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    container_name: attack-range-api
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../config:/app/config
+      - ../ssh_keys:/app/ssh_keys
+      # Mount templates directory - changes to templates on host will be available in container (read-only)
+      - ../templates:/app/templates:ro
+      # Mount apps directory - playbooks may need to install files from apps folder
+      - ../apps:/app/apps
+      # Mount all cloud provider credentials
+      - ${HOME}/.aws:/root/.aws:ro
+      # Azure CLI needs write access for session files, so mount as writable
+      - ${HOME}/.azure:/root/.azure
+      # GCP CLI needs write access for cache files, so mount as writable
+      - ${HOME}/.config/gcloud:/root/.config/gcloud
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+    restart: unless-stopped
+    networks:
+      - attack-range-network
+
+  app:
+    build:
+      context: ..
+      dockerfile: app/Dockerfile
+    container_name: attack-range-app
+    ports:
+      - "4321:4321"
+    environment:
+      # Mark that we're running in Docker
+      - DOCKER=true
+      # Use Docker service name for server-side SSR requests
+      - API_URL=http://api:4000
+      # Use localhost for client-side requests (browser)
+      - PUBLIC_API_URL=http://localhost:4000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - attack-range-network
+
+networks:
+  attack-range-network:
+    driver: bridge

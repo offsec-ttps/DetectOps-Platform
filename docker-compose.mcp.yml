@@ -1,0 +1,33 @@
+# Dedicated compose for the detection-content MCP server.
+#   docker compose -f docker-compose.mcp.yml up --build
+#
+# Mounts the SQLite detection database read-only into the container. The MCP
+# endpoint is served at http://localhost:3000/api/mcp.
+
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/dev.db
+      - ENABLE_MCP_SERVER=true
+      - MCP_PUBLIC_BASE_URL=${MCP_PUBLIC_BASE_URL:-http://localhost:3000}
+      # AUTH_ENFORCED gates the admin key-management routes; the public /api/mcp
+      # endpoint is always API-key gated regardless.
+      - AUTH_ENFORCED=${AUTH_ENFORCED:-true}
+    volumes:
+      # Provide the detection DB. Read-only is fine — the MCP server never writes
+      # detection content (only the mcp_api_keys table, which lives in the same DB;
+      # drop ":ro" if you mint/revoke keys through the containerized admin API).
+      - ./dev.db:/data/dev.db
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/mcp',{method:'OPTIONS'}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

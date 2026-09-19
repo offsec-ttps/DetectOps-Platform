@@ -1,0 +1,39 @@
+# Dependencies and build artifacts (must not overwrite container's node_modules)
+app/node_modules
+app/dist
+app/.astro
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+.venv
+venv
+env
+
+# Terraform and large runtime data
+**/.terraform
+*.tfstate
+*.tfstate.*
+terraform/**/state
+attack_data
+**/.terraform.lock.hcl
+
+# IDE and OS
+.idea
+.vscode
+.DS_Store
+
+# Docs and misc
+docs/_build
+*.md
+!app/README.md
+!api/README.md
+!api/QUICKSTART.md
+
+# Docker and compose (avoid recursive copy)
+docker
+**/docker-compose*.yml

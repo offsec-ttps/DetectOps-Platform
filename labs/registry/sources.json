@@ -1,0 +1,55 @@
+{
+  "_description": "Registry of known local lab installations. The platform scans these paths to collect configs and create reusable blueprints. Never modifies the source installations.",
+  "sources": [
+    {
+      "id": "sar-local",
+      "name": "Splunk Attack Range (Local)",
+      "type": "sar",
+      "path": "/media/nested/SamsungEvo/Simulation/attack_range_local",
+      "configFiles": [
+        "attack_range_local.conf"
+      ],
+      "keyDirs": [
+        "vagrant",
+        "ansible",
+        "modules"
+      ],
+      "description": "Locally deployed SAR with Splunk server + Windows DC on 10.0.1.0/24"
+    },
+    {
+      "id": "goad-local",
+      "name": "GOAD (Game of Active Directory)",
+      "type": "goad",
+      "path": "/media/nested/SamsungEvo/Projects/GOAD/GOAD",
+      "configFiles": [
+        "ad/MINILAB/data/config.json",
+        "ad/MINILAB/providers/virtualbox/Vagrantfile",
+        "globalsettings.ini"
+      ],
+      "keyDirs": [
+        "ad/MINILAB",
+        "ansible",
+        "extensions/splunk_forwarder",
+        "template"
+      ],
+      "activeInstance": "d86a4c-minilab-virtualbox",
+      "description": "GOAD MINILAB with DC01 + WS01 on 10.0.1.0/24, Splunk Forwarder extension installed"
+    },
+    {
+      "id": "sar-goad-standalone",
+      "name": "SAR + GOAD Standalone Kit",
+      "type": "sar-goad",
+      "path": "/media/nested/SamsungEvo/Test-Projects/detection-platform/sar-goad-standalone",
+      "configFiles": [
+        "scripts/.env.sar-goad"
+      ],
+      "keyDirs": [
+        "goad-extension",
+        "scripts",
+        "backend",
+        "docs"
+      ],
+      "description": "Self-contained SAR + GOAD integration kit with orchestrator, Splunk Forwarder extension, and deployment scripts"
+    }
+  ]
+}

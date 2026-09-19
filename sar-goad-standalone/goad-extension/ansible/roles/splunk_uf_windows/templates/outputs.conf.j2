@@ -1,0 +1,8 @@
+# Splunk Universal Forwarder outputs configuration
+# Forwards all data to SAR Splunk indexer
+
+[tcpout]
+defaultGroup=sar_indexers
+
+[tcpout:sar_indexers]
+server={{ splunk_indexer_ip }}:{{ splunk_indexer_port }}

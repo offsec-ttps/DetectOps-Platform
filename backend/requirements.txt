@@ -1,0 +1,35 @@
+# DetectOps Backend — Python 3.11+
+#
+# The `sigma` binary that the Rule Workspace conversion flow detects is
+# provided by `sigma-cli`. Without it, /api/rule-workspace/sigma-convert
+# reports "Sigma CLI not installed". The individual pysigma backends below
+# expose conversion targets in the Workspace UI (Splunk SPL, ES Lucene,
+# Microsoft KQL, etc.).
+#
+# Installed automatically by start-server.sh into backend/.venv/.
+#
+# FastAPI stack
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.3
+pydantic-settings==2.9.1
+httpx==0.28.1
+
+# Sigma CLI + pySigma + backends + pipelines
+# Versions left open (>=) for the sigma stack because SigmaHQ frequently
+# yanks point releases on PyPI. Pin tight if you need reproducible builds.
+sigma-cli>=1.0,<2
+pysigma>=0.11,<1
+pySigma-backend-splunk>=1.1,<3
+pySigma-backend-elasticsearch>=1.1,<2
+pySigma-backend-microsoft365defender>=0.2,<1
+pySigma-backend-kusto>=0.4,<2
+pySigma-pipeline-sysmon>=1.0,<3
+pySigma-pipeline-windows>=1.0,<3
+
+# Misc
+jinja2==3.1.6
+pyyaml==6.0.2
+python-dotenv==1.1.0
+python-multipart==0.0.20
+eval_type_backport==0.2.2

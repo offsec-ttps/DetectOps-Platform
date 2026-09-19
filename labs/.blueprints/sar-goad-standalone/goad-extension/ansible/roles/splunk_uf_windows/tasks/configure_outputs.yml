@@ -1,0 +1,11 @@
+---
+- name: Create outputs app directory
+  win_file:
+    path: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_outputs\local'
+    state: directory
+
+- name: Configure outputs.conf to forward to SAR Splunk
+  win_template:
+    src: outputs.conf.j2
+    dest: 'C:\Program Files\SplunkUniversalForwarder\etc\apps\sar_outputs\local\outputs.conf'
+  notify: Restart SplunkForwarder

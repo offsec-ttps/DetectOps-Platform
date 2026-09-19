@@ -1,0 +1,2086 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model CommunitySource {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  type               String
+  description        String   @default("")
+  url                String   @default("")
+  lastSyncAt         DateTime?
+  totalRules         Int      @default(0)
+  importedRulesCount Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  rules CommunitySigmaRule[]
+  elasticRules CommunityElasticRule[]
+  // Phase 1 expansion: any source registered through the new adapter interface
+  // (MITRE CAR, Sentinel, Defender XDR, Google SecOps, Panther, Falco, Wazuh)
+  // writes its rules into the unified CommunityRule table.
+  unifiedRules CommunityRule[]
+
+  @@map("community_sources")
+}
+
+// ── Unified Community Rule Model (Phase 1 — Community Content Expansion) ──
+//
+// Normalized container for any NEW community detection source registered via
+// the source adapter interface. Existing SigmaHQ / Elastic / Splunk syncs
+// keep using their dedicated tables (CommunitySigmaRule / CommunityElasticRule
+// / SplunkDetection). This is purely additive.
+//
+// One row per detection rule from any new source. The original raw payload
+// is preserved in `rawPayload` so source-specific rendering can still drill
+// down into format-native fields.
+model CommunityRule {
+  id                  String   @id @default(uuid())
+  sourceId            String
+
+  // ── Identity ──
+  upstreamRuleId      String?  // source-native id (CAR analytic id, KQL guid, YARA-L name, etc)
+  title               String
+  description         String   @default("")
+  author              String   @default("")
+  upstreamCreatedAt   DateTime?
+  upstreamModifiedAt  DateTime?
+
+  // ── ATT&CK alignment ──
+  mitreTechniques     String   @default("[]")  // JSON array of TXXXX[.XXX]
+  mitreTactics        String   @default("[]")  // JSON array
+
+  // ── Targeting ──
+  platforms           String   @default("[]")  // JSON: windows|linux|macos|cloud|network|container...
+  products            String   @default("[]")  // JSON: e.g. "splunk", "kql", "carbonblack"
+  logSources          String   @default("[]")  // JSON: free-form source identifiers
+  tags                String   @default("[]")  // JSON
+
+  // ── Content ──
+  ruleLanguage        String   @default("")    // sigma | spl | kql | eql | yara-l | python | falco-yaml | wazuh-xml | pseudocode
+  ruleType            String   @default("")    // detection | hunting | analytic | policy | correlation
+  detectionLogicRaw   String   @default("")    // the actual rule body in its native language
+  conversionSupported Boolean  @default(false) // true when ruleLanguage = sigma (Sigma CLI can convert)
+
+  // ── Maturity / risk ──
+  severity            String   @default("")    // info | low | medium | high | critical
+  status              String   @default("")    // production | experimental | deprecated | community
+  references          String   @default("[]")  // JSON array of URLs
+  falsePositives      String   @default("[]")  // JSON
+
+  // ── Source linking + change detection ──
+  sourceFilePath      String   @default("")
+  sourceUrl           String   @default("")
+  rawPayload          String   @default("{}")  // full source-specific JSON for drill-down
+  contentHash         String   @default("")    // for change detection across syncs
+  changeStatus        String   @default("new") // new | modified | deleted | unchanged
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  source CommunitySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, sourceFilePath])
+  @@index([sourceId])
+  @@index([ruleLanguage])
+  @@map("community_rules")
+}
+
+// Tracks Sigma CLI / pySigma conversion attempts (Phase 6 spike)
+// Stored separately from CommunityRule so the original is never mutated.
+model SigmaConversion {
+  id              String   @id @default(uuid())
+  sourceRuleId    String?  // CommunityRule.id OR CommunitySigmaRule.id (string ref, not FK)
+  sourceTable     String   @default("community_sigma_rules") // which table the source came from
+  inputYaml       String   // the sigma YAML that was converted
+  targetBackend   String   // splunk | esql | elastic_lucene | kql | panther | etc
+  outputFormat    String   @default("default")
+  outputQuery     String   @default("")
+  success         Boolean  @default(false)
+  errorMessage    String?
+  stderr          String   @default("")
+  toolVersion     String   @default("")
+  createdAt       DateTime @default(now())
+
+  @@index([sourceRuleId])
+  @@index([targetBackend])
+  @@map("sigma_conversions")
+}
+
+model CommunitySigmaRule {
+  id                     String   @id @default(uuid())
+  sigmaId                String?
+  title                  String
+  description            String   @default("")
+  status                 String   @default("")
+  level                  String   @default("")
+  tags                   String   @default("[]")        // JSON array
+  logsourceCategory      String   @default("")
+  logsourceProduct       String   @default("")
+  logsourceService       String   @default("")
+  detectionYaml          String                          // Full YAML content
+  filePath               String
+  repositoryUrl          String   @default("")
+  author                 String   @default("")
+  date                   String   @default("")
+  modified               String   @default("")
+  falsepositives         String   @default("[]")        // JSON array
+  references             String   @default("[]")        // JSON array
+  mitreTechniques        String   @default("[]")        // JSON array
+  changeStatus           String   @default("new")       // new | modified | deleted | unchanged
+  importStatus           String   @default("not_imported") // not_imported | imported | partial
+  upstreamLastModifiedAt DateTime?
+  contentHash            String   @default("")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  sourceId String
+  source   CommunitySource @relation(fields: [sourceId], references: [id])
+
+  @@unique([sourceId, filePath])
+  @@index([sigmaId])
+  @@index([title])
+  @@index([level])
+  @@index([changeStatus])
+  @@index([importStatus])
+  @@index([logsourceProduct])
+  @@map("community_sigma_rules")
+}
+
+model CommunityElasticRule {
+  id                     String   @id @default(uuid())
+  ruleId                 String?                          // Elastic rule_id UUID
+  name                   String
+  description            String   @default("")
+  severity               String   @default("")            // critical | high | medium | low
+  riskScore              Int      @default(0)
+  type                   String   @default("")            // query | eql | threshold | machine_learning
+  language               String   @default("")            // kuery | eql | lucene
+  query                  String   @default("")            // Detection query
+  index                  String   @default("[]")          // JSON array of index patterns
+  tags                   String   @default("[]")          // JSON array
+  threat                 String   @default("[]")          // JSON array of MITRE threat mappings
+  mitreTechniques        String   @default("[]")          // JSON array of technique IDs
+  mitreTactics           String   @default("[]")          // JSON array of tactic names
+  author                 String   @default("[]")          // JSON array of authors
+  references             String   @default("[]")          // JSON array
+  falsepositives         String   @default("[]")          // JSON array
+  note                   String   @default("")            // Investigation guide
+  setup                  String   @default("")            // Setup instructions
+  ruleContent            String                           // Full TOML content
+  filePath               String
+  repositoryUrl          String   @default("")
+  platform               String   @default("")            // windows | linux | macos | cross-platform | network
+  maturity               String   @default("")            // production | development | deprecated
+  integration            String   @default("[]")          // JSON array of required integrations
+  createdDate            String   @default("")
+  updatedDate            String   @default("")
+  changeStatus           String   @default("new")         // new | modified | deleted | unchanged
+  importStatus           String   @default("not_imported") // not_imported | imported | partial
+  contentHash            String   @default("")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  sourceId String
+  source   CommunitySource @relation(fields: [sourceId], references: [id])
+
+  @@unique([sourceId, filePath])
+  @@index([ruleId])
+  @@index([name])
+  @@index([severity])
+  @@index([changeStatus])
+  @@index([importStatus])
+  @@index([platform])
+  @@index([type])
+  @@map("community_elastic_rules")
+}
+
+model SyncRun {
+  id           String   @id @default(uuid())
+  sourceId     String
+  status       String   @default("running") // running | completed | failed
+  newCount     Int      @default(0)
+  modifiedCount Int     @default(0)
+  deletedCount  Int     @default(0)
+  totalAfterSync Int    @default(0)
+  errorMessage String?
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+
+  @@map("sync_runs")
+}
+
+/// Phase 7 — Rule Workspace draft.
+/// Carries an analyst's adapted detection from "candidate found" through
+/// "PR opened" all the way to "merged into production repo".
+model RuleDraft {
+  id              String   @id @default(uuid())
+  title           String
+  notes           String   @default("")
+
+  // Provenance — which upstream rule did this draft start from?
+  // sourceTable identifies the catalog (community_rules, community_sigma_rules,
+  // community_elastic_rules, splunk_detections, etc.) and sourceRuleId is the
+  // primary key inside that table. Both nullable so analysts can author from
+  // scratch.
+  sourceTable     String?
+  sourceRuleId    String?
+  sourceName      String   @default("") // human-readable provenance label
+
+  // Original (frozen at draft time) and adapted detection logic.
+  originalLanguage String  @default("")  // sigma | kql | spl | yara-l | etc
+  originalLogic    String  @default("")
+  adaptedLanguage  String  @default("")
+  adaptedLogic     String  @default("")
+
+  // Sigma conversion target if the draft is the output of Sigma CLI.
+  conversionTarget String? // splunk | esql | kql | panther | etc
+  conversionToolVersion String @default("")
+
+  // Lifecycle state.
+  status          String   @default("draft") // draft | review | pr_open | merged | abandoned
+  prNumber        Int?
+  prUrl           String?
+  prBranch        String?
+  prRepo          String?  // owner/repo
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([sourceTable, sourceRuleId])
+  @@map("rule_drafts")
+}
+
+/// Phase 8 — Workspace audit log. Records every meaningful workspace action
+/// (draft created, draft updated, PR opened, PR merged, source refreshed,
+/// rollback applied) so a senior detection engineer can reconstruct what
+/// happened and when.
+model WorkspaceAudit {
+  id          String   @id @default(uuid())
+  actor       String   @default("system")
+  action      String   // draft.create | draft.update | draft.pr_open | source.refresh | source.rollback
+  targetType  String   // draft | source | rule
+  targetId    String?
+  details     String   @default("{}") // JSON metadata
+  success     Boolean  @default(true)
+  errorMessage String?
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("workspace_audit")
+}
+
+model AtomicTest {
+  id                String   @id @default(uuid())
+  techniqueId       String                          // T1001, T1001.001
+  techniqueName     String                          // display_name from YAML
+  testNumber        Int                             // 1-based index
+  testGuid          String   @default("")           // auto_generated_guid
+  testName          String
+  testDescription   String   @default("")
+  platforms         String   @default("[]")         // JSON array: ["windows","linux"]
+  elevationRequired Boolean  @default(false)
+  executorName      String   @default("")           // command_prompt, powershell, bash, sh
+  command           String   @default("")
+  cleanupCommand    String   @default("")
+  inputArguments    String   @default("{}")          // JSON object
+  dependencies      String   @default("[]")         // JSON array
+  tactic            String   @default("")           // MITRE tactic name
+  sourceUrl         String   @default("")
+  contentHash       String   @default("")
+  source            String   @default("upstream")    // "upstream" (synced from redcanaryco) | "custom" (saved from the AtomicBuilder)
+  createdBy         String   @default("")            // AuthUser.id for custom rows; "" for upstream
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([techniqueId, testNumber])
+  @@index([techniqueId])
+  @@index([techniqueName])
+  @@index([tactic])
+  @@index([executorName])
+  @@index([elevationRequired])
+  @@index([source])
+  @@map("atomic_tests")
+}
+
+model AtomicSyncMeta {
+  id              String    @id @default(uuid())
+  status          String    @default("running")     // running | completed | failed
+  newCount        Int       @default(0)
+  updatedCount    Int       @default(0)
+  removedCount    Int       @default(0)
+  totalTechniques Int       @default(0)
+  totalTests      Int       @default(0)
+  commitSha       String    @default("")
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@map("atomic_sync_meta")
+}
+
+// ─── Use Case Builder (Phase 1) ──────────────────────────────────────────────
+// A UseCase is a named, multi-step adversary scenario authored in one of three
+// composition modes (atomic | purplesharp | canvas) and exportable as one or
+// more Playbook artifacts (ART YAML, PurpleSharp JSON, Stratus shell). All
+// fields use open-ended strings so new frameworks/modes/sources drop in
+// without schema migrations.
+model UseCase {
+  id              String   @id @default(uuid())
+  name            String
+  description     String   @default("")
+  authorMode      String   @default("atomic")     // "atomic" | "purplesharp" | "canvas"
+  framework       String   @default("atomic")     // "atomic" | "purplesharp" | "stratus" | "mixed"
+  source          String   @default("manual")     // "manual" | "ti" | "rule" | "upload"
+  sourceRefType   String?
+  sourceRefId     String?
+  mitreTechniques String   @default("[]")
+  mitreTactics    String   @default("[]")
+  platforms       String   @default("[]")
+  status          String   @default("draft")      // draft | ready | archived
+  authorId        String   @default("")
+  tags            String   @default("[]")
+  steps           UseCaseStep[]
+  playbooks       Playbook[]
+  canvas          UseCaseCanvas?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([authorMode])
+  @@index([framework])
+  @@index([source])
+  @@map("use_cases")
+}
+
+model UseCaseStep {
+  id              String   @id @default(uuid())
+  useCaseId       String
+  useCase         UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  orderIndex      Int
+  kind            String                                // "atomic" | "purplesharp" | "stratus" | "manual"
+  refId           String   @default("")
+  techniqueId     String   @default("")
+  displayName     String
+  parameters      String   @default("{}")              // per-step overrides JSON
+  expectedSignal  String   @default("")
+  notes           String   @default("")
+  @@index([useCaseId, orderIndex])
+  @@index([techniqueId])
+  @@map("use_case_steps")
+}
+
+model Playbook {
+  id              String   @id @default(uuid())
+  useCaseId       String
+  useCase         UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  format          String                                // "atomic-yaml" | "purplesharp-json" | "stratus-sh"
+  version         Int      @default(1)
+  body            String
+  checksum        String   @default("")
+  generator       String   @default("manual")          // "manual" | "anthropic" | "rule-mapper"
+  generatorModel  String   @default("")
+  createdAt       DateTime @default(now())
+  @@index([useCaseId, format, version])
+  @@map("playbooks")
+}
+
+model UseCaseCanvas {
+  id              String   @id @default(uuid())
+  useCaseId       String   @unique
+  useCase         UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  nodes           String   @default("[]")
+  edges           String   @default("[]")
+  layoutVersion   Int      @default(1)
+  updatedAt       DateTime @updatedAt
+  @@map("use_case_canvases")
+}
+
+model PurpleSharpVariation {
+  id              String   @id @default(uuid())
+  techniqueId     String
+  techniqueName   String
+  variation       Int
+  variationLabel  String   @default("")
+  requiresUrl     Boolean  @default(false)
+  requiresCommand Boolean  @default(false)
+  requiredParams  String   @default("[]")
+  tactic          String   @default("")
+  description     String   @default("")
+  @@unique([techniqueId, variation])
+  @@index([techniqueId])
+  @@map("purplesharp_variations")
+}
+
+model PurpleSharpTemplate {
+  id              String   @id @default(uuid())
+  scenarioPath    String   @unique
+  group           String   @default("")
+  category        String   @default("")
+  name            String
+  description     String   @default("")
+  rawJson         String
+  mitreTechniques String   @default("[]")
+  contentHash     String   @default("")
+  sourceUrl       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([group])
+  @@map("purplesharp_templates")
+}
+
+model StratusAttack {
+  id              String   @id @default(uuid())
+  attackId        String   @unique
+  name            String
+  platform        String
+  tactic          String   @default("")
+  mitreTechniques String   @default("[]")
+  description     String   @default("")
+  prerequisites   String   @default("")
+  detonateCmd     String   @default("")
+  cleanupCmd      String   @default("")
+  isIdempotent    Boolean  @default(true)
+  sourceUrl       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([platform])
+  @@map("stratus_attacks")
+}
+
+// ─── Phase 4 — upload + cloud creds + Stratus execution ─────────────────────
+// Custom detection upload. The file body is stored verbatim so the user can
+// inspect what was uploaded; parser output goes in `parsedTechniques` etc.
+model UploadedDetection {
+  id              String   @id @default(uuid())
+  filename        String
+  format          String                                // sigma | spl | elastic-toml | kql | yaml-unknown
+  rawContent      String
+  parsedTechniques String  @default("[]")
+  parsedTactics   String   @default("[]")
+  parsedLogsource String   @default("")                // free-form log source label
+  // suggested {atomic:[techniqueIds], purplesharp:[techniqueIds], stratus:[attackIds]}
+  inferredMappings String  @default("{}")
+  // FK string into UseCase once materialised. We don't add a relation here so
+  // the upload row survives UseCase archive/delete operations.
+  useCaseId       String?
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+  @@index([uploadedBy])
+  @@index([format])
+  @@map("uploaded_detections")
+}
+
+// AES-GCM-encrypted cloud credentials for the Stratus runtime.
+// `accessKeyId`/`secretKey`/`sessionToken` are base64 of {nonce|ciphertext|tag}
+// where the AEAD key is derived from CREDENTIAL_VAULT_KEY via scrypt.
+// GET endpoints never decrypt — they return label + provider only.
+model CloudCredential {
+  id              String   @id @default(uuid())
+  provider        String                                // aws | azure | gcp | kubernetes | entra-id
+  label           String                                // user-given name
+  accessKeyId     String   @default("")
+  secretKey       String   @default("")
+  sessionToken    String   @default("")
+  configJson      String   @default("{}")              // provider-specific extras (region, subscription, …)
+  ownerId         String   @default("")
+  lastUsedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([provider])
+  @@index([ownerId])
+  @@map("cloud_credentials")
+}
+
+// One per (phase, attack) execution. logs stream as the subprocess emits.
+model StratusExecution {
+  id              String   @id @default(uuid())
+  useCaseId       String?                               // optional FK string into UseCase
+  stepId          String?                               // optional FK string into UseCaseStep
+  attackId        String                                // e.g. aws.credential-access.ec2-get-password-data
+  credentialId    String?                               // FK string into CloudCredential
+  phase           String                                // warmup | detonate | cleanup | dry-run
+  status          String   @default("queued")          // queued | running | success | failure | timeout
+  exitCode        Int?
+  logs            String   @default("")
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  durationMs      Int      @default(0)
+  actor           String   @default("")
+  @@index([useCaseId, attackId])
+  @@index([credentialId])
+  @@index([status, startedAt])
+  @@map("stratus_executions")
+}
+
+// ─── AI generation log (Phase 2) ─────────────────────────────────────────────
+// Every Anthropic invocation gets a row: which generator + model + input ref +
+// token usage. The optional FK to UseCase lets us trace a UseCase back to the
+// generation(s) that produced it (one for "from-ti" + one for each format).
+model AiGeneration {
+  id              String   @id @default(uuid())
+  useCaseId       String?
+  generator       String                                // "atomic-from-prompt" | "ti-to-playbook" | "rule-to-playbook" | "detection-samples"
+  model           String                                // claude-opus-4-7 | claude-sonnet-4-6
+  inputRefType    String                                // "Prompt" | "ThreatIntelReport" | "CommunityRule" | ...
+  inputRefId      String                                // user id / report id / rule id
+  promptVersion   String                                // "ti-to-playbook@v1"
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  costUsd         Float    @default(0)
+  toolName        String   @default("")
+  toolCalls       String   @default("[]")
+  rawResponse     String   @default("")
+  status          String   @default("ok")              // ok | error | rejected
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  @@index([generator, createdAt])
+  @@index([inputRefType, inputRefId])
+  @@index([useCaseId])
+  @@map("ai_generations")
+}
+
+// ─── Unified event log (audit + execution log) ───────────────────────────────
+// Every meaningful action in the app lands here:
+//   - auth.signup / auth.login / auth.verify / auth.logout
+//   - sigma.convert / sigma.detect
+//   - simulation.start / simulation.complete / simulation.chain_persist
+//   - detection.validate
+//   - report.create / report.github_push
+//   - build.run / build.download
+//   - lab.deploy / lab.lifecycle
+//   - integration.test / integration.update
+//   - workspace.* (mirrored from WorkspaceAudit for unified querying)
+// Kept additive: existing WorkspaceAudit table stays for backwards-compat.
+model EventLog {
+  id           String   @id @default(uuid())
+  ts           DateTime @default(now())
+  category     String                              // auth | sigma | simulation | detection | report | build | lab | integration | workspace | other
+  action       String                              // dotted name within category
+  actor        String   @default("system")         // userId or "system" / "anonymous"
+  status       String   @default("ok")             // ok | error | warn | info
+  targetType   String?                             // simulation | draft | report | repo | …
+  targetId     String?
+  durationMs   Int      @default(0)
+  message      String   @default("")
+  details      String   @default("{}")             // JSON object — caller-defined context
+  errorMessage String?
+  requestId    String?                             // optional correlation id
+
+  @@index([category, ts])
+  @@index([action, ts])
+  @@index([actor, ts])
+  @@index([targetType, targetId])
+  @@index([ts])
+  @@map("event_log")
+}
+
+// ─── Auth (landing-page sign-up / sign-in / email verification) ──────────────
+// Minimal local auth: passwords hashed with scrypt (node:crypto), sessions
+// tracked in DB with an HTTP-only cookie. Email verification uses a 6-digit
+// code; since there's no SMTP configured, the code is also returned in the
+// signup response under `__devCode` for development workflows.
+model AuthUser {
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  name                String              @default("")
+  passwordHash        String              // scrypt(saltBase64:hashBase64)
+  emailVerified       Boolean             @default(false)
+  emailVerifiedAt     DateTime?
+  role                String              @default("engineer")   // engineer | admin
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  sessions            AuthSession[]
+  verifications       EmailVerification[]
+
+  @@map("auth_users")
+}
+
+model AuthSession {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  userId      String
+  user        AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  userAgent   String   @default("")
+  ip          String   @default("")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model EmailVerification {
+  id          String    @id @default(uuid())
+  userId      String
+  user        AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash    String    // scrypt of 6-digit numeric code
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_email_verifications")
+}
+
+model SimulationRun {
+  id              String    @id @default(uuid())
+  techniqueIds    String                            // JSON array of technique IDs
+  targetServer    String                            // VM name
+  targetIp        String    @default("")
+  source          String    @default("local")       // local | cloud | fleet | c2 — which environment ran it
+  executor        String    @default("")            // art | caldera
+  parameters      String    @default("{}")          // JSON object
+  status          String    @default("queued")      // queued | running | success | failure | error
+  logs            String    @default("")
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  durationMs      Int       @default(0)
+  // Full simulation+detection chain — written once detection validation completes,
+  // so the History tab can re-display detection outputs and re-export reports
+  // without depending on transient React state.
+  executionMode         String    @default("simulation")  // "simulation" | "simulation_detection"
+  selectedDetections    String    @default("[]")          // JSON array of SplunkDetectionOption snapshots
+  detectionResults      String    @default("[]")          // JSON array of DetectionResult per detection
+  splunkUrl             String    @default("")
+  maxRetries            Int       @default(20)
+  validationCompletedAt DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("simulation_runs")
+}
+
+model SplunkDetection {
+  id                String   @id @default(uuid())
+  detectionId       String   @unique                     // UUID from YAML id field
+  name              String
+  description       String   @default("")
+  author            String   @default("")
+  date              String   @default("")                 // last updated date from YAML
+  status            String   @default("")                 // production | deprecated | experimental
+  type              String   @default("")                 // TTP | Anomaly | Hunting | Correlation
+  search            String   @default("")                 // SPL query
+  dataSource        String   @default("[]")               // JSON array
+  howToImplement    String   @default("")
+  knownFalsePositives String @default("")
+  references        String   @default("[]")               // JSON array
+  mitreTechniques   String   @default("[]")               // JSON array of technique IDs
+  mitreTactics      String   @default("[]")               // JSON array of tactic names
+  analyticStories   String   @default("[]")               // JSON array of story names
+  securityDomain    String   @default("")                 // endpoint | access | network | threat
+  assetType         String   @default("")                 // Endpoint | AWS Account | etc.
+  products          String   @default("[]")               // JSON array
+  category          String   @default("")                 // endpoint | cloud | application | network | web
+  filePath          String
+  sourceUrl         String   @default("")
+  contentHash       String   @default("")
+  version           Int      @default(0)
+  verified          Boolean  @default(false)              // Marked as working after successful detection
+  verifiedAt        DateTime?
+  verifiedTechnique String   @default("")                 // Technique ID that was verified against
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@index([type])
+  @@index([securityDomain])
+  @@index([category])
+  @@index([date])
+  @@index([verified])
+  @@map("splunk_detections")
+}
+
+model CustomDetection {
+  id                String   @id @default(uuid())
+  name              String
+  description       String   @default("")
+  author            String   @default("")
+  search            String                                 // SPL query
+  source            String   @default("custom")            // custom | edited | uploaded
+  sourceDetectionId String?                                // Reference to original SplunkDetection if edited
+  mitreTechniques   String   @default("[]")                // JSON array
+  mitreTactics      String   @default("[]")                // JSON array
+  type              String   @default("")                  // TTP | Anomaly | Hunting | Custom
+  category          String   @default("")
+  securityDomain    String   @default("")
+  verified          Boolean  @default(false)
+  verifiedAt        DateTime?
+  verifiedTechnique String   @default("")
+  tags              String   @default("[]")                // JSON array
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([name])
+  @@index([source])
+  @@index([verified])
+  @@map("custom_detections")
+}
+
+model Integration {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  type            String    @default("")                  // siem | edr | cloud | identity | firewall | cicd | ticketing | messaging
+  authMethod      String    @default("api_key")           // api_key | oauth | mcp_server | credentials | saml_sso | oidc_sso
+  apiUrl          String    @default("")
+  apiKey          String    @default("")
+  clientId        String    @default("")
+  clientSecret    String    @default("")
+  mcpServerUrl    String    @default("")
+  username        String    @default("")
+  password        String    @default("")
+  ssoProvider     String    @default("")                  // saml | oidc
+  ssoIdpUrl       String    @default("")                  // IdP SSO URL or OIDC Discovery URL
+  ssoEntityId     String    @default("")                  // SAML Entity ID / OIDC Issuer
+  ssoAcsUrl       String    @default("")                  // SAML ACS callback URL
+  ssoCertificate  String    @default("")                  // IdP x509 certificate (PEM)
+  ssoScopes       String    @default("")                  // OIDC scopes
+  ssoState        String    @default("")                  // idle | pending | authenticated | failed
+  ssoLastLoginAt  DateTime?
+  ssoUserEmail    String    @default("")
+  extraConfig     String    @default("{}")                // JSON
+  enabled         Boolean   @default(false)
+  connected       Boolean   @default(false)
+  lastTestedAt    DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([type])
+  @@index([enabled])
+  @@map("integrations")
+}
+
+model DetectionReport {
+  id                  String    @id @default(uuid())
+  name                String
+  description         String    @default("")
+  severity            String    @default("medium")
+  status              String    @default("To Do")             // To Do | In Progress | Done | Backlog | L3 Review | L3 Feedback
+  assignee            String    @default("")
+  platform            String    @default("")                  // Splunk Enterprise | Elastic | etc
+  maturityLevel       String    @default("")                  // Developing | Fine-tuned | Fine-tuning in Progress
+  criticality         String    @default("")
+  phase               String    @default("")
+  procedureCoverage   String    @default("")
+  deviceGroup         String    @default("")
+  deviceCoverage      String    @default("")
+  falsePositive       String    @default("No")
+  detectionQuery      String    @default("")
+  observations        String    @default("")
+  reasonsForFailure   String    @default("")
+  recommendations     String    @default("")
+  definedAndWorking   Boolean   @default(false)
+  needsImprovement    Boolean   @default(false)
+  validateDeviceCov   Boolean   @default(false)
+  validateQuerySyntax Boolean   @default(false)
+  checkNewUcRecommend Boolean   @default(false)
+  checkFalsePositives Boolean   @default(false)
+  procedureCovCheck   Boolean   @default(false)
+  observationsCheck   Boolean   @default(false)
+  failureReasonCheck  Boolean   @default(false)
+  recommendCheck      Boolean   @default(false)
+  prDetailedAnalysis  Boolean   @default(false)
+  startDate           DateTime?
+  endDate             DateTime?
+  githubIssueUrl      String    @default("")
+  githubIssueNumber   Int       @default(0)
+  githubReportUrl     String    @default("")
+  githubProjectUrl    String    @default("")
+  githubPushedAt      DateTime?
+  simulations         ReportSimulation[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([severity])
+  @@index([platform])
+  @@map("detection_reports")
+}
+
+model ReportSimulation {
+  id          String   @id @default(uuid())
+  reportId    String
+  description String   @default("")
+  output      String   @default("")
+  order       Int      @default(0)
+  report      DetectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([reportId])
+  @@map("report_simulations")
+}
+
+model ThreatIntelReport {
+  id                    String   @id @default(uuid())
+  threatId              String   @unique                     // TL-XXXX-XXXX
+  title                 String
+  summary               String   @default("")
+  description           String   @default("")
+  severityLevel         String   @default("")                // CRITICAL | HIGH | MEDIUM | LOW
+  cvssScore             Float    @default(0)
+  category              String   @default("")                // APT | SUPPLY_CHAIN | MALWARE | RANSOMWARE | VULNERABILITY | ZERO_DAY | PHISHING
+  status                String   @default("")                // ACTIVE | RESOLVED | MONITORING
+  exploitability        String   @default("")
+  threatActor           String   @default("")
+  threatActorAliases    String   @default("[]")              // JSON array
+  nationState           String   @default("")
+  motivation            String   @default("")
+  attributionConfidence String   @default("")
+  mitreTechniques       String   @default("[]")              // JSON array of {technique_id, technique, tactic, tactic_id}
+  iocs                  String   @default("{}")              // JSON {network, file, behavioral, packages}
+  detections            String   @default("[]")              // JSON array of detection objects
+  detectionCount        Int      @default(0)
+  timeline              String   @default("[]")              // JSON array of {date, event, key}
+  references            String   @default("[]")              // JSON array of {title, url, type, date}
+  remediation           String   @default("{}")              // JSON {immediate, long_term, patches, workarounds}
+  targetSectors         String   @default("[]")              // JSON array
+  targetRegions         String   @default("[]")              // JSON array
+  tags                  String   @default("[]")              // JSON array
+  affected              String   @default("[]")              // JSON array of {vendor, product, versions}
+  contentHash           String   @default("")
+  sourceVendor          String   @default("")                // threadlinqs | rss | misp | opencti | feedly | etc
+  sourceUrl             String   @default("")
+  sourceCreated         DateTime?
+  sourceUpdated         DateTime?
+  syncedAt              DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([category])
+  @@index([severityLevel])
+  @@index([threatActor])
+  @@index([nationState])
+  @@index([sourceCreated])
+  @@index([sourceVendor])
+  @@map("threat_intel_reports")
+}
+
+model TiVendor {
+  id              String    @id @default(uuid())
+  name            String    @unique                       // Threadlinqs | SigmaHQ | MISP | OpenCTI | Feedly | etc
+  description     String    @default("")
+  apiUrl          String    @default("")
+  apiKey          String    @default("")
+  authMethod      String    @default("api_key")           // api_key | oauth | sso | token
+  clientId        String    @default("")
+  clientSecret    String    @default("")
+  enabled         Boolean   @default(false)
+  connected       Boolean   @default(false)
+  lastSyncAt      DateTime?
+  lastError       String?
+  threatCount     Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("ti_vendors")
+}
+
+model ThreatIntelSyncMeta {
+  id              String    @id @default(uuid())
+  status          String    @default("running")
+  newCount        Int       @default(0)
+  updatedCount    Int       @default(0)
+  totalThreats    Int       @default(0)
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@map("threat_intel_sync_meta")
+}
+
+// ── Threat Intelligence Aggregator ──
+
+model TiFeedSource {
+  id              String    @id @default(uuid())
+  name            String
+  type            String    @default("rss")                // rss | blog | api | structured
+  category        String    @default("vendor")             // vendor | research | cert | media | independent | government
+  blogUrl         String    @default("")                   // base blog URL
+  feedUrl         String    @default("")                   // RSS/Atom feed URL
+  active          Boolean   @default(true)
+  lastFetchedAt   DateTime?
+  lastError       String?
+  articleCount    Int       @default(0)
+  indicatorCount  Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  articles        TiArticle[]
+
+  @@unique([feedUrl])
+  @@index([type])
+  @@index([category])
+  @@index([active])
+  @@map("ti_feed_sources")
+}
+
+model TiArticle {
+  id              String    @id @default(uuid())
+  sourceId        String
+  source          TiFeedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  title           String
+  url             String    @unique
+  author          String    @default("")
+  publishedAt     DateTime?
+  rawContent      String    @default("")                   // full text / HTML
+  summary         String    @default("")
+  tags            String    @default("[]")                 // JSON array
+  iocCount        Int       @default(0)
+  processed       Boolean   @default(false)
+  stixBundleId    String    @default("")
+  contentHash     String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  indicators      TiIndicator[]
+
+  @@index([sourceId])
+  @@index([publishedAt])
+  @@index([processed])
+  @@map("ti_articles")
+}
+
+model TiIndicator {
+  id              String    @id @default(uuid())
+  articleId       String?
+  article         TiArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  type            String                                   // ipv4 | ipv6 | domain | url | sha256 | sha1 | md5 | email | cve | filename | registry | mutex
+  value           String
+  context         String    @default("")                   // where/how it was found
+  confidence      String    @default("medium")             // high | medium | low
+  tlp             String    @default("WHITE")              // WHITE | GREEN | AMBER | RED
+  firstSeen       DateTime  @default(now())
+  lastSeen        DateTime  @default(now())
+  sightings       Int       @default(1)
+  mitreTechniques String    @default("[]")                 // JSON array of technique IDs
+  tags            String    @default("[]")                 // JSON array
+  stixId          String    @default("")                   // STIX 2.1 indicator ID
+  sourceRef       String    @default("")                   // source article/feed URL
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([type, value])
+  @@index([type])
+  @@index([value])
+  @@index([articleId])
+  @@index([firstSeen])
+  @@index([lastSeen])
+  @@map("ti_indicators")
+}
+
+model TiAggregatorSync {
+  id              String    @id @default(uuid())
+  status          String    @default("running")
+  sourcesProcessed Int      @default(0)
+  articlesFound   Int       @default(0)
+  indicatorsFound Int       @default(0)
+  errorCount      Int       @default(0)
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@map("ti_aggregator_syncs")
+}
+
+model SplunkSyncMeta {
+  id              String    @id @default(uuid())
+  status          String    @default("running")           // running | completed | failed
+  newCount        Int       @default(0)
+  updatedCount    Int       @default(0)
+  removedCount    Int       @default(0)
+  totalDetections Int       @default(0)
+  commitSha       String    @default("")
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@map("splunk_sync_meta")
+}
+
+// ── GOAD (Game of Active Directory) ──
+
+model GoadInstance {
+  id              String   @id @default(uuid())
+  instanceId      String   @unique
+  lab             String
+  provider        String   @default("virtualbox")
+  provisioner     String   @default("local")
+  ipRange         String
+  status          String   @default("unknown")
+  extensions      String   @default("[]") // JSON array
+  goadPath        String   @default("")
+  splunkIp        String   @default("10.0.1.12")
+  forwarderStatus String   @default("not_installed") // not_installed, installing, installed, failed
+  lastProbeAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vms GoadVm[]
+
+  @@map("goad_instances")
+}
+
+model GoadVm {
+  id         String   @id @default(uuid())
+  instanceId String
+  name       String
+  ip         String
+  os         String   @default("")
+  role       String   @default("")
+  state      String   @default("unknown")
+  reachable  Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  instance GoadInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, name])
+  @@map("goad_vms")
+}
+
+// ── Detection Engineering Lab ──
+
+model LabDeployment {
+  id           String   @id @default(uuid())
+  templateId   String
+  templateName String
+  labType      String   // sar, sar-goad
+  mode         String   // on-prem, cloud
+  size         String   // minimal, standard, full, custom
+  provider     String   @default("virtualbox") // virtualbox, aws, azure, gcp
+  status       String   @default("idle") // idle, deploying, provisioning, installing-tools, running, error, destroyed
+  config       String   @default("{}") // JSON
+  tools        String   @default("[]") // JSON array of tool IDs
+  progress     Int      @default(0)
+  logs         String   @default("[]") // JSON array of log lines
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  toolInstalls LabToolInstall[]
+
+  @@map("lab_deployments")
+}
+
+model LabToolInstall {
+  id           String   @id @default(uuid())
+  deploymentId String
+  toolId       String
+  toolName     String
+  targetVM     String
+  status       String   @default("pending") // pending, installing, installed, failed
+  logs         String   @default("[]") // JSON
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  deployment LabDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@map("lab_tool_installs")
+}
+
+// ── Build Forge (MCP DetecOps) ──
+
+model BuildRepo {
+  id                 String   @id @default(uuid())
+  name               String   @unique                        // short name for UI / API
+  owner              String                                  // GitHub org or user
+  repoName           String                                  // GitHub repo name
+  gitUrl             String                                  // https://github.com/owner/repo.git
+  visibility         String   @default("public")             // public | private
+  description        String   @default("")
+  language           String   @default("")                   // go | rust | python | cpp | dotnet | node
+  buildSystem        String   @default("")                   // go | make | cmake | cargo | npm | pip
+  defaultBranch      String   @default("main")
+  allowedBranches    String   @default("[\"main\"]")         // JSON array
+  targets            String   @default("[]")                 // JSON array of target definitions
+  defaultEnvironment String   @default("linux")
+  defaultArch        String   @default("x64")
+  framework          String   @default("custom")             // sigma | splunk | elastic | osquery | custom
+  avatarUrl          String   @default("")
+  stars              Int      @default(0)
+  enabled            Boolean  @default(true)
+  lastSyncedAt       DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Additive fields (Phase 1: Offensive Tools seed). Optional with safe defaults
+  // so any existing code that doesn't read them keeps working unchanged.
+  category           String   @default("")                   // e.g. "credential-access", "command-and-control"
+  mitreTechniques    String   @default("[]")                 // JSON array of MITRE technique IDs ("T1558.003")
+  riskLevel          String   @default("low")                // low | medium | high
+  // Snapshot of the repo's GitHub Release / meta-repo prebuilt status, populated
+  // at seed time. UI uses this to show "Prebuilt available" and switch the
+  // primary action button between Download and Build. JSON shape:
+  //   { available: bool, kind: "release-assets" | "meta-repo" | "branch-zip" | "none",
+  //     tag?: str, assetCount?: int, primaryAssetName?: str,
+  //     primaryAssetUrl?: str, primaryAssetSize?: int, lastChecked: ISO8601 }
+  prebuiltInfo       String   @default("{}")
+
+  builds BuildRecord[]
+
+  @@index([owner])
+  @@index([language])
+  @@index([framework])
+  @@index([enabled])
+  @@index([category])
+  @@map("build_repos")
+}
+
+model BuildRecord {
+  id             String    @id @default(uuid())
+  repoId         String
+  repo           BuildRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  target         String                                     // target name
+  branch         String
+  commitSha      String    @default("")
+  environment    String    @default("linux")
+  architecture   String    @default("x64")
+  framework      String    @default("custom")
+  buildProfile   String    @default("release")               // debug | release
+  status         String    @default("queued")                // queued | running | success | failed | timeout
+  artifactPath   String    @default("")
+  artifactName   String    @default("")
+  artifactSize   Int       @default(0)
+  artifactHash   String    @default("")                      // SHA-256
+  logSnippet     String    @default("")
+  errorSummary   String    @default("")
+  durationMs     Int       @default(0)
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  savedToCollection Boolean  @default(false)
+
+  @@index([repoId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("build_records")
+}
+
+model BinaryCollection {
+  id              String   @id @default(uuid())
+  name            String                                      // display name
+  binaryName      String                                      // file name on disk
+  repoName        String                                      // e.g. "tomnomnom/waybackurls"
+  repoOwner       String   @default("")
+  language        String   @default("")
+  target          String   @default("")                       // linux-x64, win-x64, etc.
+  environment     String   @default("linux")
+  architecture    String   @default("x64")
+  framework       String   @default("custom")
+  branch          String   @default("")
+  commitSha       String   @default("")
+  buildProfile    String   @default("release")
+  filePath        String                                      // absolute path on disk
+  fileSize        Int      @default(0)
+  sha256          String   @default("")
+  description     String   @default("")
+  tags            String   @default("[]")                     // JSON array — e.g. ["recon","emulation","red-team"]
+  usedInSimulation Boolean @default(false)
+  lastUsedAt      DateTime?
+  buildRecordId   String?                                     // link back to the build that produced it
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([repoName])
+  @@index([target])
+  @@index([environment])
+  @@index([framework])
+  @@map("binary_collection")
+}
+
+// ── Attack Data Replay (Splunk attack_data repo) ──
+
+model SavedReplayDataset {
+  id              String   @id @default(uuid())
+  datasetId       String   // YAML file id field
+  datasetName     String
+  metadataPath    String   // path to .yml file
+  dataFilePath    String   // path to .log/.json data file
+  platform        String?
+  mitreAttackIds  String   @default("[]") // JSON array
+  environment     String?
+  source          String?
+  sourcetype      String?
+  index           String?
+  description     String?
+  collection      String   @default("default") // user-defined folder
+  notes           String?
+  createdBy       String   @default("analyst")
+  createdAt       DateTime @default(now())
+
+  @@unique([datasetId, dataFilePath, createdBy])
+  @@index([collection])
+  @@map("saved_replay_datasets")
+}
+
+model ReplayPlan {
+  id             String   @id @default(uuid())
+  name           String
+  datasetId      String
+  datasetName    String
+  metadataPath   String
+  dataFilePath   String
+  index          String   @default("attack_data")
+  source         String   @default("attack_data")
+  sourcetype     String   @default("_json")
+  hostOverride   String?  // override host for replay
+  splunkHost     String?  // optional override
+  notes          String?
+  commandPreview String?  // saved curl/replay command
+  status         String   @default("draft") // draft, ready, executed
+  createdBy      String   @default("analyst")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastExecutedAt DateTime?
+
+  executions ReplayExecution[]
+
+  @@index([status])
+  @@map("replay_plans")
+}
+
+model ReplayExecution {
+  id            String    @id @default(uuid())
+  planId        String?
+  datasetId     String
+  datasetName   String
+  dataFilePath  String
+  splunkHost    String
+  index         String
+  source        String
+  sourcetype    String
+  status        String    @default("pending") // pending, running, success, failed
+  bytesSent     Int       @default(0)
+  eventsSent    Int       @default(0)
+  durationMs    Int       @default(0)
+  errorMessage  String?
+  hecChannel    String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  plan ReplayPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([datasetId])
+  @@map("replay_executions")
+}
+
+// ─── Detection Pack Pipeline (Phase 1) ─────────────────────────────────────
+// Each pack is one "actionable detection" derived from a TI report or a
+// community rule. Rules are stored per-format in DetectionRule rows; the IR
+// playbook lives in IrPlaybook (1:1 with the pack).
+
+model DetectionPack {
+  id                String   @id @default(uuid())
+  name              String
+  slug              String   @unique
+  description       String   @default("")
+  severity          String   @default("medium")        // info|low|medium|high|critical
+  riskScore         Int      @default(50)              // 0..100
+  category          String   @default("other")         // web|network|os-windows|os-linux|os-macos|cloud|identity|email|third-party|other
+  platforms         String   @default("[]")            // JSON: ["windows","linux",...]
+  dataSources       String   @default("[]")            // JSON: ["Sysmon","CloudTrail",...]
+  mitreTechniques   String   @default("[]")
+  mitreTactics      String   @default("[]")
+  references        String   @default("[]")            // JSON: [{title,url,type:"report"|"blog"|"advisory"|"community"}]
+  status            String   @default("draft")         // draft|test|tune|validate|production|deprecated
+  sourceType        String                              // "ti" | "rule"
+  sourceTable       String                              // ThreatIntelReport | CommunityRule | CommunitySigmaRule | …
+  sourceRefId       String
+  generatorRunId    String?                             // FK into AiGeneration for the primary run
+  githubIssueUrl    String?
+  githubIssueNumber Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  rules             DetectionRule[]
+  irPlaybook        IrPlaybook?
+  simulations       DetectionSimulation[]
+  @@index([category])
+  @@index([severity, riskScore])
+  @@index([sourceType, sourceRefId])
+  @@map("detection_packs")
+}
+
+model DetectionRule {
+  id               String   @id @default(uuid())
+  packId           String
+  pack             DetectionPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  format           String                              // sigma|spl|kql|elastic-eql|elastic-lucene|yara|falco|wazuh
+  title            String
+  body             String                              // full rule text
+  language         String   @default("")               // sigma|kuery|lucene|eql|spl|yara-l|… (refines format)
+  validationStatus String   @default("unvalidated")    // unvalidated|valid|invalid|converted
+  validationNotes  String   @default("")
+  falsePositives   String   @default("[]")             // JSON array of strings
+  createdAt        DateTime @default(now())
+  @@index([packId, format])
+  @@map("detection_rules")
+}
+
+model DetectionSimulation {
+  id          String   @id @default(uuid())
+  packId      String
+  pack        DetectionPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  framework   String                                   // atomic|purplesharp|stratus
+  refId       String   @default("")                    // AtomicTest.testGuid / PSVariation.id / StratusAttack.attackId
+  techniqueId String
+  displayName String
+  description String   @default("")
+  rationale   String   @default("")                    // why this sim validates the rule
+  createdAt   DateTime @default(now())
+  @@index([packId])
+  @@map("detection_simulations")
+}
+
+model IrPlaybook {
+  id          String   @id @default(uuid())
+  packId      String   @unique
+  pack        DetectionPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  summary     String   @default("")
+  // Structured steps per tier — JSON array of:
+  //   { order:int, title:string, action:string, expectedFinding:string,
+  //     escalateIf:string, references:string[] }
+  l1Steps     String   @default("[]")
+  l2Steps     String   @default("[]")
+  l3Steps     String   @default("[]")
+  containment String   @default("[]")
+  eradication String   @default("[]")
+  recovery    String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("ir_playbooks")
+}
+
+// Job queue stub — populated by Phase 3's post-sync hooks. Added in Phase 1
+// so the worker can land without a follow-up migration.
+model DetectionPackJob {
+  id              String    @id @default(uuid())
+  sourceType      String                                // "ti"|"rule"
+  sourceTable     String
+  sourceRefId     String
+  status          String    @default("queued")         // queued|running|completed|failed|skipped|budget-exceeded
+  attempts        Int       @default(0)
+  costEstimateUsd Float     @default(0)
+  packId          String?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  @@unique([sourceTable, sourceRefId])
+  @@index([status, createdAt])
+  @@map("detection_pack_jobs")
+}
+
+// ─── Enterprise Use Case Pipeline (Phase 1) ─────────────────────────────────
+// Org-uploaded detection use cases with full lifecycle: upload (any format) →
+// validate → map → simulate → coverage check → report → promote. Five models
+// are added up-front so later phases don't require fresh migrations.
+
+model EnterpriseUseCase {
+  id                        String   @id @default(uuid())
+  name                      String
+  description               String   @default("")
+  // Detection logic — three columns + chooser
+  originalDetectionLogic    String   @default("")
+  recommendedDetectionLogic String   @default("")           // canonical Sigma synth
+  recommendedSpl            String   @default("")           // Sigma → SPL via sigma-cli or community import
+  recommendedKql            String   @default("")           // Sigma → KQL via sigma-cli or community import
+  recommendedNotes          String   @default("[]")         // JSON: per-format conversion notes
+  editedDetectionLogic      String   @default("")           // user edit of the Sigma
+  editedSpl                 String   @default("")           // user edit of the SPL body
+  editedKql                 String   @default("")           // user edit of the KQL body
+  selectedLogic             String   @default("original")   // original | recommended | edited
+  selectedFormat            String   @default("sigma")      // sigma | spl | kql — which body the user picked
+  format                    String   @default("")           // sigma | spl | kql | elastic-toml | yara | freeform
+  severity                  String   @default("medium")     // info | low | medium | high | critical
+  platforms                 String   @default("[]")
+  dataSources               String   @default("[]")
+  owner                     String   @default("")
+  // Provenance
+  uploadBatchId             String?
+  sourceFilename            String?
+  sourceRowRef              String   @default("")
+  uploadedBy                String   @default("")
+  // Lifecycle
+  status                    String   @default("imported")   // imported | mapped | scenarios-defined | validated | promoted | retired
+  validationStatus          String   @default("pending")    // pending | green | yellow | red
+  validationDetails         String   @default("{}")         // JSON: per-check results
+  lastValidatedAt           DateTime?
+  nextValidationDueAt       DateTime?
+  validationCadenceDays     Int      @default(365)
+  // SIEM compat for the selected logic — JSON object: { splunk:"ok|warn|fail", sentinel:..., esql:... }
+  siemCompatibility         String   @default("{}")
+  // MITRE
+  mitreTechniques           String   @default("[]")
+  mitreTactics              String   @default("[]")
+  // GitHub link (Phase 4)
+  githubIssueUrl            String?
+  githubIssueNumber         Int?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  scenarios                 EnterpriseUseCaseScenario[]
+  runs                      EnterpriseUseCaseRun[]
+  comments                  EnterpriseUseCaseComment[]
+  @@index([status])
+  @@index([validationStatus])
+  @@index([owner])
+  @@index([uploadBatchId])
+  @@map("enterprise_use_cases")
+}
+
+model EnterpriseUploadBatch {
+  id              String   @id @default(uuid())
+  filename        String
+  format          String                                     // xlsx | csv | md | txt | sigma | spl | kql | yaml | toml | yara
+  bytes           Int      @default(0)
+  parsedRowCount  Int      @default(0)
+  createdRowCount Int      @default(0)
+  status          String   @default("parsing")              // parsing | preview | committed | failed
+  parseErrors     String   @default("[]")
+  previewJson     String   @default("[]")                   // JSON: parsed-but-not-committed rows (Phase 1 keeps the full preview here so commit can re-use it)
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+  @@map("enterprise_upload_batches")
+}
+
+model EnterpriseUseCaseScenario {
+  id          String   @id @default(uuid())
+  useCaseId   String
+  useCase     EnterpriseUseCase @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  ordinal     Int
+  name        String
+  description String   @default("")
+  steps       String   @default("[]")
+  source      String   @default("auto")                     // auto | manual-edit | mixed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([useCaseId, ordinal])
+  @@index([useCaseId])
+  @@map("enterprise_use_case_scenarios")
+}
+
+model EnvironmentTarget {
+  id                   String   @id @default(uuid())
+  name                 String   @unique
+  kind                 String                                // our-template-deployed | user-cloud | agent | shell
+  templateRef          String   @default("")                // splunk-attack-range | goad
+  cloudProvider        String   @default("")                // aws | azure | gcp
+  shellMode            String   @default("")                // reverse | bind
+  description          String   @default("")
+  hostname             String   @default("")
+  port                 Int      @default(0)
+  region               String   @default("")
+  credentialId         String?
+  sshUser              String   @default("")
+  sshKeyRef            String   @default("")
+  agentEnrollmentToken String   @default("")                // AES-GCM via vault key (encrypted at rest)
+  listenerHost         String   @default("")
+  listenerPort         Int      @default(0)
+  payloadKind          String   @default("")                // script | binary | inline
+  payloadRef           String   @default("")
+  goadInstanceId       String?
+  splunkAttackRangeRef String?
+  // ── Agent backend (Phase: Adversary Simulation) ──
+  // When kind="agent", which backend executes: a user-run Caldera server, or
+  // our native lightweight BAS fleet (Rust agent + NATS).
+  agentBackend         String   @default("caldera")         // caldera | native-fleet
+  calderaUrl           String   @default("")
+  calderaApiKeyEnc     String   @default("")                // AES-GCM via vault key
+  calderaGroup         String   @default("red")
+  calderaPaw           String   @default("")                // resolved Caldera agent id
+  agentPlatform        String   @default("")                // windows | linux | darwin
+  fleetId              String?                              // when agentBackend="native-fleet" → Fleet.id
+  ownerId              String   @default("")                // AuthUser.id of the creator (multi-tenant scoping)
+  enabled              Boolean  @default(true)
+  lastSeenAt           DateTime?
+  lastError            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  @@index([kind])
+  @@index([enabled])
+  @@index([ownerId])
+  @@map("environment_targets")
+}
+
+model EnterpriseUseCaseRun {
+  id                String   @id @default(uuid())
+  useCaseId         String
+  useCase           EnterpriseUseCase @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  scenarioId        String?
+  environmentId     String?
+  testedLogicChoice String   @default("")                   // original | recommended | edited
+  mode              String                                   // simulate-only | simulate-and-validate
+  runMode           String   @default("immediate")          // immediate | draft | scheduled
+  scheduledFor      DateTime?                                // when this run should fire (null = fire now)
+  status            String   @default("queued")             // queued | running | success | failure | timeout | draft | scheduled | cancelled
+  preflight         String   @default("[]")                  // JSON: per-check results captured at run start
+  startedAt         DateTime?
+  completedAt       DateTime?
+  durationMs        Int      @default(0)
+  exitCode          Int?
+  stepResults       String   @default("[]")
+  logs              String   @default("")
+  detectionResults  String   @default("[]")
+  validationOutcome String   @default("")                   // matched | partial | missed | error | n/a
+  actor             String   @default("")
+  createdAt         DateTime @default(now())
+  @@index([useCaseId, createdAt])
+  @@index([status])
+  @@index([validationOutcome])
+  @@index([scheduledFor])
+  @@map("enterprise_use_case_runs")
+}
+
+model EnterpriseUseCaseComment {
+  id          String   @id @default(uuid())
+  useCaseId   String
+  useCase     EnterpriseUseCase @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  runId       String?
+  author      String   @default("")
+  body        String
+  kind        String   @default("note")                     // note | review | tuning | hand-off | escalation
+  createdAt   DateTime @default(now())
+  @@index([useCaseId, createdAt])
+  @@index([runId])
+  @@map("enterprise_use_case_comments")
+}
+
+// ─── LLM Provider Management (Phase 6) ──────────────────────────────────────
+// User-managed LLM provider configs. Lets operators add an API key for each
+// supported vendor, switch the active model, define custom OpenAI-compatible
+// endpoints, and verify connectivity from the UI. Keys are AES-GCM encrypted
+// at rest via the existing CREDENTIAL_VAULT_KEY.
+
+model LlmProviderConfig {
+  id              String   @id @default(uuid())
+  label           String                                      // human label shown in the UI
+  kind            String                                      // anthropic | openai | openrouter | nvidia | ollama | openai-compatible | custom
+  // Connectivity
+  baseUrl         String   @default("")                       // empty → provider's default endpoint
+  apiKeyEnc       String   @default("")                       // AES-GCM via vault key; "" when none required (e.g. ollama)
+  // Model selection
+  defaultModel    String   @default("")                       // model id the dispatcher uses when no model is specified
+  // Custom auth header style — only honoured for kind="custom"
+  authHeaderName  String   @default("Authorization")          // e.g. "X-API-Key" for vendors who don't use Bearer
+  authHeaderValue String   @default("Bearer {{key}}")         // template — {{key}} substituted at runtime
+  // Optional: when set, listModels uses this verbatim path (relative to baseUrl)
+  modelsPath      String   @default("")                       // e.g. "/v1/models"
+  // State
+  enabled         Boolean  @default(true)
+  isDefault       Boolean  @default(false)                    // exactly one row should carry this; dispatcher uses it as fallback
+  // Test state
+  lastTestedAt    DateTime?
+  lastTestOk      Boolean  @default(false)
+  lastTestLatency Int      @default(0)
+  lastTestMessage String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([kind])
+  @@index([enabled, isDefault])
+  @@map("llm_provider_configs")
+}
+
+// Outbound MCP servers this app queries for enrichment data (distinct from
+// McpApiKey, which is inbound auth for the app's own MCP server).
+model McpClientServer {
+  id              String    @id @default(uuid())
+  label           String                                        // human label shown in the UI; also the registry entry name
+  transport       String                                        // "stdio" | "http"
+  address         String                                        // command line (stdio) or URL (http)
+  tokenEnc        String    @default("")                        // AES-GCM via vault key; sent as Authorization: Bearer <token> for http
+  enabled         Boolean   @default(true)
+  // Test state
+  lastTestedAt    DateTime?
+  lastTestOk      Boolean   @default(false)
+  lastTestLatency Int       @default(0)
+  lastTestMessage String    @default("")
+  lastToolCount   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  @@index([enabled])
+  @@map("mcp_client_servers")
+}
+
+// ─── SigmaGen AI (multi-agent threat-intel → detection pipeline) ─────────────
+// A ChatGPT-style session where a user drops a URL / PDF / docx / txt / IOC /
+// free text. A multi-agent pipeline (intel-extract → ATT&CK-map → use-case →
+// detection → simulation → validation) ingests it, pulls related intel, and
+// produces three artifacts: use cases, simulations, and detection rules.
+//
+// Heavy artifacts REUSE existing tables: detection rules/sims/IRP land in
+// DetectionPack (sourceTable="SigmaGenRun"); use cases land in UseCase
+// (sourceRefType="SigmaGenRun"); every LLM call logs an AiGeneration row with a
+// "sigmagen:" generator prefix. These three tables own only the chat/run state.
+
+model SigmaGenSession {
+  id        String            @id @default(uuid())
+  title     String            @default("Untitled session")
+  createdBy String            @default("")
+  status    String            @default("active")          // active | archived
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  messages  SigmaGenMessage[]
+  runs      SigmaGenRun[]
+  @@index([createdBy, updatedAt])
+  @@map("sigmagen_sessions")
+}
+
+model SigmaGenMessage {
+  id             String          @id @default(uuid())
+  sessionId      String
+  session        SigmaGenSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role           String                                    // user | assistant | system
+  content        String          @default("")
+  inputKind      String          @default("")             // url | pdf | docx | txt | ioc | text
+  attachmentName String          @default("")
+  runId          String?                                   // assistant messages link to the run that produced artifacts
+  createdAt      DateTime        @default(now())
+  @@index([sessionId, createdAt])
+  @@map("sigmagen_messages")
+}
+
+model SigmaGenRun {
+  id             String          @id @default(uuid())
+  sessionId      String
+  session        SigmaGenSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status         String          @default("queued")        // queued | running | completed | failed | budget-exceeded
+  inputKind      String          @default("text")          // url | pdf | docx | txt | ioc | text
+  inputTitle     String          @default("")
+  // Pipeline state
+  steps          String          @default("[]")            // JSON [{agent,status,startedAt,completedAt,summary}]
+  normalizedText String          @default("")              // ingested + retrieved digest (truncated) — fed to loadSource
+  techniques     String          @default("[]")            // JSON ["T1059.001",...] mapped technique list
+  references     String          @default("[]")            // JSON [{title,url,type}] incl. retrieved citations
+  intelJson      String          @default("{}")            // JSON: structured intel-extract output for UI display
+  useCasesJson   String          @default("[]")            // JSON: enriched use cases (objective, scenario, logSources, validation, expectedAlerts, sims) for display
+  guardrailJson  String          @default("{}")            // JSON: guardrail report (injection/jailbreak scan + sanitisation) for this run's input
+  // Produced artifacts (FKs to reused tables)
+  detectionPackId String?                                  // → DetectionPack.id
+  useCaseIds     String          @default("[]")            // JSON array of UseCase.id
+  // Bookkeeping
+  attempts       Int             @default(0)
+  costUsd        Float           @default(0)
+  inputTokens    Int             @default(0)
+  outputTokens   Int             @default(0)
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  @@index([sessionId, createdAt])
+  @@index([status, createdAt])
+  @@map("sigmagen_runs")
+}
+
+// ─── Native BAS Fleet (Adversary Simulation — Track 2) ──────────────────────
+// A first-party lightweight endpoint-simulation fleet: Rust agents enroll, beacon
+// liveness, and execute version-pinned Atomic Red Team tests locally, reporting
+// execution + detection telemetry back. Defensive BAS: every operation is
+// consent-gated; agents run ONLY curated, hash-pinned bundles (no raw-command exec).
+
+model Fleet {
+  id                String   @id @default(uuid())
+  name              String
+  ownerId           String   @default("")        // AuthUser.id of the creator (multi-tenant scoping)
+  customerId        String   @default("")
+  allowedScope      String   @default("[]")     // JSON: test-pack ids this fleet may EVER run
+  consentId         String?                      // signed authorization (required to run)
+  natsSubjectPrefix String   @default("")        // bas.* scoping (M3+)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([ownerId])
+  @@map("fleets")
+}
+
+model FleetNode {
+  id            String    @id @default(uuid())   // node-id
+  fleetId       String
+  name          String    @default("")
+  hostname      String    @default("")
+  os            String    @default("")           // windows | linux | darwin
+  osVersion     String    @default("")
+  arch          String    @default("")
+  agentVersion  String    @default("")
+  apiKeyEnc     String    @default("")           // per-node HTTP secret (AES-GCM)
+  status        String    @default("offline")    // offline | online | revoked
+  enrolledScope String    @default("[]")
+  lastSeen      DateTime?
+  hostStatus    String    @default("{}")         // cpu/ram/edr facts JSON
+  currentRunId  String?
+  createdAt     DateTime  @default(now())
+  @@index([fleetId, status])
+  @@map("fleet_nodes")
+}
+
+model EnrollmentToken {
+  id           String   @id @default(uuid())
+  fleetId      String
+  tokenHash    String   @unique                  // sha256 of the token; plaintext shown once
+  label        String   @default("")
+  allowedScope String   @default("[]")
+  expiresAt    DateTime
+  usedCount    Int      @default(0)
+  maxUses      Int      @default(0)              // 0 = unlimited within TTL
+  revoked      Boolean  @default(false)
+  createdBy    String   @default("")
+  createdAt    DateTime @default(now())
+  @@index([fleetId])
+  @@map("enrollment_tokens")
+}
+
+model FleetCampaign {
+  id            String   @id @default(uuid())
+  fleetId       String
+  createdBy     String   @default("")
+  testSelection String   @default("[]")          // [{technique,testIndex,bundleHash}]
+  targetNodeIds String   @default("[]")
+  schedule      String   @default("{}")          // {type:now|cron|at, expr, window}
+  execution     String   @default("{}")          // {mode, interTestDelayMs, stopOnBlock, requireCleanup:true}
+  consentId     String?
+  status        String   @default("created")     // created|populating|running|completed|failed|halted
+  opsExpected   Int      @default(0)
+  runId         String?                           // optional link to EnterpriseUseCaseRun
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([fleetId, status])
+  @@map("fleet_campaigns")
+}
+
+model FleetOperation {
+  id         String   @id @default(uuid())
+  campaignId String
+  nodeId     String
+  data       String   @default("{}")             // {technique,testIndex,bundleHash,inputArgs,executor,elevation,cleanup,maxRuntimeMs}
+  status     String   @default("queued")         // queued|running|success|failed|blocked|cleanup_failed
+  claimedBy  String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([campaignId, status])
+  @@index([nodeId, status])
+  @@map("fleet_operations")
+}
+
+model FleetTestRun {
+  id            String    @id @default(uuid())
+  operationId   String
+  nodeId        String
+  technique     String
+  testIndex     Int       @default(0)
+  bundleHash    String    @default("")
+  exitCode      Int?
+  executeStatus String    @default("")           // success|failed|blocked
+  cleanupStatus String    @default("")           // ok|failed
+  detection     String    @default("{}")         // {verdict:detected|missed|blocked, edrEventsRef, score}
+  stdoutRef     String    @default("")           // execute stdout (preview; blobs → object store in M6)
+  stderrRef     String    @default("")           // execute stderr
+  cleanupStdoutRef String @default("")           // cleanup stdout
+  cleanupStderrRef String @default("")           // cleanup stderr
+  durationMs    Int       @default(0)
+  telemetryRef  String    @default("")
+  startedAt     DateTime?
+  endedAt       DateTime?
+  @@index([operationId])
+  @@index([nodeId])
+  @@map("fleet_test_runs")
+}
+
+model Consent {
+  id           String    @id @default(uuid())
+  customerId   String    @default("")
+  scope        String    @default("{}")
+  authorizedBy String    @default("")
+  signedDocRef String    @default("")
+  validFrom    DateTime?
+  validTo      DateTime?
+  createdAt    DateTime  @default(now())
+  @@map("consents")
+}
+
+// ── C2 server for Fleet Simulation (user-selectable adversary-emulation C2) ──
+// A standalone C2 controller (MITRE Caldera first; Sliver/OpenBAS later),
+// DECOUPLED from the Local-Lab Caldera. Endpoints run a lightweight C2 beacon
+// and the server pushes TTPs over the channel — no per-endpoint tooling install.
+// A C2Server can be "connect"ed (bring-your-own URL+key) or "managed" (deployed
+// by us as a Docker container). On health-OK it auto-registers a backing
+// EnvironmentTarget(kind=agent, agentBackend=caldera) so the existing runner +
+// Campaign Designer execute against it unchanged.
+model C2Server {
+  id                  String    @id @default(uuid())
+  ownerId             String    @default("")           // AuthUser.id (multi-tenant scoping)
+  name                String    @unique
+  provider            String    @default("caldera")    // caldera | sliver | openbas
+  mode                String    @default("connect")    // connect (BYO) | managed (platform-deployed)
+  url                 String    @default("")           // base URL beacons + REST API use, e.g. http://<lan-ip>:8888
+  apiKeyEnc           String    @default("")           // AES-GCM via vault key
+  group               String    @default("red")        // Caldera group / agent bucket
+  advertiseHost       String    @default("")           // LAN IP advertised to beacons (managed deploy)
+  agentPlatform       String    @default("")           // windows | linux | darwin (optional ability filter)
+  deploymentId        String?                          // managed → labs/deployments/<id>
+  environmentTargetId String?                          // the auto-registered EnvironmentTarget it feeds
+  adminUser           String    @default("")           // managed Caldera UI login (local lab cred)
+  adminPassword       String    @default("")           // managed Caldera UI login (local lab cred, plaintext like Integration creds)
+  // connect mode:  online | offline | error | unknown
+  // managed mode:  installing | installed | starting | running | stopped | error
+  status              String    @default("unknown")
+  lastError           String    @default("")
+  lastSeen            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  @@index([ownerId])
+  @@index([provider])
+  @@map("c2_servers")
+}
+
+// ── SIEM connection for Simulation & Detection (bring-your-own, per-environment) ──
+// Each simulation environment (Local Lab / Cloud Lab / Fleet / C2) can validate
+// detection against its OWN SIEM. Splunk (SPL) and Microsoft Defender for
+// Endpoint (MDE, KQL via Graph Advanced Hunting) are supported. Secrets are
+// AES-GCM encrypted (credential-vault), never stored plaintext — unlike the
+// legacy Integration table. Resolved per target at validation time.
+model SiemConnection {
+  id            String    @id @default(uuid())
+  ownerId       String    @default("")            // AuthUser.id (multi-tenant scoping)
+  name          String    @unique
+  kind          String    @default("splunk")      // splunk | mde
+  scope         String    @default("any")          // local | cloud | fleet | c2 | any — which env it serves
+  targetRef     String    @default("")             // optional: env name / fleetId / c2Id it's bound to
+  isDefault     Boolean   @default(false)          // default connection for its scope
+  // Non-secret config
+  url           String    @default("")             // Splunk REST base, e.g. https://host:8089
+  authMode      String    @default("token")        // splunk: token | basic ; mde: oauth
+  tenantId      String    @default("")             // MDE: Azure AD tenant id
+  clientId      String    @default("")             // MDE: app registration client id
+  username      String    @default("")             // Splunk basic-auth user (non-secret)
+  // Secrets (AES-GCM JSON of { token? | password? | clientSecret? })
+  secretsEnc    String    @default("")
+  status        String    @default("unknown")      // unknown | online | error
+  lastError     String    @default("")
+  lastTested    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([ownerId])
+  @@index([kind])
+  @@index([scope])
+  @@map("siem_connections")
+}
+
+// ── Simulation Module marketplace (plugin architecture) ──
+// A module is DECLARATIVE content (manifest + scenarios + UI metadata) that
+// compiles to ScenarioStep[] the existing runner executes. No arbitrary code.
+model SimulationModule {
+  id             String    @id @default(uuid())
+  moduleId       String    @unique                  // publisher.name
+  name           String
+  version        String                             // current live semver
+  category       String    @default("")             // ransomware|phishing|lateral-movement|...
+  description    String    @default("")
+  author         String    @default("")
+  icon           String    @default("")
+  manifest       String    @default("{}")           // full module.json JSON
+  contentHash    String    @default("")             // sha256 of canonical package
+  status         String    @default("submitted")    // submitted|validating|approved|live|rejected|disabled
+  signatureState String    @default("unsigned")     // unsigned|signed|verified|invalid
+  signatureB64   String    @default("")
+  permissions    String    @default("{}")           // declared capabilities JSON (enforced at runtime)
+  packageRef     String    @default("")             // sha256-keyed package store ref
+  ownerId        String    @default("")             // AuthUser.id
+  enabled        Boolean   @default(true)
+  installedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  versions       ModuleVersion[]
+  validations    ModuleValidationRun[]
+  @@index([status])
+  @@index([category])
+  @@index([ownerId])
+  @@map("simulation_modules")
+}
+
+model ModuleVersion {
+  id           String   @id @default(uuid())
+  moduleRowId  String                               // FK SimulationModule.id
+  module       SimulationModule @relation(fields: [moduleRowId], references: [id], onDelete: Cascade)
+  version      String
+  manifest     String   @default("{}")
+  contentHash  String   @default("")
+  packageRef   String   @default("")
+  signatureB64 String   @default("")
+  changelog    String   @default("")
+  status       String   @default("draft")           // draft|published|yanked
+  createdAt    DateTime @default(now())
+  @@unique([moduleRowId, version])
+  @@index([moduleRowId])
+  @@map("module_versions")
+}
+
+model ModuleValidationRun {
+  id              String    @id @default(uuid())
+  moduleRowId     String                            // FK SimulationModule.id
+  module          SimulationModule @relation(fields: [moduleRowId], references: [id], onDelete: Cascade)
+  version         String
+  status          String    @default("queued")      // queued|running|passed|failed|budget-exceeded
+  attempts        Int       @default(0)
+  checks          String    @default("[]")          // JSON [{name,status,detail}]
+  aiReview        String    @default("{}")           // JSON: runTool verdict + rationale
+  dryRunResults   String    @default("[]")          // JSON: StepRunResult[] from dry-run
+  verdict         String    @default("")            // auto-approve|needs-human|reject
+  costEstimateUsd Float     @default(0)
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  @@unique([moduleRowId, version])
+  @@index([status, createdAt])
+  @@map("module_validation_runs")
+}
+
+// ── Self-hosted ransomware-gang intelligence (RansomLook-style) ──
+model RansomwareGang {
+  id             String    @id @default(uuid())
+  name           String    @unique
+  aliases        String    @default("[]")            // JSON string[]
+  status         String    @default("active")        // active|inactive|rebranded|unknown
+  tier           String    @default("")
+  leakSiteUrls   String    @default("[]")            // JSON string[]
+  screenshotRef  String    @default("")              // screenshot store ref / URL
+  description    String    @default("")
+  profile        String    @default("{}")            // JSON (raw collector profile)
+  knownTTPs      String    @default("[]")            // JSON [{id,name,tactic}]
+  iocs           String    @default("{}")            // JSON {network[],file[],behavioral[]}
+  signatures     String    @default("[]")            // JSON [{kind,name,ref}]
+  targetSectors  String    @default("[]")            // JSON string[]
+  targetRegions  String    @default("[]")            // JSON string[]
+  victimCount    Int       @default(0)
+  references     String    @default("[]")            // JSON [{title,url}]
+  source         String    @default("seed")          // seed|collector|ai
+  enrichedAt     DateTime?
+  contentHash    String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  @@index([status])
+  @@index([source])
+  @@map("ransomware_gangs")
+}
+
+model RansomwareVictim {
+  id            String    @id @default(uuid())
+  gangName      String
+  victim        String
+  sector        String    @default("")
+  country       String    @default("")
+  postUrl       String    @default("")
+  screenshotRef String    @default("")
+  discoveredAt  DateTime?
+  contentHash   String    @default("")
+  createdAt     DateTime  @default(now())
+  @@unique([gangName, victim, discoveredAt])
+  @@index([gangName])
+  @@index([discoveredAt])
+  @@map("ransomware_victims")
+}
+
+model IntelApiKey {
+  id             String    @id @default(uuid())
+  label          String    @default("")
+  keyHash        String    @unique                   // sha256 of the raw key
+  prefix         String    @default("")              // shown in UI to identify the key
+  ownerId        String    @default("")
+  scopes         String    @default("[]")            // JSON string[] (e.g. ["read"])
+  rateLimitPerMin Int      @default(120)
+  enabled        Boolean   @default(true)
+  requestCount   Int       @default(0)
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+  @@index([enabled])
+  @@map("intel_api_keys")
+}
+
+// Issued API keys for the public detection-content MCP server.
+//   - mintKey() returns the plaintext key ONCE (dmcp_<prefix>_<secret>); only
+//     sha256(key) + a short prefix are stored.
+//   - requireMcpApiKey() authenticates, enforces per-minute rate limit + a durable
+//     daily quota, checks scopes, and bumps usage counters.
+model McpApiKey {
+  id              String    @id @default(uuid())
+  label           String    @default("")
+  keyHash         String    @unique                   // sha256 of the raw key
+  prefix          String    @default("")              // shown in UI to identify the key
+  ownerId         String    @default("")
+  scopes          String    @default("[]")            // JSON string[] e.g. ["detections:read","intel:read"]
+  tier            String    @default("free")          // free | pro | admin
+  rateLimitPerMin Int       @default(60)
+  dailyQuota      Int       @default(200)
+  requestCount    Int       @default(0)               // cumulative lifetime calls
+  dailyCount      Int       @default(0)               // calls in the current daily window
+  dailyResetAt    DateTime?                           // when dailyCount was last reset
+  enabled         Boolean   @default(true)
+  lastUsedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  @@index([enabled])
+  @@map("mcp_api_keys")
+}
+
+model IntelCollectionRun {
+  id            String    @id @default(uuid())
+  collector     String                                // ransomwatch|ransomware-live|tor-leaksite|all
+  status        String    @default("running")         // running|success|failed
+  groupsNew     Int       @default(0)
+  groupsUpdated Int       @default(0)
+  victimsNew    Int       @default(0)
+  errors        String    @default("[]")              // JSON string[]
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  @@index([status, startedAt])
+  @@map("intel_collection_runs")
+}
+
+// ── Multi-mode phishing simulation (authorized, audited, consent-gated) ──
+model PhishingCampaign {
+  id            String    @id @default(uuid())
+  name          String
+  mode          String    @default("template")        // template | tool | ai
+  status        String    @default("draft")           // draft|pending_approval|approved|running|completed|aborted|rejected
+  config        String    @default("{}")              // JSON: {templateId|toolId|aiPrompt, targetPersona, scenario, techniques[], consent}
+  generated     String    @default("{}")              // JSON: AI/template content {subject, body, landing}
+  techniques    String    @default("[]")              // JSON string[] (ATT&CK ids exercised)
+  approval      String    @default("{}")              // JSON: {requestedBy, approvedBy, approvedAt, note, decision}
+  results       String    @default("{}")              // JSON: detection-run summary
+  runId         String    @default("")                // EnterpriseUseCaseRun id from the simulation
+  ownerId       String    @default("")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  launchedAt    DateTime?
+  completedAt   DateTime?
+  @@index([status])
+  @@index([ownerId])
+  @@map("phishing_campaigns")
+}
+
+model PhishingTemplate {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  category      String    @default("")                // credential-harvest|attachment|link|bec|mfa-fatigue
+  kind          String    @default("email")           // email | landing
+  subject       String    @default("")
+  body          String    @default("")                // HTML/text with {placeholders}
+  placeholders  String    @default("[]")              // JSON string[]
+  techniques    String    @default("[]")              // JSON string[] ATT&CK ids
+  sourceRef     String    @default("")                // attribution
+  license       String    @default("")
+  createdAt     DateTime  @default(now())
+  @@index([category])
+  @@map("phishing_templates")
+}

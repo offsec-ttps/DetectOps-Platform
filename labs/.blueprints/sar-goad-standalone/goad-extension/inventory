@@ -1,0 +1,7 @@
+; EXTENSION : SPLUNK_FORWARDER ------------------------------------------
+; No new machines needed - this extension only installs agents on existing domain machines
+
+; Target only domain controllers for Splunk UF installation
+; (all AD logs are centralized on the DC)
+[splunk_forwarder_targets]
+dc01

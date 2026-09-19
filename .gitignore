@@ -76,3 +76,6 @@ graphify-out/
 # ===================== OS / editor ======================
 .DS_Store
 Thumbs.db
+
+# stray working image (committed cleanly under docs/images/)
+/post 2image.png

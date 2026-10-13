@@ -300,7 +300,10 @@ function PhasedPanel({ template, canDeploy, blockReason, onBack, feasibility }: 
   template: LabTemplate; canDeploy: boolean; blockReason: string | null; onBack: () => void;
   feasibility: string | null;
 }) {
-  const [deployPath] = useState(() => `~/.detectops-labs/${template.id}`);
+  // Deploy under the project (big disk), not the root-disk home — the root disk
+  // is chronically near-full and VM growth there pauses/crashes the guests. The
+  // deploy route resolves this relative to the project root (server cwd).
+  const [deployPath] = useState(() => `.detectops-labs/${template.id}`);
   const [state, setState] = useState<DeploymentState | null>(null);
   const [running, setRunning] = useState(false);
   const [registered, setRegistered] = useState<{ notes: string[] } | null>(null);

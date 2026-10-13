@@ -72,6 +72,31 @@ async function resolveUniqueSlug(tx: { detectionPack: { findUnique: (a: any) => 
   return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Some models double-escape the rule text inside the tool call, so after JSON
+ * parsing the body still holds literal "\n" / "\t" sequences and no real line
+ * breaks. Stored as-is it renders on one line and pySigma cannot parse the YAML.
+ * Only unescape when the body has no real newline, so rules whose content
+ * legitimately contains "\n" (e.g. a regex) are left alone.
+ */
+export function normalizeRuleBody(body: string): string {
+  if (!body || body.includes("\n") || !/\\[nrt]/.test(body)) return body;
+  return body
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "  ")
+    .replace(/\\"/g, '"');
+}
+
+/**
+ * Sigma only accepts stable | test | experimental | deprecated | unsupported. Models
+ * often write `status: production` (or draft), which makes pySigma reject the whole rule.
+ */
+export function normalizeSigmaStatus(body: string): string {
+  return body.replace(/^status:[ \t]*["']?([A-Za-z_-]+)["']?[ \t]*$/m, (line, s) =>
+    /^(stable|test|experimental|deprecated|unsupported)$/i.test(s) ? line : "status: experimental");
+}
+
 export async function persistPack(input: PackPersistInput) {
   const p = input.packTool;
   // resolveUniqueSlug does findUnique-then-create with no lock, so two
@@ -122,7 +147,11 @@ async function persistOnce(input: PackPersistInput, p: PackPersistInput["packToo
           packId: pack.id,
           format: r.format,
           title: r.title.slice(0, 240),
-          body: r.body.slice(0, 32_000),
+          // The literal-escape unescape (\n → newline, \" → ") only makes sense for
+          // Sigma YAML that arrived double-escaped. Single-line KQL/SPL bodies
+          // legitimately contain \t / \" inside regexes and string literals, so
+          // rewriting those would silently change the query — leave them verbatim.
+          body: (r.format === "sigma" ? normalizeSigmaStatus(normalizeRuleBody(r.body)) : r.body).slice(0, 32_000),
           language: r.language || "",
           falsePositives: JSON.stringify(r.falsePositives || []),
         })),

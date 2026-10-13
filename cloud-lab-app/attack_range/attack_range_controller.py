@@ -510,7 +510,19 @@ class AttackRangeController:
         if not router_public_ip:
             raise ValueError("Router public IP not available. Cannot run VPN playbooks.")
 
-        next_octet = 11 + len(vpn_clients)
+        # Allocate the LOWEST free host octet rather than 11 + len(clients): after
+        # a revoke() the list shrinks, so the length-based scheme would hand a new
+        # client the address of a still-active peer (two WireGuard peers claiming
+        # one AllowedIPs → one of them silently loses access).
+        used_octets = set()
+        for c in vpn_clients:
+            addr = str(c.get("address") or "")
+            host = addr.split("/")[0].rsplit(".", 1)[-1]
+            if host.isdigit():
+                used_octets.add(int(host))
+        next_octet = next((o for o in range(11, 255) if o not in used_octets), None)
+        if next_octet is None:
+            raise ValueError("No free VPN client addresses left in 10.0.1.0/24.")
         new_client = {"name": name, "address": f"10.0.1.{next_octet}/32"}
         new_vpn_clients = list(vpn_clients) + [new_client]
 
@@ -535,3 +547,51 @@ class AttackRangeController:
 
         self.logger.info(f"Share '{name}' created successfully. Config saved to general.sharing.")
         return config_content
+
+    def revoke(self, name: str) -> bool:
+        """Revoke a WireGuard client: remove it from vpn_clients and re-run the VPN
+        playbook so the peer loses access. Mirrors share()."""
+        self.logger.info(f"[action] > revoke client: {name}\n")
+        status = self.config.get("general", {}).get("status", "")
+        if status not in ["wait_for_vpn", "running"]:
+            raise ValueError(f"Cannot revoke. Attack range status is '{status}'.")
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("Client name is required.")
+        vpn_clients = self.config.get("general", {}).get("vpn_clients") or []
+        if not any(c.get("name") == name for c in vpn_clients):
+            raise ValueError(f"No share named '{name}' exists.")
+        new_vpn_clients = [c for c in vpn_clients if c.get("name") != name]
+        router_public_ip = self.config.get("general", {}).get("router_public_ip")
+        if not router_public_ip:
+            raise ValueError("Router public IP not available. Cannot run VPN playbooks.")
+        self.ansible_manager.update_inventory(router_public_ip)
+        self.ansible_manager.update_vpn_playbook(router_public_ip)
+        self.ansible_manager.update_vpn_config_playbook()
+        extra_vars = {"vpn_clients": new_vpn_clients}
+        self.logger.info("Running VPN deploy playbook with client removed...")
+        self.ansible_manager.run_ansible_playbook_safe("vpn.yaml", extra_vars=extra_vars)
+        self.config_manager.update_vpn_clients(new_vpn_clients)
+        self.logger.info(f"Client '{name}' revoked successfully.")
+        return True
+
+    def list_clients(self) -> list:
+        """Return the configured VPN clients with best-effort last-handshake (epoch secs).
+        Used by the LMS ops console for live VPN status."""
+        vpn_clients = self.config.get("general", {}).get("vpn_clients") or []
+        try:
+            handshakes = self._wg_handshakes()
+        except Exception:
+            handshakes = {}
+        return [
+            {"name": c.get("name"), "address": c.get("address"),
+             "last_handshake": handshakes.get(c.get("name"))}
+            for c in vpn_clients
+        ]
+
+    def _wg_handshakes(self) -> dict:
+        """Best-effort {client_name: last_handshake_epoch} via `wg show` on the router.
+        Returns {} when unavailable (the console then shows the client as offline).
+        TODO: run `wg show wg0 dump` over the router SSH/ansible and map peer public
+        keys (tracked in vpn_config) to client names for live/idle status."""
+        return {}

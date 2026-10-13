@@ -1,0 +1,35 @@
+# Threat-Intelligence → Simulation-Library watcher — OPTIONAL scheduled trigger.
+#
+# The always-on trigger is the post-TI-sync hook inside the app; this cron is
+# only for DEPLOYED instances that expose the API over a reachable URL. It is a
+# no-op unless BOTH repository secrets are set:
+#   WATCHER_URL   — base URL of the deployed app (e.g. https://detectops.example.com)
+#   WATCHER_TOKEN — matches the app's WATCHER_TOKEN env (bearer auth on the scan route)
+# Locally the app uses dev.db behind localhost, which CI cannot reach — leave the
+# secrets unset and rely on the post-sync hook + the "Run scan now" button.
+name: ti-watcher-scan
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger watcher scan
+        env:
+          WATCHER_URL: ${{ secrets.WATCHER_URL }}
+          WATCHER_TOKEN: ${{ secrets.WATCHER_TOKEN }}
+        run: |
+          if [ -z "$WATCHER_URL" ] || [ -z "$WATCHER_TOKEN" ]; then
+            echo "WATCHER_URL/WATCHER_TOKEN not set — skipping (local/dev install relies on the post-sync hook)."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$WATCHER_URL/api/ti-watcher/scan" \
+            -H "Authorization: Bearer $WATCHER_TOKEN" \
+            -H "Content-Type: application/json" -d '{}')
+          echo "HTTP $code"; cat /tmp/resp.json
+          [ "$code" = "200" ]

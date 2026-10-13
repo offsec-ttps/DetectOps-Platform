@@ -9,7 +9,7 @@
  * components on the server).
  */
 
-export const BUILTIN_MODULE_VIEW_IDS = ["ransomware-intel", "technique-catalog", "phishing-sim"] as const;
+export const BUILTIN_MODULE_VIEW_IDS = ["ransomware-intel", "technique-catalog", "phishing-sim", "apt-catalog", "attack-catalog", "attack-sim"] as const;
 export type BuiltinModuleViewId = (typeof BUILTIN_MODULE_VIEW_IDS)[number];
 
 export function isBuiltinModuleView(id: string | undefined): id is BuiltinModuleViewId {

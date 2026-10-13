@@ -49,6 +49,8 @@ from api.models import (
     SimulateResponse,
     ShareRequest,
     ShareResponse,
+    RevokeResponse,
+    ClientsResponse,
     UpdateNameRequest,
     UpdateNameResponse,
 )
@@ -1561,6 +1563,65 @@ def share_attack_range(body: ShareRequest):
             message="Failed to share attack range",
             details=traceback.format_exc()
         ).model_dump()), 500
+
+
+@app.post(
+    "/attack-range/revoke",
+    tags=[attack_range_tag],
+    responses={200: RevokeResponse, 400: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    summary="Revoke a VPN client",
+    description="Remove a WireGuard client from the range and re-run the VPN playbook so the peer loses access."
+)
+def revoke_attack_range(body: ShareRequest):
+    """Revoke a WireGuard client by name."""
+    try:
+        config_path = os.path.join(CONFIG_DIR, f"{body.attack_range_id}.yml")
+        if not os.path.exists(config_path):
+            return jsonify(ErrorResponse(
+                message=f"Attack range with ID '{body.attack_range_id}' not found"
+            ).model_dump()), 404
+        config = load_yaml_file(config_path)
+        if not config:
+            return jsonify(ErrorResponse(message="Failed to load config").model_dump()), 500
+        controller = AttackRangeController(config, config_path=config_path)
+        controller.revoke(body.name)
+        return jsonify(RevokeResponse(
+            name=body.name, message=f"Client '{body.name}' revoked."
+        ).model_dump()), 200
+    except ValueError as e:
+        # validation messages are safe to surface (e.g. "no such share")
+        return jsonify(ErrorResponse(message="Revoke validation failed", details=str(e)).model_dump()), 400
+    except Exception:
+        app.logger.exception("attack-range revoke failed")
+        return jsonify(ErrorResponse(message="Failed to revoke client").model_dump()), 500
+
+
+@app.get(
+    "/attack-range/clients/<attack_range_id>",
+    tags=[attack_range_tag],
+    responses={200: ClientsResponse, 404: ErrorResponse, 500: ErrorResponse},
+    summary="List VPN clients",
+    description="List the range's WireGuard clients with best-effort live status (last handshake)."
+)
+def list_attack_range_clients(path: AttackRangeIdPath):
+    """List VPN clients + live status for the ops console."""
+    try:
+        config_path = os.path.join(CONFIG_DIR, f"{path.attack_range_id}.yml")
+        if not os.path.exists(config_path):
+            return jsonify(ErrorResponse(
+                message=f"Attack range with ID '{path.attack_range_id}' not found"
+            ).model_dump()), 404
+        config = load_yaml_file(config_path)
+        if not config:
+            return jsonify(ErrorResponse(message="Failed to load config").model_dump()), 500
+        controller = AttackRangeController(config, config_path=config_path)
+        clients = controller.list_clients()
+        return jsonify(ClientsResponse(
+            attack_range_id=path.attack_range_id, clients=clients
+        ).model_dump()), 200
+    except Exception:
+        app.logger.exception("attack-range clients listing failed")
+        return jsonify(ErrorResponse(message="Failed to list clients").model_dump()), 500
 
 
 @app.post(

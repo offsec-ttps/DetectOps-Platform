@@ -327,6 +327,159 @@ model AtomicSyncMeta {
   @@map("atomic_sync_meta")
 }
 
+// ─── Living-off-the-Land (LOTL) libraries ────────────────────────────────────
+// Per-project living-off-the-land technique catalogs (LOLBAS, GTFOBins,
+// LOLDrivers, LOLRMM, LOOBins, LOLAPI, LOTTunnels, Persistence-Info, LOAS,
+// Sysinternals), ingested from the upstream repos via the magicsword-io
+// Magic-Atomics ingestion model. One polymorphic table discriminated by
+// `library`; field shape mirrors Magic-Atomics' PreventionTest so the ported
+// ingestors map 1:1. SQLite stores JSON as strings (same convention as
+// AtomicTest). Analysts browse these like the Atomic Test Library and save
+// selections as LotlGroup rows to simulate later.
+model LotlTechnique {
+  id                String   @id @default(uuid())
+  library           String                           // "lolbas" | "gtfobins" | "loldrivers" | ...
+  sourceRef         String                           // stable upstream id (filename / slug)
+  name              String
+  description       String   @default("")
+  command           String   @default("")
+  executor          String   @default("manual")       // cmd | powershell | bash | manual
+  cleanupCommand    String   @default("")
+  techniqueId       String   @default("")             // MITRE ATT&CK id, "" when unmapped
+  techniqueName     String   @default("")
+  tactic            String   @default("")
+  binaryPath        String   @default("")
+  elevationRequired Boolean  @default(false)
+  riskLevel         String   @default("medium")        // low | medium | high
+  platforms         String   @default("[]")           // JSON array
+  metadata          String   @default("{}")           // JSON object, source-specific extras
+  sourceUrl         String   @default("")
+  contentHash       String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([library, sourceRef])
+  @@index([library])
+  @@index([techniqueId])
+  @@index([tactic])
+  @@index([executor])
+  @@index([elevationRequired])
+  @@map("lotl_techniques")
+}
+
+model LotlSyncMeta {
+  id           String    @id @default(uuid())
+  library      String    @unique                       // one row per library
+  status       String    @default("running")           // running | completed | failed
+  newCount     Int       @default(0)
+  updatedCount Int       @default(0)
+  removedCount Int       @default(0)
+  totalTests   Int       @default(0)
+  commitSha    String    @default("")
+  errorMessage String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@map("lotl_sync_meta")
+}
+
+// An analyst-created, reusable selection of techniques from one LOTL library,
+// simulated later through the same materialize → runScenario path as the
+// Atomic Test Library. `entries` is a JSON array of LotlTechnique ids.
+model LotlGroup {
+  id          String   @id @default(uuid())
+  name        String
+  library     String                                   // group is scoped to one library
+  description String   @default("")
+  entries     String   @default("[]")                 // JSON array of LotlTechnique ids
+  createdBy   String   @default("")                    // AuthUser.id
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([library])
+  @@index([createdBy])
+  @@map("lotl_groups")
+}
+
+// ─── APT Simulation library (CyberGeoOps snapshot) ───────────────────────────
+// A geo/sector lens over Atomic Red Team tests: a one-time snapshot imported
+// from the CyberGeoOps TIP (tip.sqlite atomics + threat_actors attribution).
+// Each AptAtomic maps an APT group to an ART test by GUID — the executable
+// command/cleanup/executor live in AtomicTest (atomic_tests) and are resolved
+// by `testGuid`, so simulation reuses the existing atomic runner ("one route").
+// Facets: `originCountry` = APT attribution origin, group `sectors` = targeted
+// industry sectors (the "domain" facet). Refresh by re-running the importer.
+model AptGroup {
+  id            String   @id @default(uuid())
+  name          String   @unique                    // group_name as used by the atomics (APT28, Lazarus Group, …)
+  mitreId       String   @default("")               // ATT&CK group id (G0007) when known
+  originCode    String   @default("")               // ISO-ish origin code: RU, CN, IR, KP … "" = unattributed
+  originCountry String   @default("")               // display name: Russia … "" = Unattributed
+  actorType     String   @default("unknown")        // apt | campaign | ransomware | criminal | malware | unknown
+  aliases       String   @default("[]")             // JSON array
+  sectors       String   @default("[]")             // JSON array of targeted sectors, ordered by weight (the "domain" facet)
+  primarySectors String  @default("[]")             // JSON array: the high-signal subset used for faceting
+  targetedCountries String @default("[]")           // JSON array (victimology, informational)
+  tactics       String   @default("[]")             // JSON array of ATT&CK tactics covered by its atomics
+  atomicCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([originCountry])
+  @@index([actorType])
+  @@map("apt_groups")
+}
+
+// One mapping row: an APT group exercises a specific ART test (by GUID). The
+// command/executor/platforms come from AtomicTest via `testGuid`. Denormalised
+// display fields avoid a join for the browser; they mirror the snapshot.
+model AptAtomic {
+  id            String   @id @default(uuid())
+  groupName     String                               // -> AptGroup.name
+  techniqueId   String   @default("")                // T1059.001
+  techniqueName String   @default("")
+  testGuid      String   @default("")                // -> AtomicTest.testGuid (ART auto_generated_guid)
+  testName      String   @default("")
+  platform      String   @default("")                // windows | linux | macos (ART platform hint)
+  executor      String   @default("")                // powershell | command_prompt | sh | bash | manual
+  tactic        String   @default("")                // comma-joined ATT&CK tactics
+  createdAt     DateTime @default(now())
+
+  @@index([groupName])
+  @@index([testGuid])
+  @@index([techniqueId])
+  @@index([platform])
+  @@map("apt_atomics")
+}
+
+// A ready-made adversary emulation plan referenced from the APT Simulation
+// library (MITRE CTID Adversary Emulation Library, CTID micro plans, and the
+// ATT&CK Evaluations `ael` plans). Every row is referential: `repoUrl` points at
+// the real upstream, and for CTID full plans `techniqueIds` are parsed from the
+// plan's own YAML (authentic coverage), making the plan runnable by mapping its
+// techniques to Atomic Red Team tests. Reference-only plans keep techniqueIds=[].
+model AptEmulationPlan {
+  id            String   @id @default(uuid())
+  key           String   @unique                    // slug, e.g. "ctid-apt29"
+  name          String                               // "APT29", "Micro: Process Injection", "ATT&CK Eval R5 — Turla"
+  source        String                               // ctid-full | ctid-micro | attack-eval | other
+  actor         String   @default("")                // linked APT group / actor name ("" for behavior plans)
+  origin        String   @default("")                // free text from the research doc (Russia (SVR), eCrime, …)
+  sectors       String   @default("[]")              // JSON array (primary sectors the plan's actor targets)
+  description   String   @default("")
+  repoUrl       String   @default("")                // real upstream URL
+  referenceUrl  String   @default("")                // results/intel page (e.g. attackevals site)
+  round         String   @default("")                // ATT&CK Eval round label when applicable
+  techniqueIds  String   @default("[]")              // JSON array of ATT&CK ids (authentic for CTID full plans)
+  stepCount     Int      @default(0)                 // emulation steps (CTID full plans)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([source])
+  @@index([actor])
+  @@map("apt_emulation_plans")
+}
+
 // ─── Use Case Builder (Phase 1) ──────────────────────────────────────────────
 // A UseCase is a named, multi-step adversary scenario authored in one of three
 // composition modes (atomic | purplesharp | canvas) and exportable as one or
@@ -2072,15 +2225,85 @@ model PhishingCampaign {
 model PhishingTemplate {
   id            String    @id @default(uuid())
   name          String    @unique
-  category      String    @default("")                // credential-harvest|attachment|link|bec|mfa-fatigue
-  kind          String    @default("email")           // email | landing
+  category      String    @default("")                // credential-harvest|attachment|link|bec|mfa-fatigue|smishing|vishing|malware
+  kind          String    @default("email")           // email | landing | sms
   subject       String    @default("")
   body          String    @default("")                // HTML/text with {placeholders}
   placeholders  String    @default("[]")              // JSON string[]
   techniques    String    @default("[]")              // JSON string[] ATT&CK ids
-  sourceRef     String    @default("")                // attribution
+  sourceRef     String    @default("")                // attribution (real campaign/actor it is modeled on)
   license       String    @default("")
+  // ── awareness-training metadata (banking library) ──
+  description   String    @default("")                // what this simulates + the real campaign it mirrors
+  redFlags      String    @default("[]")              // JSON string[] — teachable warning signs for trainees
+  audience      String    @default("both")            // employee | customer | both
+  region        String    @default("global")          // global | india | us | eu | uk | apac | ...
+  difficulty    String    @default("medium")          // easy | medium | hard
   createdAt     DateTime  @default(now())
   @@index([category])
+  @@index([audience])
   @@map("phishing_templates")
+}
+
+// ─── Threat-Intelligence → Simulation-Library Watcher ───────────────────────
+// The watcher scans ThreatIntelReport rows, classifies each observed technique
+// into the correct Attack-Simulation library, dedups, and links a vetted
+// AtomicTest. Contributions land here as `pending` (review-gated) and, once
+// approved, are merged into the library view by /api/attack-sim/libraries.
+// It NEVER fabricates mappings or payloads — only links to existing atomics.
+model SimLibraryContribution {
+  id                  String    @id @default(uuid())
+  // routing
+  libraryKey          String?                              // target library key (e.g. "clickfix"); null ⇒ unrouted
+  category            String?                              // TechniqueDef.category within the target library
+  techniqueKey        String                               // generated slug (library-scoped)
+  // metadata (extracted from the TI report)
+  name                String
+  description         String    @default("")
+  summary             String    @default("")
+  abuse               String    @default("")
+  attackTechniques    String    @default("[]")             // JSON string[] ATT&CK ids
+  tactic              String?
+  platforms           String    @default("[]")             // JSON string[]
+  severity            String    @default("medium")         // low|medium|high|critical
+  // provenance
+  sourceTable         String    @default("ThreatIntelReport")
+  sourceRefId         String                               // ThreatIntelReport.id
+  sourceUrl           String?
+  sourceVendor        String?
+  sourceTitle         String?
+  // classifier
+  classifierMethod    String    @default("none")           // rules|ai|none
+  classifierConfidence Float    @default(0)
+  classifierReason    String    @default("")
+  // atomic linkage (link existing only — never generated)
+  atomicTestId        String?
+  atomicTestName      String?
+  atomicTestNumber    Int?
+  needsAtomic         Boolean   @default(true)
+  // lifecycle
+  status              String    @default("pending")        // pending|approved|rejected|unrouted
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  // dedup
+  dedupKey            String    @unique                    // `${libraryKey??"unrouted"}:${primaryTechniqueId}:${slug(name)}`
+  @@index([status, createdAt])
+  @@index([libraryKey, status])
+  @@map("sim_library_contributions")
+}
+
+// Observability + watermark for the TI watcher. Watermark = last successful run's startedAt.
+model SimWatcherRun {
+  id                   String    @id @default(uuid())
+  startedAt            DateTime  @default(now())
+  finishedAt           DateTime?
+  reportsScanned       Int       @default(0)
+  contributionsCreated Int       @default(0)
+  unrouted             Int       @default(0)
+  status               String    @default("running")       // running|completed|failed
+  errorMessage         String?
+  @@index([status, startedAt])
+  @@map("sim_watcher_runs")
 }

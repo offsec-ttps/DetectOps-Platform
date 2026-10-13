@@ -39,6 +39,10 @@ function expandHome(p: string | null | undefined): string {
   if (!p) return p || "";
   if (p === "~") return os.homedir();
   if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
+  // A relative deployPath (e.g. ".detectops-labs/<id>") resolves to the project
+  // root, so local labs deploy onto the project's big disk rather than wherever
+  // the server happens to be invoked from.
+  if (!path.isAbsolute(p)) return path.join(process.cwd(), p);
   return p;
 }
 const SAR_SOURCE = process.env.SAR_PATH || "/media/nested/SamsungEvo/Simulation/attack_range_local";

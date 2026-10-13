@@ -34,6 +34,19 @@ export const openrouterProvider: LlmProvider = {
         "X-Title": process.env.OPENROUTER_APP_NAME || "DetectOps",
       },
       pricing: null,
+      extraBody: providerRouting(model),
     }, { ...input, model });
   },
 };
+
+/**
+ * Pin which upstream serves the request. Claude models go to Anthropic's own
+ * API by default: through Amazon Bedrock, large nested tool schemas come back
+ * with `<parameter name=…>` markup inside string values instead of JSON.
+ * OPENROUTER_PROVIDER_ORDER (comma-separated, e.g. "Anthropic,Google") overrides.
+ */
+function providerRouting(model: string): Record<string, unknown> | undefined {
+  const order = process.env.OPENROUTER_PROVIDER_ORDER?.split(",").map((s) => s.trim()).filter(Boolean)
+    ?? (model.startsWith("anthropic/") ? ["Anthropic"] : []);
+  return order.length ? { provider: { order, allow_fallbacks: false } } : undefined;
+}

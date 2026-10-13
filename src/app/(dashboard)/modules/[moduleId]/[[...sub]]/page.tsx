@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Blocks, Loader2, Play, ShieldCheck, AlertTriangle, CheckCircle2, XCircle, ChevronLeft, Server, Zap,
@@ -18,9 +18,13 @@ import { isBuiltinModuleView } from "@/lib/modules/views";
 import RansomwareIntelView from "@/components/modules/views/RansomwareIntelView";
 import TechniqueCatalogView from "@/components/modules/views/TechniqueCatalogView";
 import PhishingSimulationView from "@/components/modules/views/PhishingSimulationView";
+import AptCatalogView from "@/components/modules/views/AptCatalogView";
+import AttackCatalogView from "@/components/modules/views/AttackCatalogView";
+import AttackSimLibraryView from "@/components/modules/views/AttackSimLibraryView";
 
 export default function ModulePage() {
   const params = useParams();
+  const router = useRouter();
   const moduleId = String(params.moduleId || "");
   const sub = Array.isArray(params.sub) ? params.sub.map(String) : params.sub ? [String(params.sub)] : [];
   const [mod, setMod] = useState<any>(null);
@@ -68,11 +72,27 @@ export default function ModulePage() {
   );
 
   // If the module declares a built-in rich view, render it instead of the generic list.
+  // The Back control goes to a DETERMINISTIC destination rather than router.back():
+  // from a sub-page (e.g. a ransomware gang detail) it returns to the module
+  // directory, and from the directory it returns to the Attack Simulations list.
+  // (router.back() looped here because sub-views also push history via <Link>, so a
+  // history-relative back oscillated between the detail page and the directory.)
   const viewId = mod?.manifest?.contributes?.view;
   if (isBuiltinModuleView(viewId)) {
-    if (viewId === "ransomware-intel") return <div className="p-6 max-w-6xl mx-auto"><RansomwareIntelView moduleId={moduleId} sub={sub} /></div>;
-    if (viewId === "technique-catalog") return <div className="p-6 max-w-6xl mx-auto"><TechniqueCatalogView moduleId={moduleId} sub={sub} /></div>;
-    if (viewId === "phishing-sim") return <div className="p-6 max-w-6xl mx-auto"><PhishingSimulationView /></div>;
+    const inSubView = sub.length > 0;
+    const backHref = inSubView ? `/modules/${moduleId}` : "/simulations";
+    const backLabel = inSubView ? "Back" : "Back to Attack Simulations";
+    const BackBar = (
+      <button onClick={() => router.push(backHref)} className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronLeft className="h-3.5 w-3.5" /> {backLabel}
+      </button>
+    );
+    if (viewId === "ransomware-intel") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<RansomwareIntelView moduleId={moduleId} sub={sub} /></div>;
+    if (viewId === "technique-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<TechniqueCatalogView moduleId={moduleId} sub={sub} /></div>;
+    if (viewId === "phishing-sim") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<PhishingSimulationView /></div>;
+    if (viewId === "apt-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AptCatalogView moduleId={moduleId} sub={sub} /></div>;
+    if (viewId === "attack-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AttackCatalogView moduleId={moduleId} sub={sub} /></div>;
+    if (viewId === "attack-sim") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AttackSimLibraryView moduleId={moduleId} sub={sub} /></div>;
   }
 
   const perms = mod.permissions || {};

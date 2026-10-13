@@ -248,7 +248,7 @@ export async function generateDetectionPack(input: GenerateInput): Promise<Gener
       system: DETECTION_PACK_V1.system,
       user: userMsg,
       tool: DETECTION_PACK_V1.tool,
-      maxTokens: 6144,
+      maxTokens: 24000,
     });
   } catch (err) {
     if (err instanceof LlmProviderError) {
@@ -305,7 +305,7 @@ export async function generateDetectionPack(input: GenerateInput): Promise<Gener
       system: IR_PLAYBOOK_V1.system,
       user: buildIrPlaybookUserMessage({ digest: src.digest, packSummary }),
       tool: IR_PLAYBOOK_V1.tool,
-      maxTokens: 6144,
+      maxTokens: 24000,
     });
   } catch (err: any) {
     irpError = err;

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { PlatformBadges } from "@/components/shared/PlatformBadge";
 import {
   Atom, Search, Play, ExternalLink, Shield, Tag, Monitor,
   Terminal, Filter, ChevronRight, ChevronLeft, BookOpen, Clock,
@@ -520,10 +521,10 @@ export default function AtomicTestLibraryPage() {
                         <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-accent">{test.techniqueId}</span>
                         <span className="text-xs font-medium text-foreground truncate">{test.testName}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-muted">
+                      <div className="flex items-center gap-2 text-[10px] text-muted flex-wrap">
                         <span>{test.tactic}</span>
                         <span>·</span>
-                        {test.platforms.map((p) => <span key={p} className="rounded bg-muted/10 px-1 py-0.5">{capitalize(p)}</span>)}
+                        <PlatformBadges platforms={test.platforms} size="xs" />
                         <span>·</span>
                         <span>{test.executorName}</span>
                       </div>
@@ -542,9 +543,7 @@ export default function AtomicTestLibraryPage() {
                         <span className="text-[10px] text-muted-foreground">{test.tactic || "—"}</span>
                       </div>
                       <div className={cn("flex gap-1 flex-wrap", selectedTest ? "col-span-2" : "col-span-2")}>
-                        {test.platforms.map((p) => (
-                          <span key={p} className="rounded bg-muted/10 px-1 py-0.5 text-[9px] font-medium text-muted-foreground">{PLATFORM_ICONS[p] || p}</span>
-                        ))}
+                        <PlatformBadges platforms={test.platforms} size="xs" max={3} />
                       </div>
                       <div className="col-span-1">
                         <span className="text-[10px] text-muted-foreground">{test.executorName || "—"}</span>

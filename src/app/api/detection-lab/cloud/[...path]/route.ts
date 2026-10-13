@@ -38,9 +38,16 @@ const ALLOW: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: "POST", pattern: /^attack-range\/destroy$/ },
   { method: "POST", pattern: /^attack-range\/abort$/ },
   { method: "POST", pattern: /^attack-range\/share$/ },
+  { method: "POST", pattern: /^attack-range\/revoke$/ },        // LMS ops: revoke a student's VPN
+  { method: "GET",  pattern: /^attack-range\/clients\/[^/]+$/ },// LMS ops: list VPN clients + status
   { method: "POST", pattern: /^attack-range\/update-name$/ },
   { method: "POST", pattern: /^attack-range\/simulate$/ },
 ];
+
+// Server-to-server endpoints the RuSecure LMS bridge drives. These bypass the browser
+// and must present the shared service key (DETECTOPS_SERVICE_KEY must match the bridge's
+// DETECTOPS_API_KEY). Browser-facing endpoints are unchanged.
+const SERVICE_ONLY = /^attack-range\/(revoke$|clients\/)/;
 
 function isAllowed(method: string, path: string): boolean {
   return ALLOW.some((r) => r.method === method && r.pattern.test(path));
@@ -55,7 +62,20 @@ async function proxy(req: NextRequest, path: string) {
     );
   }
 
-  const upstream = `${SAR_API}/${path}`;
+  // Service-key gate for the LMS-driven lab-access endpoints.
+  if (SERVICE_ONLY.test(path)) {
+    const key = process.env.DETECTOPS_SERVICE_KEY || "";
+    const provided = req.headers.get("x-detectops-key") || "";
+    if (!key || provided !== key) {
+      return NextResponse.json(
+        { status: "error", message: "Valid X-DetectOps-Key required for this endpoint" },
+        { status: 401 },
+      );
+    }
+  }
+
+  // Forward the query string (e.g. ?range_id=…) along with the path.
+  const upstream = `${SAR_API}/${path}${req.nextUrl.search || ""}`;
   const init: RequestInit = { method, headers: {} };
 
   // Only forward a safe subset of headers

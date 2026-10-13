@@ -97,6 +97,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ nodeId: str
       technique: data.technique || "",
       test_index: data.testIndex ?? 0,
       bundle_hash: data.bundleHash || "",
+      // LOTL addressing key: the agent echoes it to /api/v1/bundles so the
+      // control plane fetches the exact source row. Integrity is still enforced
+      // by the bundle_hash re-check, so this is addressing only, not trust.
+      ...(data.lotlId ? { lotl_id: data.lotlId } : {}),
       max_runtime_ms: data.maxRuntimeMs || 120_000,
       scope,
       consent_ref: consentRef,

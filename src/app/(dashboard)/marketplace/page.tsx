@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Blocks, Search, Loader2, Plus, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, RefreshCw, Hammer,
+  Blocks, Search, Loader2, Plus, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, RefreshCw, Hammer, Download, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,7 @@ export default function MarketplacePage() {
   const [cat, setCat] = useState("all");
   const [ticking, setTicking] = useState(false);
   const [enabled, setEnabled] = useState(true);
+  const [busyId, setBusyId] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +47,23 @@ export default function MarketplacePage() {
     setTicking(true);
     try { await fetch("/api/modules/validation/tick", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await load(); }
     finally { setTicking(false); }
+  };
+
+  // Install enables the module (POST /install resolves deps + sets enabled);
+  // uninstall is a non-destructive disable (PATCH enabled:false) so first-party
+  // modules survive and simply drop out of the Attack Simulations grid.
+  const toggleInstall = async (e: React.MouseEvent, moduleId: string, install: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBusyId(moduleId);
+    try {
+      if (install) {
+        await fetch(`/api/modules/${moduleId}/install`, { method: "POST" });
+      } else {
+        await fetch(`/api/modules/${moduleId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: false }) });
+      }
+      await load();
+    } finally { setBusyId(""); }
   };
 
   const shown = items.filter((m) =>
@@ -112,6 +130,30 @@ export default function MarketplacePage() {
                   {m.signatureState === "verified" && <span className="inline-flex items-center gap-1 text-success"><ShieldCheck className="h-3 w-3" /> signed</span>}
                   <span className="ml-auto">by {m.author}</span>
                 </div>
+                {m.status === "live" && (
+                  <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+                    {m.enabled ? (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success"><CheckCircle2 className="h-3 w-3" /> Installed</span>
+                        <button
+                          onClick={(e) => toggleInstall(e, m.moduleId, false)}
+                          disabled={busyId === m.moduleId}
+                          className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[10px] text-muted-foreground hover:text-danger hover:border-danger/40 disabled:opacity-50"
+                        >
+                          {busyId === m.moduleId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Uninstall
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={(e) => toggleInstall(e, m.moduleId, true)}
+                        disabled={busyId === m.moduleId}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[10px] font-medium text-white hover:bg-[#60a5fa] disabled:opacity-50"
+                      >
+                        {busyId === m.moduleId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Install
+                      </button>
+                    )}
+                  </div>
+                )}
               </Link>
             );
           })}

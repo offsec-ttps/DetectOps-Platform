@@ -9,17 +9,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Loader2, ChevronRight, ArrowRight, Hammer,
+  Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Loader2, ChevronRight, ArrowRight, Hammer, Globe, Cloud, Network, MousePointerClick,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // category/icon-name → component + accent
-const ICONS: Record<string, any> = { Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical };
+const ICONS: Record<string, any> = { Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Globe, Hammer, Cloud, Network, MousePointerClick };
 const CATEGORY_STYLE: Record<string, { icon: any; tone: string }> = {
+  "deceptive-delivery": { icon: MousePointerClick, tone: "text-danger border-danger/30 bg-danger/10" },
   ransomware: { icon: Skull, tone: "text-danger border-danger/30 bg-danger/10" },
   phishing: { icon: Mail, tone: "text-warning border-warning/30 bg-warning/10" },
   discovery: { icon: Terminal, tone: "text-accent border-accent/30 bg-accent/10" },
   "lateral-movement": { icon: Crosshair, tone: "text-purple border-purple/30 bg-purple/10" },
+  apt: { icon: Globe, tone: "text-danger border-danger/30 bg-danger/10" },
+  container: { icon: Boxes, tone: "text-accent border-accent/30 bg-accent/10" },
+  cloud: { icon: Cloud, tone: "text-purple border-purple/30 bg-purple/10" },
+  "active-directory": { icon: Network, tone: "text-danger border-danger/30 bg-danger/10" },
+  hacktools: { icon: Hammer, tone: "text-warning border-warning/30 bg-warning/10" },
 };
 
 export default function SimulationsPage() {
@@ -37,7 +43,10 @@ export default function SimulationsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2"><Boxes className="h-6 w-6 text-accent" /> Attack Simulations</h1>
           <p className="mt-1 text-sm text-muted-foreground">Choose a simulation category. Each maps real-world adversary tradecraft to atomic tests you can run against your environments.</p>
         </div>
-        <Link href="/marketplace" className="inline-flex items-center gap-1.5 h-9 px-3 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground"><Hammer className="h-3.5 w-3.5" /> Module Marketplace</Link>
+        <div className="flex items-center gap-2">
+          <Link href="/simulations/watcher" className="inline-flex items-center gap-1.5 h-9 px-3 text-xs rounded-md border border-purple/40 bg-purple/10 text-purple hover:bg-purple/20"><Radar className="h-3.5 w-3.5" /> Library Updates</Link>
+          <Link href="/marketplace" className="inline-flex items-center gap-1.5 h-9 px-3 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground"><Hammer className="h-3.5 w-3.5" /> Module Marketplace</Link>
+        </div>
       </div>
 
       {loading ? (

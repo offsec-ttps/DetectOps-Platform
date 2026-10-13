@@ -32,6 +32,7 @@ export type EventCategory =
   | "enterprise-uc"  // Enterprise Use Case pipeline: enterprise-uc.upload / .validate / .run / .promote / .comment
   | "bas"            // Adversary-sim BAS fleet: bas.fleet.* / .node.enroll / .node.heartbeat / .campaign.* / .token.*
   | "mcp"            // Detection-content MCP server: mcp.key.mint / .key.revoke / .tools.call / .initialize
+  | "ti-watcher"     // TI → Simulation-Library watcher: ti-watcher.scan.* / .contribution.approved / .rejected
   | "system"
   | "other";
 

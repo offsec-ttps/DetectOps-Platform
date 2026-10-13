@@ -76,6 +76,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       useSmoke: t.useSmoke === true,
       technique: t.technique ? String(t.technique) : undefined,
       testIndex: t.testIndex != null ? Number(t.testIndex) : undefined,
+      lotlId: t.lotlId ? String(t.lotlId) : undefined,
       maxRuntimeMs: body.execution?.maxRuntimeMs != null ? Number(body.execution.maxRuntimeMs) : undefined,
     });
     if (!d.ok) return NextResponse.json({ error: `test ${JSON.stringify(t)}: ${d.error}` }, { status: 400 });
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     data: {
       fleetId: id,
       createdBy: auth.user.email,
-      testSelection: JSON.stringify(dispatches.map((d) => ({ technique: d.data.technique, testIndex: d.data.testIndex, bundleHash: d.data.bundleHash, testName: d.bundle.testName }))),
+      testSelection: JSON.stringify(dispatches.map((d) => ({ technique: d.data.technique, testIndex: d.data.testIndex, bundleHash: d.data.bundleHash, testName: d.bundle.testName, ...(d.data.lotlId ? { lotlId: d.data.lotlId } : {}) }))),
       targetNodeIds: JSON.stringify(usable.map((n) => n.id)),
       schedule: JSON.stringify({ type: "now" }),
       execution: JSON.stringify({

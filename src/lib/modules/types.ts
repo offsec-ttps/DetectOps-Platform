@@ -14,7 +14,8 @@ export type ModuleFramework = (typeof MODULE_FRAMEWORKS)[number];
 
 export const MODULE_CATEGORIES = [
   "ransomware", "phishing", "lateral-movement", "exfiltration", "persistence",
-  "credential-access", "c2", "discovery", "impact", "other",
+  "credential-access", "c2", "discovery", "impact", "apt",
+  "container", "cloud", "active-directory", "hacktools", "deceptive-delivery", "other",
 ] as const;
 export type ModuleCategory = (typeof MODULE_CATEGORIES)[number];
 
@@ -69,9 +70,11 @@ export interface ModuleManifest {
     widgets?: Array<{ id: string; title: string; kind: string }>;
     ownedTables?: string[];        // declarative only (not auto-migrated in v1)
     view?: string;                 // opt into a built-in rich view (e.g. "ransomware-intel")
-    // Curated technique catalogue for the "technique-catalog" view. Resolved to
-    // atomic tests at simulate-time (no pre-baked testGuids needed).
-    catalog?: Array<{ name: string; description?: string; techniques: Array<{ id: string; name: string; tactic?: string }> }>;
+    // Curated technique catalogue for the "technique-catalog" / "attack-catalog"
+    // views. Resolved to atomic tests at simulate-time (no pre-baked testGuids
+    // needed). `domain` lets the attack-catalog view facet groups by sub-domain
+    // (e.g. Docker vs Kubernetes, AWS vs Azure vs GCP) within one library.
+    catalog?: Array<{ name: string; domain?: string; description?: string; techniques: Array<{ id: string; name: string; tactic?: string }> }>;
   };
   entryPoints?: Record<string, string>;  // declarative pointers only
 }

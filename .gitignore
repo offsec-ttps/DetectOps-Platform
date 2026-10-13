@@ -79,3 +79,10 @@ Thumbs.db
 
 # stray working image (committed cleanly under docs/images/)
 /post 2image.png
+
+# Migrated local lab store (VM disks + SAR data) — big-disk, never track
+.detectops-labs/
+/APT-Simulation-Lab-Resources.docx
+
+# local-only attack-library research (docx from Gemini + Claude)
+/research/

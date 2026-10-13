@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Cloud, Cpu, Server, Rocket, ChevronLeft, ChevronRight, Loader2, ShieldCheck, Radar } from "lucide-react";
+import { Cloud, Cpu, Server, Rocket, ChevronLeft, ChevronRight, Loader2, ShieldCheck, Radar, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import CloudTab from "@/components/detection-lab/cloud/CloudTab";
 import LocalDeployFlow from "@/components/deploy/LocalDeployFlow";
@@ -17,8 +17,9 @@ import CloudRegisterPanel from "@/components/deploy/CloudRegisterPanel";
 import CloudReadinessPanel from "@/components/deploy/CloudReadinessPanel";
 import CloudTemplatesPanel from "@/components/deploy/CloudTemplatesPanel";
 import FleetSimulationHub from "@/components/deploy/fleet-hub/FleetSimulationHub";
+import OsImagesHub from "@/components/deploy/os-images/OsImagesHub";
 
-type View = "chooser" | "cloud" | "local" | "fleet";
+type View = "chooser" | "cloud" | "local" | "fleet" | "osimages";
 
 export default function DeployHubPage() {
   const [view, setView] = useState<View>("chooser");
@@ -34,7 +35,7 @@ export default function DeployHubPage() {
   useEffect(() => {
     try {
       const v = new URLSearchParams(window.location.search).get("view");
-      if (v === "local" || v === "cloud" || v === "fleet") setView(v);
+      if (v === "local" || v === "cloud" || v === "fleet" || v === "osimages") setView(v);
     } catch { /* ignore */ }
   }, []);
 
@@ -88,6 +89,22 @@ export default function DeployHubPage() {
             </div>
           </div>
 
+          {/* Analyst VMs — purpose-built OS images for investigation & hunting */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Analyst VMs / OS Images</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Spin up a purpose-built workstation on demand — forensics, OSINT, reverse-engineering, or an authorized-pentest box.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <ChooserCard
+                Icon={Monitor} tone="muted" title="Analyst VMs / OS Images" badge={localAvailable ? "self-hosted" : "self-hosted only"}
+                desc="Deploy a whole prebuilt OS image (Kali, SIFT, REMnux, Trace Labs, Slingshot, …) onto local VirtualBox now — AWS/Azure/GCP into your own account coming soon."
+                disabled={loaded && !localAvailable}
+                disabledNote="Available on self-hosted installs (set PLATFORM_MODE=self-hosted)."
+                onClick={() => setView("osimages")} />
+            </div>
+          </div>
+
           {/* Flow reminder */}
           <div className="rounded-xl border border-border bg-card/40 p-4">
             <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
@@ -106,6 +123,8 @@ export default function DeployHubPage() {
       {view === "local" && <LocalDeployFlow />}
       {/* Fleet Simulation hub: C2 options catalog + C2 servers + native fleets. */}
       {view === "fleet" && <FleetSimulationHub />}
+      {/* Analyst VMs: forensics/OSINT/RE/pentest OS-image catalog + deployed VMs. */}
+      {view === "osimages" && <OsImagesHub />}
     </div>
   );
 }

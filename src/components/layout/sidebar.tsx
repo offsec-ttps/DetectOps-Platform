@@ -143,13 +143,6 @@ const navSections: { title?: string; items: NavItem[] }[] = [
   },
 ];
 
-// lucide icon names a module manifest may reference for its nav contribution.
-const MODULE_ICONS: Record<string, React.ElementType> = {
-  Blocks, ShieldAlert, Server, Layers, Swords, Database, Radar, FlaskRound, Rocket, Crosshair, Bot, ShieldCheck, Skull,
-};
-
-interface ModuleNavItem { moduleId: string; label: string; href: string; icon?: string; badge?: string }
-
 /**
  * The collapsed flag is owned by DashboardShell because the main column's left
  * margin has to match this width. While it lived here as local state, collapsing
@@ -170,22 +163,11 @@ export function Sidebar({
   const setCollapsed = onToggleCollapsed
     ? () => onToggleCollapsed()
     : () => setCollapsedLocal((v) => !v);
-  const [moduleNav, setModuleNav] = useState<ModuleNavItem[]>([]);
 
-  // Registry-aware: live modules contribute nav entries (kept separate from the
-  // static sections, mirroring how community-sources keeps legacy adapters on).
-  // Module nav is global and route-independent — fetch once on mount, not on
-  // every navigation. (pathname is still used below for active-link styling.)
-  useEffect(() => {
-    fetch("/api/modules/nav").then((r) => r.json()).then((d) => setModuleNav(d.items || [])).catch(() => {});
-  }, []);
-
-  const allSections = [
-    ...navSections,
-    ...(moduleNav.length
-      ? [{ title: "Simulation Modules", items: moduleNav.map((m) => ({ label: m.label, href: m.href, icon: MODULE_ICONS[m.icon || ""] || Blocks, badge: m.badge })) as NavItem[] }]
-      : []),
-  ];
+  // Installed simulation modules are reached through Preparation → "Attack
+  // Simulations" (the /simulations grid), so the sidebar no longer renders a
+  // separate, redundant "Simulation Modules" section.
+  const allSections = navSections;
 
   return (
     <aside

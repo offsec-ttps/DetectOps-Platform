@@ -6,6 +6,7 @@ import { NavigationGuardModal, type NavGuardHandle } from "@/components/campaign
 import EnvironmentAccessPanel from "@/components/campaign-designer/EnvironmentAccessPanel";
 import SiemConnectModal from "@/components/siem/SiemConnectModal";
 import AtomicPreview from "@/components/campaign-designer/AtomicPreview";
+import LotlCampaignPicker, { type LotlSelEntry } from "@/components/campaign-designer/LotlCampaignPicker";
 import {
   Plus, Play, ArrowRight, Copy,
   Clock, CheckCircle2, XCircle, Loader2,
@@ -208,13 +209,97 @@ export default function CampaignDesignerPage() {
   // Per-technique selected atomic test number (default 1). Lets the user preview/
   // edit/save-as a custom atomic and choose which test runs (honored on fleet).
   const [techniqueTests, setTechniqueTests] = useState<Record<string, number>>({});
+  // Full per-technique test selection from a library handoff (fleet dispatch runs
+  // every entry); `techniqueTests` holds the single preview/default test.
+  const [techniqueTestLists, setTechniqueTestLists] = useState<Record<string, number[]>>({});
   const [techniqueSearchResults, setTechniqueSearchResults] = useState<AtomicTestOption[]>([]);
   // Per-technique privilege requirement of the atomic that will run (test #1),
   // so the user can tell which techniques need Admin/SYSTEM before launching.
   const [techElevation, setTechElevation] = useState<Record<string, { admin: boolean; testName?: string }>>({});
   const [searching, setSearching] = useState(false);
+  // Living-off-the-Land technique selection (parallel to atomic techniqueList).
+  // Each entry is a LotlTechnique row chosen from a library; routed on launch by
+  // target type (fleet → bundle path, SSH labs → enterprise runner).
+  const [lotlSelection, setLotlSelection] = useState<Array<{ id: string; library: string; name: string; techniqueId: string; executor: string; platforms: string[] }>>([]);
+  // APT Simulation selection (atomic_tests ids for a group) → faithful per-atomic
+  // runner via /api/apt/campaign-simulate. Parallel to lotlSelection.
+  const [aptSelection, setAptSelection] = useState<{ group: string; atomicTestIds: string[] } | null>(null);
   const [params, setParams] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState(false);
+
+  // Ingest a LOTL selection handed off from the library browser (sessionStorage)
+  // → populate Step 2 and jump to it, so all simulation starts here.
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("lotl.campaignHandoff"); } catch { /* ignore */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("lotl.campaignHandoff"); } catch { /* ignore */ }
+    let parsed: { ids?: string[]; library?: string } = {};
+    try { parsed = JSON.parse(raw); } catch { return; }
+    const ids = Array.isArray(parsed.ids) ? parsed.ids.map(String) : [];
+    const lib = parsed.library || "";
+    if (!ids.length || !lib) return;
+    (async () => {
+      const entries: Array<{ id: string; library: string; name: string; techniqueId: string; executor: string; platforms: string[] }> = [];
+      for (let i = 0; i < ids.length; i += 80) {
+        const chunk = ids.slice(i, i + 80);
+        const d = await fetch(`/api/lotl/${lib}?ids=${chunk.join(",")}`).then((r) => r.json()).catch(() => null);
+        for (const it of d?.items || []) entries.push({ id: it.id, library: it.library, name: it.name, techniqueId: it.techniqueId || "", executor: it.executor, platforms: it.platforms || [] });
+      }
+      if (entries.length) { setLotlSelection(entries); setWizardStep(2); }
+    })();
+  }, []);
+
+  // Ingest an APT Simulation selection handed off from the APT library view
+  // (sessionStorage) → run EVERY selected atomic via /api/apt/campaign-simulate,
+  // then jump to Step 2 — same single route as every other simulation.
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("apt.campaignHandoff"); } catch { /* ignore */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("apt.campaignHandoff"); } catch { /* ignore */ }
+    let parsed: { group?: string; atomicTestIds?: string[] } = {};
+    try { parsed = JSON.parse(raw); } catch { return; }
+    const ids = Array.isArray(parsed.atomicTestIds) ? parsed.atomicTestIds.map(String) : [];
+    if (!ids.length) return;
+    setAptSelection({ group: parsed.group || "APT", atomicTestIds: ids });
+    setWizardStep(2);
+  }, []);
+
+  // Ingest an attack-library selection (Container / Cloud / Active Directory /
+  // Hacktools) handed off from the attack-catalog view (sessionStorage) →
+  // populate the NORMAL technique flow (techniqueList + per-technique test#) and
+  // jump to Step 2, so environment choice + execution + detection are the same
+  // standard path as a hand-built campaign (works on every target type).
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("attack.campaignHandoff"); } catch { /* ignore */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("attack.campaignHandoff"); } catch { /* ignore */ }
+    let parsed: { techniques?: string[]; tests?: Record<string, number>; testLists?: Record<string, number[]> } = {};
+    try { parsed = JSON.parse(raw); } catch { return; }
+    const techs = [...new Set((Array.isArray(parsed.techniques) ? parsed.techniques : []).map(String).filter((t) => /^T\d{4}(\.\d{3})?$/.test(t)))];
+    if (!techs.length) return;
+    setTechniqueList(techs);
+    if (parsed.tests && typeof parsed.tests === "object") {
+      const clean: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed.tests)) if (/^T\d{4}(\.\d{3})?$/.test(k) && Number(v) > 0) clean[k] = Number(v);
+      if (Object.keys(clean).length) setTechniqueTests(clean);
+    }
+    // Every ticked test per technique (not just the first) — libraries that let
+    // the analyst pick several tests under one technique send the full list here
+    // so the fleet dispatch runs all of them.
+    if (parsed.testLists && typeof parsed.testLists === "object") {
+      const lists: Record<string, number[]> = {};
+      for (const [k, v] of Object.entries(parsed.testLists)) {
+        if (!/^T\d{4}(\.\d{3})?$/.test(k) || !Array.isArray(v)) continue;
+        const nums = [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+        if (nums.length) lists[k] = nums;
+      }
+      if (Object.keys(lists).length) setTechniqueTestLists(lists);
+    }
+    setWizardStep(2);
+  }, []);
 
   // Execution mode state
   const [executionMode, setExecutionMode] = useState<"simulation" | "simulation_detection">("simulation");
@@ -594,27 +679,35 @@ export default function CampaignDesignerPage() {
     }
   };
 
-  // Remote-fleet target: queue one atomic per selected technique on the node's
+  // Remote-fleet target: queue the selected atomic(s) per technique on the node's
   // agent (it runs on the endpoint itself), then poll the node's test-runs for
-  // execute/cleanup status. Uses testIndex 1 (the first atomic of each technique).
+  // execute/cleanup status. Runs every test the analyst ticked for a technique
+  // (techniqueTestLists), else the chosen/default test (techniqueTests, #1).
   const launchFleetSimulation = async (target: LabTarget) => {
     if (!target.fleetId || !target.nodeId) return;
     if (techniqueList.length === 0) { setSimulating(false); return; }
 
-    let logs = `Dispatching ${techniqueList.length} technique(s) to fleet node ${target.displayName} (${target.labName || "fleet"}).\n`
+    const jobs: Array<{ technique: string; testIndex: number }> = [];
+    for (const technique of techniqueList) {
+      const list = techniqueTestLists[technique];
+      const indices = list && list.length ? list : [techniqueTests[technique] || 1];
+      for (const testIndex of indices) jobs.push({ technique, testIndex });
+    }
+
+    let logs = `Dispatching ${jobs.length} test(s) across ${techniqueList.length} technique(s) to fleet node ${target.displayName} (${target.labName || "fleet"}).\n`
       + `The agent runs each atomic locally on the endpoint and always cleans up.\n\n`;
     setSimResult({ id: `fleet-${Date.now()}`, status: "running", logs, techniques: techniqueList });
 
     const opIds: string[] = [];
     try {
-      for (const technique of techniqueList) {
+      for (const { technique, testIndex } of jobs) {
         const res = await fetch(`/api/fleets/${target.fleetId}/nodes/${target.nodeId}/run-test`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ technique, testIndex: techniqueTests[technique] || 1, maxRuntimeMs: 300_000 }),
+          body: JSON.stringify({ technique, testIndex, maxRuntimeMs: 300_000 }),
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.operationId) { opIds.push(j.operationId); logs += `queued ${technique} #${j.testIndex} → ${j.testName || "atomic"} (op ${j.operationId.slice(0, 8)})\n`; }
-        else logs += `skip ${technique}: ${j.error || `HTTP ${res.status}`}\n`;
+        else logs += `skip ${technique} #${testIndex}: ${j.error || `HTTP ${res.status}`}\n`;
         setSimResult({ id: `fleet-${Date.now()}`, status: "running", logs, techniques: techniqueList });
       }
     } catch (e: any) {
@@ -753,14 +846,92 @@ export default function CampaignDesignerPage() {
   };
 
   // ── Launch simulation ──
+  // LOTL selection → unified campaign-simulate endpoint, routed by target type
+  // (fleet → bundle path, SSH labs → enterprise runner). Keeps all simulation
+  // flowing through the Campaign Designer rather than the standalone browser.
+  const launchLotl = async (target?: LabTarget) => {
+    if (!target) {
+      setSimResult({ id: "", status: "error", logs: "Select a server first.", techniques: [] });
+      setSimulating(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/lotl/campaign-simulate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryIds: lotlSelection.map((l) => l.id),
+          target,
+          mode: executionMode === "simulation_detection" ? "simulate-and-validate" : "simulate-only",
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      const covered = lotlSelection.map((l) => l.techniqueId).filter(Boolean);
+      const skippedLines = (d.skipped || []).map((s: any) => `[skipped] ${s.name} — ${s.reason}`).join("\n");
+      if (!res.ok) {
+        setSimResult({ id: "", status: "error", logs: `${d.error || `API error ${res.status}`}${skippedLines ? `\n${skippedLines}` : ""}`, techniques: covered });
+        return;
+      }
+      if (d.channel === "fleet") {
+        setSimResult({ id: d.campaignId || "", status: "running", logs: `LOTL dispatched to fleet node — ${d.operations ?? d.stepCount} operation(s) queued. Track progress in Fleet results.${skippedLines ? `\n${skippedLines}` : ""}\n`, techniques: covered });
+      } else {
+        const lines = (d.stepResults || []).map((s: any) => `[${s.status}] ${s.displayName || s.notes || s.framework}`).join("\n");
+        setSimResult({ id: d.runId || "", status: d.status === "success" ? "success" : "error", logs: `LOTL via ${d.environment} — ${d.stepCount} step(s) run, ${(d.skipped || []).length} skipped\n${lines}${skippedLines ? `\n${skippedLines}` : ""}`, techniques: d.mappedTechniques || covered });
+      }
+    } finally { setSimulating(false); }
+  };
+
+  // APT selection → faithful per-atomic runner (runs EVERY selected atomic and
+  // scores prevention + detection), on the SAR lab. Parallel to launchLotl.
+  const launchApt = async (target?: LabTarget) => {
+    if (!target) { setSimResult({ id: "", status: "error", logs: "Select a server first.", techniques: [] }); setSimulating(false); return; }
+    if (!aptSelection) { setSimulating(false); return; }
+    try {
+      const res = await fetch("/api/apt/campaign-simulate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          atomicTestIds: aptSelection.atomicTestIds, groupName: aptSelection.group, target,
+          mode: executionMode === "simulation_detection" ? "simulate-and-validate" : "simulate-only",
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const hint = d.code === "too_large" ? " (select fewer atomics per run)" : d.code === "confirm_required" ? " (host-destructive tests need explicit confirmation)" : "";
+        setSimResult({ id: "", status: "error", logs: `${d.error || `API error ${res.status}`}${hint}`, techniques: [] });
+        return;
+      }
+      const p = d.summary?.prevention || {};
+      const det = d.summary?.detection;
+      const lines = (d.results || []).map((s: any) => `[${s.prevention}${s.detection && s.detection !== "n/a" ? "/" + s.detection : ""}] ${s.techniqueId} ${s.testName}`).join("\n");
+      setSimResult({
+        id: d.runId || "", status: d.status === "success" ? "success" : "error",
+        logs: `APT "${aptSelection.group}" — ${d.stepCount} atomic(s): allowed=${p.allowed} blocked=${p.blocked} failed=${p.failed} skipped=${p.skipped} error=${p.error}` +
+          (det ? ` · detected=${det.detected} gaps=${det.gaps}` : "") + `\n${lines}`,
+        techniques: (d.results || []).map((s: any) => s.techniqueId).filter(Boolean),
+      });
+    } finally { setSimulating(false); }
+  };
+
   const launchSimulation = async () => {
     setSimulating(true);
     setSimResult(null);
 
+    const selectedTarget = labTargets.find((t) => t.deployedName === selectedServer);
+
+    // LOTL selection takes the unified LOTL channel. If LOTL techniques are
+    // selected, run them here (a mixed atomic+LOTL launch runs the LOTL set;
+    // run atomics in a separate launch).
+    if (aptSelection && aptSelection.atomicTestIds.length > 0) {
+      await launchApt(selectedTarget);
+      return;
+    }
+    if (lotlSelection.length > 0) {
+      await launchLotl(selectedTarget);
+      return;
+    }
+
     // Cloud targets route through the SAR terminal run-tool endpoint. Output
     // streams over SSE and is concatenated into simResult.logs. No /sar/simulate
     // polling for these.
-    const selectedTarget = labTargets.find((t) => t.deployedName === selectedServer);
     if (selectedTarget?.source === "cloud" && selectedTarget.rangeId) {
       await launchCloudSimulation(selectedTarget);
       return;
@@ -1934,7 +2105,11 @@ export default function CampaignDesignerPage() {
   const hasAnyTargets = labTargets.length > 0;
   const hasAnyRunning = runningTargets.length > 0;
 
-  const canSimulate = (sarOnline || hasAnyRunning) && techniqueList.length > 0 && selectedServer;
+  const canSimulate = !!selectedServer && (
+    (techniqueList.length > 0 && (sarOnline || hasAnyRunning)) ||
+    lotlSelection.length > 0 ||
+    (!!aptSelection && aptSelection.atomicTestIds.length > 0)
+  );
   const isDetectionMode = executionMode === "simulation_detection";
 
   // Resolve which SIEM this environment validates detection against:
@@ -2313,13 +2488,49 @@ export default function CampaignDesignerPage() {
                 </div>
               )}
 
+              {/* Living-off-the-Land technique selection — routed on launch by
+                  target type (fleet → bundle path, SSH labs → enterprise runner). */}
+              <div className="pt-1 border-t border-border/60">
+                <LotlCampaignPicker
+                  selectedIds={new Set(lotlSelection.map((l) => l.id))}
+                  onAdd={(entries: LotlSelEntry[]) => setLotlSelection((prev) => {
+                    const byId = new Map(prev.map((p) => [p.id, p]));
+                    for (const e of entries) byId.set(e.id, e);
+                    return [...byId.values()];
+                  })}
+                />
+                {lotlSelection.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <p className="text-[11px] text-muted-foreground">{lotlSelection.length} LOTL technique(s) selected:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(lotlSelection.reduce((acc: Record<string, number>, l) => { acc[l.library] = (acc[l.library] || 0) + 1; return acc; }, {})).map(([lib, n]) => (
+                        <span key={lib} className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-1 text-[11px] text-accent">
+                          <span className="font-semibold">{lib}</span> · {n}
+                          <button onClick={() => setLotlSelection((prev) => prev.filter((p) => p.library !== lib))} className="text-accent/50 hover:text-accent"><X className="h-3 w-3" /></button>
+                        </span>
+                      ))}
+                      <button onClick={() => setLotlSelection([])} className="text-[11px] text-muted-foreground hover:text-foreground underline">clear all</button>
+                    </div>
+                  </div>
+                )}
+                {aptSelection && aptSelection.atomicTestIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-danger/30 bg-danger/5 px-2.5 py-1 text-[11px] text-danger">
+                      <span className="font-semibold">APT: {aptSelection.group}</span> · {aptSelection.atomicTestIds.length} atomic test(s)
+                      <button onClick={() => setAptSelection(null)} className="text-danger/50 hover:text-danger"><X className="h-3 w-3" /></button>
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">runs every selected atomic via the APT runner</span>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-between pt-2">
                 <button onClick={() => setWizardStep(1)} className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-card-hover transition-colors">
                   <ChevronLeft className="h-3 w-3" /> Back
                 </button>
                 <button
                   onClick={() => setWizardStep(3)}
-                  disabled={techniqueList.length === 0}
+                  disabled={techniqueList.length === 0 && lotlSelection.length === 0 && !(aptSelection && aptSelection.atomicTestIds.length > 0)}
                   className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent/90 transition-colors disabled:opacity-40"
                 >
                   Next <ChevronRight className="h-3 w-3" />

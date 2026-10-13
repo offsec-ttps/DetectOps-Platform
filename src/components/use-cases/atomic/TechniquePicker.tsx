@@ -2,25 +2,23 @@
 /**
  * Searchable MITRE technique picker (replaces the plain text input).
  *
- * Opens a dialog with:
- *   - tactic chip row across the top (filters)
- *   - search box
- *   - virtualised result list (technique id + name)
+ * The closed trigger stays a MUI TextField so it matches the rest of the MUI
+ * builder form. The OPEN picker is a lightweight Tailwind overlay using the app's
+ * own dark tokens — not a MUI Dialog — so it:
+ *   - matches the DetectOps theme exactly (no MUI design / emotion-flash mismatch), and
+ *   - stays fast while typing: the old dialog rendered ~250 result rows each with
+ *     MUI <Button> tactic chips (hundreds of MUI components re-rendering per
+ *     keystroke → input lag). Here rows are plain elements and filtering runs
+ *     through useDeferredValue so typing never blocks.
  *
- * Emits BOTH `id` and `name` so the parent can fill `display_name` from a
- * single click. Falls back to a free-text input when the upstream CSV
- * index can't be reached.
+ * Emits BOTH `id` and `name` so the parent can fill `display_name` from a single
+ * click. Falls back to a free-text input when the upstream CSV index is down.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Box, Button, Dialog, DialogTitle, DialogContent, IconButton, InputAdornment,
-  TextField, Typography, CircularProgress, Stack, FormHelperText,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import SearchIcon from "@mui/icons-material/Search";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { TextField, InputAdornment, CircularProgress } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import { Search as SearchIcon, X as CloseIcon, ExternalLink } from "lucide-react";
 import useAtomicIndex, { type AtomicIndexTechnique } from "./useAtomicIndex";
 
 const TACTICS = [
@@ -81,6 +79,11 @@ export default function TechniquePicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeTactic, setActiveTactic] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Non-blocking filtering: typing updates `query` immediately (responsive
+  // input) while the (heavier) list filter runs against the deferred value.
+  const deferredQuery = useDeferredValue(query);
 
   // TID → Set<tactic>
   const tacticByTid = useMemo(() => {
@@ -100,14 +103,14 @@ export default function TechniquePicker({
     if (activeTactic) {
       list = list.filter((t) => tacticByTid.get(t.id)?.has(activeTactic));
     }
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((t) =>
         t.id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q),
       );
     }
-    return list.slice(0, 250);
-  }, [data, query, activeTactic, tacticByTid]);
+    return list.slice(0, 300);
+  }, [data, deferredQuery, activeTactic, tacticByTid]);
 
   const pick = (t: AtomicIndexTechnique) => {
     onPick(t.id, t.name);
@@ -125,6 +128,15 @@ export default function TechniquePicker({
     }
     setOpen(true);
   };
+
+  // Focus the search on open; close on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => searchRef.current?.focus(), 30);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
+  }, [open]);
 
   // Display shown in the closed input: "T1003.001 · OS Credential Dumping: LSASS Memory"
   const closedLabel = value
@@ -154,123 +166,123 @@ export default function TechniquePicker({
         placeholder="Choose a technique…"
       />
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { bgcolor: "#111827", minHeight: 480 } }}>
-        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1 }}>
-          <Box sx={{ flex: 1 }}>Pick MITRE ATT&CK technique</Box>
-          {value && (
-            <IconButton size="small" component="a" href={attackUrl(value)} target="_blank" rel="noreferrer">
-              <OpenInNewIcon fontSize="small" />
-            </IconButton>
-          )}
-          <IconButton size="small" onClick={() => setOpen(false)}><CloseIcon fontSize="small" /></IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus fullWidth size="small"
-            value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by technique id or name…"
-            sx={{ mb: 1.5 }}
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-          />
-
-          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1.5, gap: 0.5 }}>
-            <TacticChip
-              tactic={"all"}
-              active={activeTactic === null}
-              onClick={() => setActiveTactic(null)}
-              label="All"
-            />
-            {TACTICS.map((t) => (
-              <TacticChip
-                key={t} tactic={t}
-                active={activeTactic === t}
-                onClick={() => setActiveTactic(activeTactic === t ? null : t)}
-                label={tacticLabel(t)}
-              />
-            ))}
-          </Stack>
-
-          {loading && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 3 }}>
-              <CircularProgress size={16} /> Loading atomic-red-team index…
-            </Box>
-          )}
-          {indexError && (
-            <Box sx={{ py: 2 }}>
-              <Typography variant="body2" color="warning.main">{indexError.message}</Typography>
-              <FormHelperText>You can still type a technique id manually in the field.</FormHelperText>
-            </Box>
-          )}
-
-          {!loading && !indexError && (
-            <Box sx={{ maxHeight: 360, overflowY: "auto" }}>
-              {filtered.length === 0 ? (
-                <Box sx={{ py: 4, textAlign: "center", color: "text.disabled", fontSize: 13 }}>
-                  No techniques match this search / tactic.
-                </Box>
-              ) : (
-                filtered.map((t) => {
-                  const tactics = [...(tacticByTid.get(t.id) || [])];
-                  const selected = t.id === value;
-                  return (
-                    <Box
-                      key={t.id}
-                      onClick={() => pick(t)}
-                      sx={{
-                        px: 1.5, py: 1, borderRadius: 1, cursor: "pointer",
-                        background: selected ? "rgba(59,130,246,0.10)" : "transparent",
-                        border: "1px solid",
-                        borderColor: selected ? "rgba(59,130,246,0.40)" : "transparent",
-                        mb: 0.5,
-                        "&:hover": { background: "rgba(255,255,255,0.04)" },
-                      }}
-                    >
-                      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
-                        <Box sx={{ fontFamily: "JetBrains Mono, ui-monospace, monospace", fontSize: 12, color: "primary.main", minWidth: 80 }}>
-                          {t.id}
-                        </Box>
-                        <Box sx={{ flex: 1, fontSize: 13, color: "text.primary" }}>{t.name}</Box>
-                        {tactics.map((tac) => (
-                          <TacticChip key={tac} tactic={tac} label={tacticLabel(tac)} size="xs" />
-                        ))}
-                      </Stack>
-                    </Box>
-                  );
-                })
+      {open && (
+        <div className="fixed inset-0 z-[1400] flex items-start justify-center p-4" role="dialog" aria-modal="true" aria-label="Pick MITRE ATT&CK technique">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" onClick={() => setOpen(false)} />
+          <div className="relative z-10 mt-[6vh] flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+            {/* header */}
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+              <h2 className="flex-1 text-sm font-semibold text-foreground">Pick MITRE ATT&CK technique</h2>
+              {value && (
+                <a href={attackUrl(value)} target="_blank" rel="noreferrer" title="Open on attack.mitre.org"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-card-hover">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               )}
-            </Box>
-          )}
-        </DialogContent>
-      </Dialog>
+              <button onClick={() => setOpen(false)} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-card-hover">
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2.5 p-4 pb-2">
+              {/* search */}
+              <div className="relative">
+                <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by technique id or name…"
+                  className="h-9 w-full rounded-md border border-border bg-input pl-8 pr-3 text-xs text-foreground outline-none focus:border-accent/60"
+                />
+              </div>
+
+              {/* tactic filter chips */}
+              <div className="flex flex-wrap gap-1.5">
+                <TacticChip tactic="all" label="All" active={activeTactic === null} onClick={() => setActiveTactic(null)} />
+                {TACTICS.map((t) => (
+                  <TacticChip key={t} tactic={t} label={tacticLabel(t)} active={activeTactic === t}
+                    onClick={() => setActiveTactic(activeTactic === t ? null : t)} />
+                ))}
+              </div>
+            </div>
+
+            {/* results */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+              {loading && (
+                <div className="flex items-center gap-2 px-1 py-6 text-sm text-muted-foreground">
+                  <CircularProgress size={16} /> Loading atomic-red-team index…
+                </div>
+              )}
+              {indexError && (
+                <div className="px-1 py-4">
+                  <p className="text-sm text-warning">{indexError.message}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">You can still type a technique id manually in the field.</p>
+                </div>
+              )}
+              {!loading && !indexError && (
+                filtered.length === 0 ? (
+                  <div className="py-10 text-center text-[13px] text-muted-foreground">No techniques match this search / tactic.</div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {filtered.map((t) => {
+                      const tactics = [...(tacticByTid.get(t.id) || [])];
+                      const selected = t.id === value;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => pick(t)}
+                          className={
+                            "flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left transition-colors " +
+                            (selected ? "border-accent/40 bg-accent/10" : "border-transparent hover:bg-[rgba(255,255,255,0.04)]")
+                          }
+                        >
+                          <span className="w-[72px] shrink-0 font-mono text-[12px] text-accent">{t.id}</span>
+                          <span className="flex-1 text-[13px] text-foreground">{t.name}</span>
+                          <span className="flex flex-wrap justify-end gap-1">
+                            {tactics.map((tac) => <TacticBadge key={tac} tactic={tac} label={tacticLabel(tac)} />)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {data?.techniques && filtered.length >= 300 && (
+                      <div className="px-1 py-2 text-center text-[11px] text-muted-foreground">Showing first 300 — refine your search to narrow down.</div>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function TacticChip({ tactic, label, onClick, active, size = "sm" }: {
-  tactic: string; label: string; onClick?: () => void; active?: boolean; size?: "xs" | "sm";
-}) {
+// A clickable tactic filter chip (top row).
+function TacticChip({ tactic, label, onClick, active }: { tactic: string; label: string; onClick?: () => void; active?: boolean }) {
   const fg = tactic === "all" ? "#94a3b8" : TACTIC_FG[tactic] || "#94a3b8";
   return (
-    <Button
+    <button
       onClick={onClick}
-      variant={active ? "contained" : "outlined"}
-      size="small"
-      disableRipple={!onClick}
-      sx={{
-        textTransform: "none",
-        px: size === "xs" ? 0.9 : 1.2,
-        py: size === "xs" ? 0.05 : 0.25,
-        minHeight: 0, minWidth: 0,
-        fontSize: size === "xs" ? 10 : 11,
-        fontWeight: 500,
-        borderRadius: 999,
-        borderColor: active ? "primary.main" : `${fg}55`,
-        color: active ? "primary.main" : fg,
-        background: active ? "rgba(59,130,246,0.10)" : "transparent",
-        "&:hover": { background: active ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)" },
+      className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+      style={{
+        color: active ? "#60a5fa" : fg,
+        borderColor: active ? "#3b82f6" : `${fg}55`,
+        background: active ? "rgba(59,130,246,0.12)" : "transparent",
       }}
     >
       {label}
-    </Button>
+    </button>
+  );
+}
+
+// A tiny, non-interactive tactic badge shown on a result row.
+function TacticBadge({ tactic, label }: { tactic: string; label: string }) {
+  const fg = TACTIC_FG[tactic] || "#94a3b8";
+  return (
+    <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium" style={{ color: fg, borderColor: `${fg}40` }}>
+      {label}
+    </span>
   );
 }

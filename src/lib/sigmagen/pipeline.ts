@@ -133,7 +133,7 @@ export async function runSigmaGenPipeline(input: RunPipelineInput): Promise<RunP
 
     // 2. Intel extraction -----------------------------------------------------
     await begin("intel");
-    const intelRes = await runTool<IntelData>({ provider, system: INTEL_EXTRACT_V1.system + GUARDRAIL_SYSTEM_CLAUSE, user: buildIntelExtractUserMessage(untrustedDigest), tool: INTEL_EXTRACT_V1.tool, maxTokens: 6144 });
+    const intelRes = await runTool<IntelData>({ provider, system: INTEL_EXTRACT_V1.system + GUARDRAIL_SYSTEM_CLAUSE, user: buildIntelExtractUserMessage(untrustedDigest), tool: INTEL_EXTRACT_V1.tool, maxTokens: 16000 });
     totalCost += intelRes.costUsd;
     await recordGen(runId, "sigmagen:intel-extract", INTEL_EXTRACT_V1.version, INTEL_EXTRACT_V1.tool.name, intelRes, intelRes.data);
     const intel = intelRes.data;
@@ -148,7 +148,7 @@ export async function runSigmaGenPipeline(input: RunPipelineInput): Promise<RunP
     const mapRes = await runTool<{ techniques: MappedTechnique[]; coverageNotes?: string }>({
       provider, system: ATTACK_MAPPING_V1.system + GUARDRAIL_SYSTEM_CLAUSE,
       user: buildAttackMappingUserMessage({ summary: threatContext, candidates }),
-      tool: ATTACK_MAPPING_V1.tool, maxTokens: 4096,
+      tool: ATTACK_MAPPING_V1.tool, maxTokens: 16000,
     });
     totalCost += mapRes.costUsd;
     await recordGen(runId, "sigmagen:attack-mapping", ATTACK_MAPPING_V1.version, ATTACK_MAPPING_V1.tool.name, mapRes, mapRes.data);
@@ -194,7 +194,7 @@ export async function runSigmaGenPipeline(input: RunPipelineInput): Promise<RunP
       const ucRes = await runTool<{ useCases: UseCaseData[] }>({
         provider, system: USE_CASES_V1.system + GUARDRAIL_SYSTEM_CLAUSE,
         user: buildUseCasesUserMessage({ summary: threatContext, techniques: mappedTechs.map((t) => ({ techniqueId: t.techniqueId, techniqueName: t.techniqueName, tactic: t.tactic, dataSources: t.dataSources })) }),
-        tool: USE_CASES_V1.tool, maxTokens: 6144,
+        tool: USE_CASES_V1.tool, maxTokens: 32000,
       });
       totalCost += ucRes.costUsd;
       await recordGen(runId, "sigmagen:use-cases", USE_CASES_V1.version, USE_CASES_V1.tool.name, ucRes, ucRes.data);

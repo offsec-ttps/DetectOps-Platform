@@ -13,6 +13,7 @@ import {
   Mail, Loader2, ShieldAlert, Play, CheckCircle2, XCircle, AlertTriangle, FileText, Boxes, Sparkles,
   Server, Trash2, Plus, ChevronLeft, ChevronRight, Ban, BadgeCheck, ScrollText, Clock, Power,
   Eye, Code2, Star, CornerUpLeft, Paperclip, Globe, Lock, Home, Phone, Landmark, Users, ArrowRight, LayoutGrid,
+  Target, Info,
 } from "lucide-react";
 import { PHISHGRID_COVERAGE, INDUSTRY_COVERAGE, COVERAGE_SOURCE, templateMatchesIndustry } from "@/lib/phishing/coverage";
 import { cn } from "@/lib/utils";
@@ -402,8 +403,11 @@ function TemplatesTab({ onUse, industry, onClearIndustry }: { onUse: (id: string
               </button>
               <div className="p-2 flex flex-col flex-1 gap-1.5">
                 <div className="text-[11px] font-medium text-foreground leading-tight line-clamp-2" title={t.name}>{t.name}</div>
-                <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-                  <span className="px-1.5 py-0.5 rounded-full border border-border truncate">{t.category}</span>
+                <div className="flex items-center gap-1 flex-wrap text-[9px]">
+                  <span className="px-1.5 py-0.5 rounded-full border border-border text-muted-foreground truncate">{t.category}</span>
+                  {t.audience && t.audience !== "both" && <span className={cn("px-1.5 py-0.5 rounded-full border", t.audience === "employee" ? "border-warning/40 text-warning" : "border-accent/40 text-accent")}>{t.audience}</span>}
+                  {t.difficulty && <span className={cn("px-1.5 py-0.5 rounded-full border", t.difficulty === "hard" ? "border-danger/40 text-danger" : t.difficulty === "easy" ? "border-success/40 text-success" : "border-border text-muted-foreground")}>{t.difficulty}</span>}
+                  {t.region && t.region !== "global" && <span className="px-1.5 py-0.5 rounded-full border border-border text-muted-foreground uppercase">{t.region}</span>}
                 </div>
                 <button onClick={() => onUse(t.id)} className="mt-auto inline-flex items-center justify-center gap-1 text-[10px] font-medium rounded-md bg-accent text-white px-2 py-1 hover:bg-[#60a5fa]"><Play className="h-2.5 w-2.5" /> Use</button>
               </div>
@@ -416,11 +420,47 @@ function TemplatesTab({ onUse, industry, onClearIndustry }: { onUse: (id: string
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
           <div className="bg-card border border-border rounded-xl max-w-3xl w-full max-h-[88vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3"><div className="text-sm font-semibold text-foreground">{preview.name}</div><button onClick={() => setPreview(null)} className="text-muted-foreground hover:text-foreground"><XCircle className="h-4 w-4" /></button></div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">{preview.name}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px]">
+                  <span className="px-1.5 py-0.5 rounded-full border border-border text-muted-foreground">{preview.category}</span>
+                  {preview.audience && <span className={cn("px-1.5 py-0.5 rounded-full border", preview.audience === "employee" ? "border-warning/40 text-warning" : preview.audience === "customer" ? "border-accent/40 text-accent" : "border-border text-muted-foreground")}>{preview.audience}</span>}
+                  {preview.difficulty && <span className={cn("px-1.5 py-0.5 rounded-full border", preview.difficulty === "hard" ? "border-danger/40 text-danger" : preview.difficulty === "easy" ? "border-success/40 text-success" : "border-border text-muted-foreground")}>{preview.difficulty}</span>}
+                  {preview.region && preview.region !== "global" && <span className="px-1.5 py-0.5 rounded-full border border-border text-muted-foreground uppercase">{preview.region}</span>}
+                </div>
+              </div>
+              <button onClick={() => setPreview(null)} className="text-muted-foreground hover:text-foreground"><XCircle className="h-4 w-4" /></button>
+            </div>
             <EmailPreview subject={preview.subject} body={preview.body} kind={preview.kind} category={preview.category} />
-            <div className="mt-3 flex items-center gap-2">
+
+            {/* Awareness panel — what this trains + attribution */}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {preview.description && (
+                <div className="rounded-lg border border-border bg-background/40 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 inline-flex items-center gap-1"><Target className="h-3 w-3" /> What this simulates</div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{preview.description}</p>
+                </div>
+              )}
+              {(preview.redFlags || []).length > 0 && (
+                <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-warning mb-1 inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Red flags to teach</div>
+                  <ul className="space-y-0.5">
+                    {preview.redFlags.map((f: string, i: number) => <li key={i} className="text-[11px] text-muted-foreground flex gap-1.5"><span className="text-warning">•</span> {f}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            {(preview.techniques || []).length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">ATT&CK</span>
+                {preview.techniques.map((t: string) => <span key={t} className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-accent/20 bg-accent/5 text-accent">{t}</span>)}
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-border pt-3">
               <button onClick={() => { onUse(preview.id); setPreview(null); }} className="inline-flex items-center gap-1.5 h-9 px-4 text-xs font-medium rounded-md bg-accent text-white hover:bg-[#60a5fa]"><Play className="h-3.5 w-3.5" /> Use this template</button>
-              <span className="text-[10px] text-muted-foreground">{preview.sourceRef}</span>
+              {preview.sourceRef && <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1"><Info className="h-3 w-3" /> {preview.sourceRef}</span>}
             </div>
           </div>
         </div>

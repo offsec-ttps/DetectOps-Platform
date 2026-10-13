@@ -235,6 +235,16 @@ export async function runAggregatorSync(): Promise<{
     const { enqueueAfterSyncSafe } = await import("@/lib/detection-packs/enqueue");
     await enqueueAfterSyncSafe("ti", syncStartedAt);
 
+    // TI → Simulation-Library watcher: route newly ingested techniques into the
+    // correct Attack-Simulation library (review-gated). Genuinely fire-and-forget:
+    // NOT awaited (it can issue LLM calls per technique, so it must never block
+    // the sync response) and NO explicit `since` — the watcher uses its own
+    // completed-run watermark, so a failed scan is retried on the next sync
+    // instead of its window being skipped forever.
+    import("@/lib/ti-watcher/scan")
+      .then(({ runWatcherScanSafe }) => runWatcherScanSafe({}))
+      .catch(() => { /* watcher failure must NOT take down the sync result */ });
+
     return {
       sourcesProcessed: sources.length,
       articlesFound: totalArticles,

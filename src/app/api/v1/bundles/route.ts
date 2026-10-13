@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   const technique = sp.get("technique") || undefined;
   const testIndexRaw = sp.get("testIndex");
   const testIndex = testIndexRaw != null ? parseInt(testIndexRaw, 10) : undefined;
+  const lotlId = sp.get("lotlId") || undefined;
   const nodeId = req.headers.get("x-node-id") || "";
   const key = req.headers.get("x-node-key") || "";
 
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
   if (!node) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!hash) return NextResponse.json({ error: "hash required" }, { status: 400 });
 
-  const bundle = await resolveBundle({ hash, technique, testIndex });
+  const bundle = await resolveBundle({ hash, technique, testIndex, lotlId });
   if (!bundle) return NextResponse.json({ error: "bundle not found or hash mismatch" }, { status: 404 });
 
   // Integrity: the recomputed hash must equal the requested one.

@@ -12,6 +12,12 @@ export async function GET() {
   await ensurePhishingTemplates().catch(() => {});
   const rows = await prisma.phishingTemplate.findMany({ orderBy: { category: "asc" } });
   return NextResponse.json({
-    items: rows.map((r) => ({ id: r.id, name: r.name, category: r.category, kind: r.kind, subject: r.subject, body: r.body, placeholders: j<string[]>(r.placeholders, []), techniques: j<string[]>(r.techniques, []), license: r.license, sourceRef: r.sourceRef })),
+    items: rows.map((r) => ({
+      id: r.id, name: r.name, category: r.category, kind: r.kind, subject: r.subject, body: r.body,
+      placeholders: j<string[]>(r.placeholders, []), techniques: j<string[]>(r.techniques, []),
+      license: r.license, sourceRef: r.sourceRef,
+      description: r.description, redFlags: j<string[]>(r.redFlags, []),
+      audience: r.audience, region: r.region, difficulty: r.difficulty,
+    })),
   });
 }

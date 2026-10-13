@@ -250,3 +250,21 @@ class UpdateNameResponse(BaseModel):
     message: str = Field(..., description="Status message")
     attack_range_id: str = Field(..., description="Attack range ID")
     attack_range_name: str = Field(..., description="Updated attack range name")
+
+
+# ── VPN client revoke / list (RuSecure Academy lab-access integration) ──────────
+class RevokeResponse(BaseModel):
+    status: str = Field("success", description="Result status")
+    name: str = Field(..., description="Revoked client name")
+    message: str = Field(..., description="Human-readable result")
+
+
+class ClientInfo(BaseModel):
+    name: str = Field(..., description="WireGuard client name")
+    address: Optional[str] = Field(None, description="Client VPN address")
+    last_handshake: Optional[int] = Field(None, description="Epoch seconds of last WG handshake, or null")
+
+
+class ClientsResponse(BaseModel):
+    attack_range_id: str = Field(..., description="Attack range ID")
+    clients: List[ClientInfo] = Field(default_factory=list, description="VPN clients + live status")

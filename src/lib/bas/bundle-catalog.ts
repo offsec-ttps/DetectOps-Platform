@@ -15,7 +15,7 @@
 
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import type { AtomicTest } from "@/generated/prisma/client";
+import type { AtomicTest, LotlTechnique } from "@/generated/prisma/client";
 
 export interface BundleContent {
   technique: string;
@@ -141,6 +141,52 @@ export function bundleFromAtomic(at: AtomicTest): BundleContent {
   };
 }
 
+/** Normalize an ATT&CK tactic into a scope token (same rule as buildDispatch). */
+function normTactic(tactic: string): string {
+  return (tactic || "").toLowerCase().trim().replace(/\s+/g, "-");
+}
+
+/**
+ * LOTL addressing: a LotlTechnique has no (techniqueId, testNumber) natural key
+ * that maps cleanly onto the atomic addressing, so we synthesize a STABLE one
+ * from the row id. `technique` = the row's MITRE id (or "LOTL" when unmapped)
+ * and `testIndex` = a deterministic 31-bit ordinal derived from the uuid. Both
+ * are byte-stable for a given row, so canonicalBundle/bundleHash reproduce the
+ * same hash on the control plane and on the agent's re-hash. The real lookup
+ * key (`lotlId`) travels alongside in the dispatch/addressing — never inside the
+ * hashed BundleContent — so resolveBundle can fetch the exact source row.
+ */
+export function lotlOrdinal(id: string): number {
+  const h = createHash("sha256").update(id || "", "utf8").digest();
+  // 31-bit non-negative ordinal; deterministic for a given row id.
+  return h.readUInt32BE(0) % 1_000_000_000;
+}
+
+/**
+ * Build the executable bundle for a LOTL technique — mirrors bundleFromAtomic's
+ * BundleContent shape. LOTL rows are curated commands (LOLBAS/GTFOBins/…) stored
+ * in the DB, so (unlike atomics) they do NOT go through the Invoke-AtomicTest
+ * harness: the row's own `command`/`cleanupCommand` are the executable surface.
+ * They are still rebuilt server-side from the DB row and hash-verified exactly
+ * like atomics, so no raw-command-from-message path is introduced.
+ */
+export function bundleFromLotl(l: LotlTechnique): BundleContent {
+  const platforms = safeJson<string[]>(l.platforms, []);
+  const execRaw = (l.executor || "manual").toLowerCase().trim();
+  // cmd → command_prompt; powershell/bash/manual pass through unchanged.
+  const executor = execRaw === "cmd" ? "command_prompt" : execRaw || "manual";
+  return {
+    technique: l.techniqueId || "LOTL",
+    testIndex: lotlOrdinal(l.id),
+    testName: l.name,
+    executor,
+    command: l.command || "",
+    cleanup: l.cleanupCommand || "",
+    platforms,
+    elevationRequired: l.elevationRequired,
+  };
+}
+
 /**
  * A built-in benign bundle for dev / smoke / connectivity proof. Runs a
  * harmless echo and a harmless cleanup — proves the execute→cleanup→report
@@ -164,10 +210,22 @@ export function safeSmokeBundle(): BundleContent {
  * (technique, testIndex) hint so we can locate the source row directly instead
  * of scanning the whole catalogue, then we verify the recomputed hash matches.
  */
-export async function resolveBundle(opts: { hash: string; technique?: string; testIndex?: number }): Promise<BundleContent | null> {
+export async function resolveBundle(opts: { hash: string; technique?: string; testIndex?: number; lotlId?: string }): Promise<BundleContent | null> {
   // Built-in safe bundle.
   const safe = safeSmokeBundle();
   if (bundleHash(safe) === opts.hash) return safe;
+
+  // LOTL selection: fetch the exact source row by id, rebuild, verify hash.
+  // The synthetic (technique, testIndex) addressing can collide with a real
+  // atomic, so when a lotlId is supplied we resolve ONLY via that row.
+  if (opts.lotlId) {
+    const l = await prisma.lotlTechnique.findUnique({ where: { id: opts.lotlId } });
+    if (l) {
+      const b = bundleFromLotl(l);
+      if (bundleHash(b) === opts.hash) return b;
+    }
+    return null;
+  }
 
   // Locate the AtomicTest by (technique, testIndex) when supplied.
   if (opts.technique && opts.testIndex != null) {
@@ -176,6 +234,22 @@ export async function resolveBundle(opts: { hash: string; technique?: string; te
     });
     if (at) {
       const b = bundleFromAtomic(at);
+      if (bundleHash(b) === opts.hash) return b;
+    }
+
+    // LOTL fallback for agents that don't echo `lotl_id` (the Rust agent only
+    // forwards hash/technique/testIndex). The synthetic LOTL addressing is
+    // technique = row.techniqueId || "LOTL" and testIndex = lotlOrdinal(row.id),
+    // so narrow to rows with that techniqueId, match the ordinal, then verify
+    // the recomputed hash — integrity is still enforced by the hash re-check.
+    const unmapped = opts.technique === "LOTL";
+    const candidates = await prisma.lotlTechnique.findMany({
+      where: unmapped ? { OR: [{ techniqueId: "" }, { techniqueId: null as any }] } : { techniqueId: opts.technique },
+      take: 2000,
+    }).catch(() => [] as LotlTechnique[]);
+    for (const l of candidates) {
+      if (lotlOrdinal(l.id) !== opts.testIndex) continue;
+      const b = bundleFromLotl(l);
       if (bundleHash(b) === opts.hash) return b;
     }
   }
@@ -187,22 +261,31 @@ export async function resolveBundle(opts: { hash: string; technique?: string; te
  * Returns the operation `data` payload — note it carries NO command/cleanup,
  * only the addressing + hash, so the job message itself is not executable.
  */
-export async function buildDispatch(opts: { useSmoke?: boolean; technique?: string; testIndex?: number; maxRuntimeMs?: number }): Promise<
-  | { ok: true; data: { technique: string; testIndex: number; bundleHash: string; maxRuntimeMs: number; scope: string }; bundle: BundleContent }
+export async function buildDispatch(opts: { useSmoke?: boolean; technique?: string; testIndex?: number; lotlId?: string; maxRuntimeMs?: number }): Promise<
+  | { ok: true; data: { technique: string; testIndex: number; bundleHash: string; maxRuntimeMs: number; scope: string; lotlId?: string }; bundle: BundleContent }
   | { ok: false; error: string }
 > {
   let bundle: BundleContent | null = null;
   let scope = "diagnostic";                       // safe smoke test → benign scope
+  let lotlId: string | undefined;                 // addressing key for LOTL rows
   if (opts.useSmoke) {
     bundle = safeSmokeBundle();
+  } else if (opts.lotlId) {
+    const l = await prisma.lotlTechnique.findUnique({ where: { id: opts.lotlId } });
+    if (!l) return { ok: false, error: `LotlTechnique ${opts.lotlId} not found` };
+    bundle = bundleFromLotl(l);
+    lotlId = l.id;
+    // Scope = the ATT&CK tactic when the row is mapped; otherwise fall back to a
+    // risk-level token so unmapped LOTL rows still carry a meaningful scope.
+    scope = normTactic(l.tactic) || `lotl-${(l.riskLevel || "medium").toLowerCase().trim() || "medium"}`;
   } else if (opts.technique && opts.testIndex != null) {
     const at = await prisma.atomicTest.findFirst({ where: { techniqueId: opts.technique, testNumber: opts.testIndex } });
     if (!at) return { ok: false, error: `AtomicTest ${opts.technique} #${opts.testIndex} not found` };
     bundle = bundleFromAtomic(at);
     // Scope = the ATT&CK tactic (normalized), used for allowed-scope enforcement.
-    scope = (at.tactic || "").toLowerCase().trim().replace(/\s+/g, "-") || "unspecified";
+    scope = normTactic(at.tactic) || "unspecified";
   } else {
-    return { ok: false, error: "specify useSmoke:true or {technique,testIndex}" };
+    return { ok: false, error: "specify useSmoke:true, {lotlId}, or {technique,testIndex}" };
   }
   if (!bundle.command) return { ok: false, error: "bundle has no command" };
   return {
@@ -213,6 +296,7 @@ export async function buildDispatch(opts: { useSmoke?: boolean; technique?: stri
       bundleHash: bundleHash(bundle),
       maxRuntimeMs: Math.min(600_000, Math.max(5_000, opts.maxRuntimeMs || 120_000)),
       scope,
+      ...(lotlId ? { lotlId } : {}),
     },
     bundle,
   };

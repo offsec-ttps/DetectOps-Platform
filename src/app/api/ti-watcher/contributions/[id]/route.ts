@@ -3,19 +3,28 @@
  *   body: { action: "approve" | "reject", libraryKey?, category? }
  *
  * Review-gate control. Approving flips status → "approved" (the library view
- * then merges it) and re-links a vetted AtomicTest if still unlinked. For an
- * *unrouted* contribution, approve may supply `libraryKey`/`category` to route
- * it on acceptance. Rejecting flips status → "rejected".
+ * then merges it into what every analyst sees) and re-links a vetted AtomicTest
+ * if still unlinked. For an *unrouted* contribution, approve may supply
+ * `libraryKey`/`category` to route it on acceptance. Rejecting flips status →
+ * "rejected".
+ *
+ * AuthZ: this mutates published library content, so it requires the reviewer
+ * (admin) role — not merely an authenticated session. Contributions are global
+ * (no per-user owner), so admin-only is the access model. In dev/unenforced
+ * mode the synthetic user is already admin, so local review keeps working.
+ * `libraryKey` is constrained to a registered target and `category` to that
+ * library's own category set (no arbitrary grouping injected into the view).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { linkAtomic } from "@/lib/ti-watcher/atomics";
 import { getTarget } from "@/lib/ti-watcher/targets";
+import { getLibraryByModule } from "@/lib/attack-sim/registry";
 import { logEvent } from "@/lib/event-log";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireRole("admin");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const body = await req.json().catch(() => ({} as any));
@@ -44,9 +53,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!target) return NextResponse.json({ error: `unknown library "${libraryKey}"` }, { status: 400 });
 
   const primaryId = (() => { try { return (JSON.parse(row.attackTechniques || "[]")[0] || "").toUpperCase(); } catch { return ""; } })();
-  const category = typeof body?.category === "string" && body.category
-    ? body.category
-    : (row.category || (primaryId ? target.categoryFor(primaryId, row.name) : null));
+
+  // Category is the in-library grouping the technique renders under. Constrain
+  // it to the backing library's own category set so a caller can't inject an
+  // arbitrary heading into the library view; fall back to the computed default.
+  const lib = getLibraryByModule(target.moduleId);
+  const allowedCategories = new Set((lib?.techniques || []).map((t) => t.category));
+  const computedCategory = row.category || (primaryId ? target.categoryFor(primaryId, row.name) : null);
+  let category: string | null;
+  if (typeof body?.category === "string" && body.category) {
+    if (!allowedCategories.has(body.category)) {
+      return NextResponse.json({ error: `invalid category for library "${libraryKey}"`, allowed: [...allowedCategories] }, { status: 400 });
+    }
+    category = body.category;
+  } else {
+    category = computedCategory;
+  }
 
   // re-link an atomic if we still don't have one
   let atomic = { atomicTestId: row.atomicTestId, atomicTestName: row.atomicTestName, atomicTestNumber: row.atomicTestNumber, needsAtomic: row.needsAtomic };

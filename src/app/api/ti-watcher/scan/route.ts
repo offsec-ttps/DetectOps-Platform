@@ -2,11 +2,13 @@
  * POST /api/ti-watcher/scan — run one TI → Simulation-Library watcher scan now.
  * GET  /api/ti-watcher/scan — last run + pending-contribution counts.
  *
- * Auth: a logged-in user, OR a bearer token matching WATCHER_TOKEN (for the
- * optional GitHub Action cron on deployed instances).
+ * AuthZ: a reviewer (admin) session, OR a bearer token matching WATCHER_TOKEN
+ * (for the optional GitHub Action cron on deployed instances). A scan both
+ * creates DB rows and can spend LLM tokens, so it is admin-gated rather than
+ * open to any authenticated user. GET (read-only status) needs only a session.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, requireRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { runWatcherScan } from "@/lib/ti-watcher/scan";
 
@@ -18,7 +20,7 @@ async function authorize(req: NextRequest): Promise<{ ok: true } | { ok: false; 
     const hdr = req.headers.get("authorization") || "";
     if (hdr === `Bearer ${token}`) return { ok: true };
   }
-  const auth = await requireUser();
+  const auth = await requireRole("admin");
   if (auth.ok) return { ok: true };
   return { ok: false, response: auth.response };
 }

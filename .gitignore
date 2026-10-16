@@ -86,3 +86,4 @@ Thumbs.db
 
 # local-only attack-library research (docx from Gemini + Claude)
 /research/
+labs/winrm.config.json

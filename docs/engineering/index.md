@@ -14,6 +14,8 @@ The Engineering section is where you model threats and author, generate, and bro
 | [Rule Workspace](rule-workspace.md) | `/rule-workspace` | Edit Sigma rules, convert to SIEM backends, open PRs. |
 | [Atomic Test Library](../content/atomic-test-library.md) | `/atomic-tests` | Browse ~2,000 Atomic Red Team tests; author custom tests. |
 | [Community Content](../content/community-content.md) | `/community` | Search 14,000+ community detection rules across many sources. |
+| [Custom Modules](custom-modules.md) | `/marketplace/build` | Create, validate, and deploy your own attack-simulation modules. |
+| [Attack Simulation Test Report](attack-simulation-test-report.md) | — | Build & end-to-end test results for the Attack Simulation libraries. |
 
 ## Typical flow
 

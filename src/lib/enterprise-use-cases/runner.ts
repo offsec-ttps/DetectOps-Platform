@@ -156,6 +156,99 @@ async function sshExec(env: EnvironmentTarget, command: string, timeoutMs: numbe
 // metacharacters rather than try to quote-escape an arbitrary template.
 const SHELL_INJECTION = /[;&|`$(){}<>\n\r\\"']/;
 
+// ─── WinRM transport (SAR Windows endpoints speak WinRM, not SSH) ────────────
+// Credentials come from a gitignored, operator-managed config file keyed by host
+// (shape: { "10.0.1.14": { user, password, transport?, scheme?, port? } }) so no
+// secret is written to the DB/schema or to git. This is the lab-grade source;
+// for a multi-tenant/production deployment, source WinRM credentials from the
+// encrypted credential vault (see src/lib/crypto/credential-vault.ts, as
+// SiemConnection/CloudCredential do) and reference them via the environment.
+// The default scheme is http+basic (WinRM 5985), which SAR provisions and which
+// is only safe on an isolated lab network — it transmits the password in
+// cleartext. Set scheme:"https" (port 5986) for any routed network.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+interface WinrmCred { user: string; password: string; transport: string; scheme: string; port: number }
+function winrmCreds(host: string): WinrmCred | null {
+  try {
+    const cfg = JSON.parse(readFileSync(join(process.cwd(), "labs", "winrm.config.json"), "utf8"));
+    const c = cfg[host];
+    if (c && c.user) {
+      const scheme = c.scheme === "https" ? "https" : "http";
+      return { user: c.user, password: c.password || "", transport: c.transport || "basic", scheme, port: Number(c.port) || (scheme === "https" ? 5986 : 5985) };
+    }
+  } catch { /* no config for this host */ }
+  return null;
+}
+
+async function winrmExec(env: EnvironmentTarget, command: string, timeoutMs: number): Promise<{
+  exitCode: number; stdout: string; stderr: string; durationMs: number; timedOut: boolean;
+}> {
+  const t0 = Date.now();
+  if (!env.hostname) return { exitCode: -1, stdout: "", stderr: "env missing hostname", durationMs: 0, timedOut: false };
+  // Authorization boundary (anti confused-deputy): the runner only ever uses WinRM
+  // credentials for a host an operator has explicitly allowlisted in the config.
+  // An environment pointing at any other host yields no credentials and cannot be
+  // executed against, so a caller cannot steer the privileged WinRM session at an
+  // arbitrary target. Run invocation itself is gated upstream (authenticated API +
+  // environment ownership); per-tenant RBAC on environments is a recommended
+  // follow-on for shared deployments.
+  const creds = winrmCreds(env.hostname);
+  if (!creds) return { exitCode: -1, stdout: "", stderr: `no WinRM credentials configured for host ${env.hostname} — add it to the operator allowlist (labs/winrm.config.json)`, durationMs: Date.now() - t0, timedOut: false };
+  const payload = JSON.stringify({
+    host: env.hostname, user: creds.user, password: creds.password, transport: creds.transport,
+    scheme: creds.scheme, port: creds.port,
+    shell: "powershell", command, timeout: Math.round(timeoutMs / 1000),
+  });
+  return new Promise((resolve) => {
+    const py = process.env.WINRM_PYTHON || "python3";
+    const child = spawn(py, [join(process.cwd(), "scripts", "winrm_exec.py")], { stdio: ["pipe", "pipe", "pipe"] });
+    let out = "", err = "";
+    let timedOut = false;
+    child.stdout.on("data", (d) => { out += d.toString(); });
+    child.stderr.on("data", (d) => { err += d.toString(); });
+    const killer = setTimeout(() => { timedOut = true; try { child.kill("SIGKILL"); } catch {} }, timeoutMs + 20_000);
+    child.on("close", () => {
+      clearTimeout(killer);
+      try {
+        const r = JSON.parse(out.trim().split("\n").filter(Boolean).pop() || "{}");
+        resolve({ exitCode: r.exitCode ?? -1, stdout: String(r.stdout || "").slice(-16_000), stderr: String(r.stderr || err).slice(-8_000), durationMs: Date.now() - t0, timedOut });
+      } catch {
+        resolve({ exitCode: -1, stdout: out.slice(-16_000), stderr: (err || "winrm helper: unparseable output").slice(-8_000), durationMs: Date.now() - t0, timedOut });
+      }
+    });
+    child.on("error", (e) => { clearTimeout(killer); resolve({ exitCode: -1, stdout: "", stderr: `winrm helper spawn error: ${e.message}`, durationMs: Date.now() - t0, timedOut }); });
+    child.stdin.write(payload); child.stdin.end();
+  });
+}
+
+// Build the PowerShell that runs ONE atomic on a SAR Windows endpoint via
+// Invoke-AtomicTest (GetPrereqs → run → cleanup), resolving (technique, test#)
+// from the step's testGuid. Mirrors the fleet bundle wrapper.
+async function buildWinrmAtomicPs(step: ScenarioStep, budgetSec: number): Promise<string | null> {
+  if (!step.refId) return null;
+  const test = await prisma.atomicTest.findFirst({ where: { testGuid: step.refId }, select: { techniqueId: true, testNumber: true } });
+  if (!test) return null;
+  const t = test.techniqueId, n = test.testNumber;
+  // Harden against command injection / confused-deputy: these values are
+  // interpolated into the PowerShell that the privileged WinRM session runs, so
+  // only accept a canonical ATT&CK id and a non-negative integer test number.
+  // A tampered or malformed AtomicTest row can therefore never inject commands;
+  // Invoke-AtomicTest also runs only the test matching this (technique, number).
+  if (!/^T\d{4}(\.\d{3})?$/.test(t) || !Number.isInteger(n) || n < 0 || n > 999) return null;
+  // SAR installs ART under C:\AtomicRedTeam; fall back to the ProgramData base.
+  return [
+    `$base = @('C:\\AtomicRedTeam','C:\\ProgramData\\AtomicRedTeam') | Where-Object { Test-Path "$_\\atomics" } | Select-Object -First 1;`,
+    `if (-not $base) { Write-Output 'ART-NOT-INSTALLED'; exit 1 };`,
+    `Import-Module "$base\\invoke-atomicredteam\\Invoke-AtomicRedTeam.psd1" -Force -ErrorAction SilentlyContinue;`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -GetPrereqs -Confirm:$false -ErrorAction SilentlyContinue | Out-Null;`,
+    `$o = Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -TimeoutSeconds ${Math.max(30, Math.min(300, budgetSec))} -Confirm:$false -ErrorAction Continue 2>&1 | Out-String;`,
+    `Write-Output $o;`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -Cleanup -Confirm:$false -ErrorAction SilentlyContinue | Out-Null;`,
+  ].join("");
+}
+
 // ─── Step builders ──────────────────────────────────────────────────────────
 async function buildAtomicCommand(step: ScenarioStep): Promise<string | null> {
   // Resolve the AtomicTest by refId (testGuid)
@@ -272,7 +365,21 @@ async function dispatchStep(env: EnvironmentTarget, step: ScenarioStep, perStepB
 
   // our-template-deployed
   if (env.kind === "our-template-deployed") {
+    // WinRM transport for Windows SAR endpoints (shellMode="winrm"): detonate the
+    // atomic via Invoke-AtomicTest over WinRM instead of SSH.
+    const useWinrm = env.shellMode === "winrm";
     if (fw === "atomic") {
+      if (useWinrm) {
+        const ps = await buildWinrmAtomicPs(step, Math.round(perStepBudget / 1000));
+        if (!ps) return runUnsupportedStep(env, step, `ART test guid ${step.refId} not in the AtomicTest catalogue`);
+        const r = await winrmExec(env, ps, perStepBudget);
+        const ran = /Done executing test/i.test(r.stdout) || (r.exitCode === 0 && !/ART-NOT-INSTALLED/.test(r.stdout));
+        return {
+          status: r.timedOut ? "failure" : ran ? "ok" : "failure",
+          exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr, durationMs: r.durationMs,
+          notes: r.timedOut ? "step timed out" : /ART-NOT-INSTALLED/.test(r.stdout) ? "Atomic Red Team not installed on target" : "",
+        };
+      }
       const cmd = await buildAtomicCommand(step);
       if (!cmd) return runUnsupportedStep(env, step, `ART test guid ${step.refId} not in the AtomicTest catalogue, or an input-argument value contained disallowed shell characters`);
       const r = await sshExec(env, cmd, perStepBudget);

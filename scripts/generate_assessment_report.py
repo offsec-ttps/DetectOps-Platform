@@ -70,9 +70,22 @@ def aggregate(rows, libmap):
             by_lib[lib][2] += 1 if r.get("observed") else 0
     return runnable, executed, observed, dict(by_tactic), dict(by_lib)
 
+def visibility_buckets(executed):
+    """Three-bucket telemetry-visibility model when records carry `vis_bucket`
+    (visible = a distinctive indicator reached the SIEM; generic-only = only
+    common shell tokens, so attribution is indeterminate; absent = distinctive
+    indicator ran but produced no matching telemetry — a true blind spot)."""
+    have = [r for r in executed if r.get("vis_bucket")]
+    if not have:
+        return None
+    b = collections.Counter(r["vis_bucket"] for r in have)
+    return {"visible": b.get("visible", 0), "generic-only": b.get("generic-only", 0),
+            "absent": b.get("absent", 0), "total": len(have)}
+
 def md_report(rows, args):
     libmap = library_techniques()
     runnable, executed, observed, by_tactic, by_lib = aggregate(rows, libmap)
+    buckets = visibility_buckets(executed)
     na = len([r for r in rows if r.get("status") == "n/a"])
     today = datetime.date.today().isoformat()
     L = []
@@ -86,39 +99,99 @@ def md_report(rows, args):
     L.append("| Metric | Result |\n|---|---|")
     L.append(f"| Atomics attempted (Windows, non-destructive, on-host) | {len(runnable)} |")
     L.append(f"| Executed on the endpoint | **{len(executed)} / {len(runnable)} ({pct(len(executed), len(runnable))}%)** |")
-    L.append(f"| Observable in SIEM (telemetry present) | **{len(observed)} / {len(runnable)} ({pct(len(observed), len(runnable))}%)** |")
+    if buckets:
+        denom = buckets["visible"] + buckets["absent"]
+        L.append(f"| Telemetry-visible in SIEM (distinctive indicator) | **{buckets['visible']} / {denom} "
+                 f"({pct(buckets['visible'], denom)}%)** |")
+        L.append(f"| Attribution indeterminate (generic shell tokens only) | {buckets['generic-only']} |")
+        L.append(f"| Telemetry blind spots (indicator ran, no log) | {buckets['absent']} |")
+    else:
+        L.append(f"| Observable in SIEM (telemetry present) | **{len(observed)} / {len(runnable)} ({pct(len(observed), len(runnable))}%)** |")
     if na: L.append(f"| Skipped (not Windows-applicable) | {na} |")
     L.append("")
-    L.append("*\"Observable\" means the atomic's activity produced telemetry the SIEM "
-             "ingested — the prerequisite for a detection. Turning observability into "
-             "firing detections is covered in the recommendations.*\n")
+    if buckets:
+        L.append("*Methodology: each executed atomic was re-queried against the SIEM over the "
+                 "full engagement window using a **distinctive indicator** (a non-generic process, "
+                 "script, or argument unique to the test). \"Telemetry-visible\" means that indicator "
+                 "reached the SIEM — the prerequisite for a detection. Atomics whose only indicator is a "
+                 "generic shell (`powershell.exe`, `cmd.exe`, …) are reported separately as "
+                 "indeterminate, since a bare shell event cannot be attributed to a specific test. "
+                 "Visibility is not the same as a firing detection — see \"Detection measurement\" below.*\n")
+    else:
+        L.append("*\"Observable\" means the atomic's activity produced telemetry the SIEM "
+                 "ingested — the prerequisite for a detection. Turning observability into "
+                 "firing detections is covered in the recommendations.*\n")
+    if args.detection_note:
+        L.append("## Detection measurement (tuned-rule sample)\n")
+        L.append(args.detection_note + "\n")
+
+    def bucketed(keyfn):
+        """group executed atomics by key -> {visible, generic-only, absent, exec, atomics}"""
+        agg = collections.defaultdict(lambda: collections.Counter())
+        for r in runnable:
+            for k in keyfn(r):
+                agg[k]["atomics"] += 1
+                if r.get("executed"): agg[k]["exec"] += 1
+                b = r.get("vis_bucket")
+                if b: agg[k][b] += 1
+        return agg
 
     L.append("## Coverage by ATT&CK tactic\n")
-    L.append("| Tactic | Atomics | Executed | Observable | Observability |\n|---|---|---|---|---|")
-    for t in sorted(by_tactic, key=lambda k: -by_tactic[k][0]):
-        a, e, o = by_tactic[t]
-        L.append(f"| {t} | {a} | {e} | {o} | {pct(o, a)}% |")
-    L.append("")
+    if buckets:
+        L.append("| Tactic | Atomics | Executed | Visible | Indeterminate | Blind | Visibility |\n|---|---|---|---|---|---|---|")
+        agg = bucketed(lambda r: [(r.get("tactic") or "other").replace("-", " ").title()])
+        for t in sorted(agg, key=lambda k: -agg[k]["atomics"]):
+            c = agg[t]; denom = c["visible"] + c["absent"]
+            L.append(f"| {t} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
+        L.append("")
+        L.append("*Visibility % = visible / (visible + blind); indeterminate (generic-shell-only) atomics are excluded from the ratio.*\n")
+    else:
+        L.append("| Tactic | Atomics | Executed | Observable | Observability |\n|---|---|---|---|---|")
+        for t in sorted(by_tactic, key=lambda k: -by_tactic[k][0]):
+            a, e, o = by_tactic[t]
+            L.append(f"| {t} | {a} | {e} | {o} | {pct(o, a)}% |")
+        L.append("")
 
     if by_lib:
         L.append("## Coverage by simulation library\n")
-        L.append("| Library | Atomics | Executed | Observable | Observability |\n|---|---|---|---|---|")
-        for lib in LIB_MODULES:
-            if lib in by_lib:
-                a, e, o = by_lib[lib]
-                L.append(f"| {lib} | {a} | {e} | {o} | {pct(o, a)}% |")
-        L.append("")
+        if buckets:
+            L.append("| Library | Atomics | Executed | Visible | Indeterminate | Blind | Visibility |\n|---|---|---|---|---|---|---|")
+            agg = bucketed(lambda r: list(libmap.get(r["tech"], ())))
+            for lib in LIB_MODULES:
+                if lib in agg:
+                    c = agg[lib]; denom = c["visible"] + c["absent"]
+                    L.append(f"| {lib} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
+            L.append("")
+        else:
+            L.append("| Library | Atomics | Executed | Observable | Observability |\n|---|---|---|---|---|")
+            for lib in LIB_MODULES:
+                if lib in by_lib:
+                    a, e, o = by_lib[lib]
+                    L.append(f"| {lib} | {a} | {e} | {o} | {pct(o, a)}% |")
+            L.append("")
 
-    # Top gaps: executed but not observable (SIEM blind spots)
-    blind = [r for r in executed if not r.get("observed")]
-    L.append("## Notable blind spots (executed, not observable in SIEM)\n")
-    if blind:
-        L.append("| Technique | Atomic | Tactic |\n|---|---|---|")
-        for r in blind[:40]:
-            L.append(f"| {r['tech']} | {r.get('name','')[:60]} | {(r.get('tactic') or '').replace('-',' ')} |")
-        if len(blind) > 40: L.append(f"| … | {len(blind)-40} more | |")
+    # Blind spots: a distinctive indicator ran but produced NO telemetry.
+    # With the three-bucket model these are the `absent` records (not the
+    # indeterminate generic-only ones); otherwise fall back to not-observed.
+    if buckets:
+        blind = [r for r in executed if r.get("vis_bucket") == "absent"]
+        L.append("## Telemetry blind spots (distinctive indicator ran, no log)\n")
     else:
-        L.append("None — every executed atomic produced observable telemetry.")
+        blind = [r for r in executed if not r.get("observed")]
+        L.append("## Notable blind spots (executed, not observable in SIEM)\n")
+    if blind:
+        L.append("| Technique | Atomic | Tactic | Indicator |\n|---|---|---|---|")
+        for r in blind[:40]:
+            ind = ", ".join(r.get("indicators", [])[:2]) if r.get("indicators") else ""
+            L.append(f"| {r['tech']} | {r.get('name','')[:55]} | {(r.get('tactic') or '').replace('-',' ')} | {ind} |")
+        if len(blind) > 40: L.append(f"| … | {len(blind)-40} more | | |")
+        L.append("")
+        L.append("*Some blind spots reflect indicator-selection limits (a test whose only "
+                 "distinctive token is a one-off string literal) rather than a hard telemetry gap; "
+                 "those marked by a registry-value or PowerShell-cmdlet indicator are genuine gaps "
+                 "closed by registry auditing (Sysmon EID 12/13) and script-block logging (4104).*")
+    else:
+        L.append("None — every executed atomic with a distinctive indicator produced telemetry.")
     L.append("")
     L.append("## Recommendations\n")
     L.append("See `detection-improvement-recommendations.md`. The highest-impact items: "
@@ -140,7 +213,12 @@ def main():
     ap.add_argument("--assessor", default="RuSecure")
     ap.add_argument("--client", default="UnicornSecrets")
     ap.add_argument("--lab", default="Splunk SAR")
+    ap.add_argument("--detection-note", default="",
+                    help="Free-text note for the 'Detection measurement' section "
+                         "(e.g. results of a tuned-rule sample). Optional.")
     args = ap.parse_args()
+    if args.detection_note.startswith("@"):  # @path reads the note from a file
+        args.detection_note = open(args.detection_note[1:]).read().strip()
     rows = load_results(args.results)
     md = md_report(rows, args)
     out = os.path.join(ROOT, args.out) if not os.path.isabs(args.out) else args.out

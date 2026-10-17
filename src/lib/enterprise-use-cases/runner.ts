@@ -351,6 +351,42 @@ export async function stagePrereqs(
   return { status: "failed", stdout: out, tail: tail || (r.stderr || "").slice(-150) || "no output", durationMs: r.durationMs };
 }
 
+export interface InstallLibraryResult {
+  ok: boolean;
+  installedTechniques: number;   // folder count under atomics after install (0 if unknown)
+  tail: string;
+  durationMs: number;
+}
+
+// Install / refresh the FULL Atomic Red Team atomics library on a WinRM host via
+// the official redcanaryco installer, so techniques not yet present on the host
+// become available to test. Downloads from GitHub (host needs internet). This is
+// the same installer an operator runs by hand; it only fetches the atomics
+// content and never executes a test. WinRM-only; input is a fixed command (no
+// user interpolation). Long budget — the atomics folder is large.
+export async function installAtomicLibrary(env: EnvironmentTarget, budgetSec = 600): Promise<InstallLibraryResult> {
+  if (env.kind !== "our-template-deployed" || env.shellMode !== "winrm") {
+    return { ok: false, installedTechniques: 0, tail: "library install supports WinRM our-template-deployed environments only", durationMs: 0 };
+  }
+  const budget = Math.max(120, Math.min(1800, budgetSec));
+  const ps = [
+    `$ErrorActionPreference='Continue';`,
+    `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;`,
+    `$base = @('C:\\AtomicRedTeam','C:\\ProgramData\\AtomicRedTeam') | Where-Object { Test-Path $_ } | Select-Object -First 1; if (-not $base) { $base='C:\\AtomicRedTeam' };`,
+    // Dot-source the official installer, then pull the full atomics set + the
+    // invoke module. -Force refreshes existing content.
+    `IEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/redcanaryco/invoke-atomicredteam/master/install-atomicredteam.ps1');`,
+    `Install-AtomicRedTeam -getAtomics -Force -InstallPath $base 2>&1 | Out-String | Write-Output;`,
+    `if (Test-Path "$base\\atomics") { $c=(Get-ChildItem "$base\\atomics" -Directory | Measure-Object).Count; Write-Output ("INSTALLED-TECHNIQUES=" + $c) } else { Write-Output 'ATOMICS-FOLDER-MISSING' };`,
+  ].join("");
+  const r = await winrmExec(env, ps, budget * 1000 + 30_000);
+  const out = r.stdout || "";
+  const m = out.match(/INSTALLED-TECHNIQUES=(\d+)/);
+  const n = m ? parseInt(m[1], 10) : 0;
+  const tail = out.slice(-240).replace(/\s+/g, " ").trim();
+  return { ok: n > 0, installedTechniques: n, tail: tail || (r.stderr || "").slice(-150) || "no output", durationMs: r.durationMs };
+}
+
 // List the ATT&CK technique folders actually installed under the ART atomics
 // path on a WinRM host, so a "full" sweep can skip atomics the host does not
 // have (they would otherwise each cost a round-trip only to report n/a).

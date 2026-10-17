@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import CoverageAssessmentTab from "@/components/reporting/CoverageAssessmentTab";
 import {
   BarChart3, FileText, BookOpen, TrendingDown, Clock, Shield,
   AlertTriangle, CheckCircle, Plus, GitBranch, Loader2, X, Search,
@@ -78,7 +79,7 @@ const SEV_COLORS: Record<string, string> = {
 // ── Component ──
 
 export default function ReportingPage() {
-  const [tab, setTab] = useState<"knowledge" | "metrics" | "debt" | "reports">("reports");
+  const [tab, setTab] = useState<"knowledge" | "metrics" | "debt" | "reports" | "coverage">("reports");
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -213,6 +214,7 @@ export default function ReportingPage() {
       <div className="flex gap-1 border-b border-border">
         {([
           { key: "reports", label: "Use Case Reports" },
+          { key: "coverage", label: "Coverage Assessment" },
           { key: "knowledge", label: "Knowledge Base" },
           { key: "metrics", label: "Metrics & Trends" },
           { key: "debt", label: "Detection Debt" },
@@ -440,6 +442,9 @@ export default function ReportingPage() {
           )}
         </div>
       )}
+
+      {/* ═══ Coverage Assessment Tab ═══ */}
+      {tab === "coverage" && <CoverageAssessmentTab />}
 
       {/* ═══ Report Form Modal ═══ */}
       {showForm && (

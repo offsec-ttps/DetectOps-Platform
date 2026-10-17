@@ -249,6 +249,77 @@ async function buildWinrmAtomicPs(step: ScenarioStep, budgetSec: number): Promis
   ].join("");
 }
 
+// ─── Single-atomic detonation seam (coverage-assessment sweep) ──────────────
+// Detonate one ART (techniqueId, testNumber) on an environment and report
+// whether it executed — without constructing a scenario/use-case per atomic.
+// Used by the coverage-assessment worker to sweep the whole library. WinRM
+// endpoints (shellMode="winrm") run Invoke-AtomicTest over WinRM; other
+// transports are out of scope for the bulk sweep (SAR Windows DC is WinRM).
+export interface DetonateResult {
+  status: "executed" | "failed" | "n/a";
+  executed: boolean;
+  exitCode: number;
+  stdout: string;
+  tail: string;
+  durationMs: number;
+}
+export async function detonateAtomicTest(
+  env: EnvironmentTarget, techniqueId: string, testNumber: number, budgetSec = 60,
+): Promise<DetonateResult> {
+  const t = techniqueId, n = testNumber;
+  // Same hardening as buildWinrmAtomicPs: only a canonical ATT&CK id + a bounded
+  // integer test number are interpolated into the privileged WinRM PowerShell.
+  if (!/^T\d{4}(\.\d{3})?$/.test(t) || !Number.isInteger(n) || n < 0 || n > 999) {
+    return { status: "failed", executed: false, exitCode: -1, stdout: "", tail: "invalid technique id / test number", durationMs: 0 };
+  }
+  if (env.kind !== "our-template-deployed" || env.shellMode !== "winrm") {
+    return { status: "failed", executed: false, exitCode: -1, stdout: "", tail: "coverage sweep supports WinRM our-template-deployed environments only", durationMs: 0 };
+  }
+  const ps = [
+    `$base = @('C:\\AtomicRedTeam','C:\\ProgramData\\AtomicRedTeam') | Where-Object { Test-Path "$_\\atomics" } | Select-Object -First 1;`,
+    `if (-not $base) { Write-Output 'ART-NOT-INSTALLED'; exit 1 };`,
+    `Import-Module "$base\\invoke-atomicredteam\\Invoke-AtomicRedTeam.psd1" -Force -ErrorAction SilentlyContinue;`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -GetPrereqs -Confirm:$false -ErrorAction SilentlyContinue | Out-Null;`,
+    `$o = Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -TimeoutSeconds ${Math.max(30, Math.min(300, budgetSec))} -Confirm:$false -ErrorAction Continue 2>&1 | Out-String;`,
+    `Write-Output $o;`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -Cleanup -Confirm:$false -ErrorAction SilentlyContinue | Out-Null;`,
+  ].join("");
+  const r = await winrmExec(env, ps, budgetSec * 1000 + 20_000);
+  const out = r.stdout || "";
+  const tail = out.slice(-220).replace(/\s+/g, " ").trim();
+  if (/Done executing test/i.test(out)) {
+    return { status: "executed", executed: true, exitCode: r.exitCode, stdout: out, tail, durationMs: r.durationMs };
+  }
+  if (/ART-NOT-INSTALLED/.test(out)) {
+    return { status: "n/a", executed: false, exitCode: r.exitCode, stdout: out, tail: "ART not installed on target", durationMs: r.durationMs };
+  }
+  if (/applicable to|does not exist|could not find|no atomic tests/i.test(out)) {
+    return { status: "n/a", executed: false, exitCode: r.exitCode, stdout: out, tail: tail || "not applicable / missing on host", durationMs: r.durationMs };
+  }
+  return { status: "failed", executed: false, exitCode: r.exitCode, stdout: out, tail: tail || (r.stderr || "").slice(-150) || "no output", durationMs: r.durationMs };
+}
+
+// List the ATT&CK technique folders actually installed under the ART atomics
+// path on a WinRM host, so a "full" sweep can skip atomics the host does not
+// have (they would otherwise each cost a round-trip only to report n/a).
+// Returns an uppercased set of technique ids (e.g. "T1059.001"); empty set on
+// any failure (caller then falls back to not intersecting).
+export async function listInstalledAtomicTechniques(env: EnvironmentTarget): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (env.kind !== "our-template-deployed" || env.shellMode !== "winrm") return out;
+  const ps = [
+    `$base = @('C:\\AtomicRedTeam','C:\\ProgramData\\AtomicRedTeam') | Where-Object { Test-Path "$_\\atomics" } | Select-Object -First 1;`,
+    `if (-not $base) { Write-Output 'ART-NOT-INSTALLED'; exit 1 };`,
+    `Get-ChildItem "$base\\atomics" -Directory | ForEach-Object { $_.Name };`,
+  ].join("");
+  const r = await winrmExec(env, ps, 60_000);
+  for (const line of (r.stdout || "").split(/\r?\n/)) {
+    const m = line.trim().match(/^T\d{4}(\.\d{3})?$/);
+    if (m) out.add(line.trim().toUpperCase());
+  }
+  return out;
+}
+
 // ─── Step builders ──────────────────────────────────────────────────────────
 async function buildAtomicCommand(step: ScenarioStep): Promise<string | null> {
   // Resolve the AtomicTest by refId (testGuid)

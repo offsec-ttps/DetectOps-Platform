@@ -2307,3 +2307,72 @@ model SimWatcherRun {
   @@index([status, startedAt])
   @@map("sim_watcher_runs")
 }
+
+// ─── Coverage Assessment (analyst-facing ART sweep → branded report) ────────
+// An analyst runs the Windows Atomic Red Team library against an environment,
+// the server detonates each atomic (via the WinRM/SSH runner) and observes
+// telemetry in the SIEM, then aggregates (three-bucket visibility) and renders
+// a branded md/docx/pdf report. Long-running: enqueued like a draft run and
+// driven by a tick worker (see src/lib/coverage-assessment/worker.ts), progress
+// surfaced by polling. Session-poisoning credential-dump + destructive atomics
+// are excluded at scope resolution.
+model CoverageAssessment {
+  id               String   @id @default(uuid())
+  name             String
+  assessor         String   @default("")                   // report branding
+  client           String   @default("")
+  lab              String   @default("")                   // free-text environment label on the report
+  environmentId    String?                                 // EnvironmentTarget.id the sweep detonates against
+  siemConnectionId String?                                 // SiemConnection.id used to observe telemetry
+  scope            String   @default("{}")                 // JSON: {mode:"full"|"libraries"|"techniques", libraries?:[], techniques?:[]}
+  detectionNote    String   @default("")                   // tuned-rule detection section (free text / markdown)
+  status           String   @default("queued")             // queued | running | rendering | completed | failed | cancelled
+  // progress + totals
+  atomicsTotal     Int      @default(0)                    // resolved runnable atomics (after exclusions)
+  processed        Int      @default(0)
+  executedCount    Int      @default(0)
+  visibleCount     Int      @default(0)
+  genericCount     Int      @default(0)
+  absentCount      Int      @default(0)
+  naCount          Int      @default(0)
+  failedCount      Int      @default(0)
+  // results
+  metrics          String   @default("{}")                 // JSON: aggregated tactic/library tables + headline
+  reportMd         String   @default("")                   // rendered markdown (source of truth)
+  reportPaths      String   @default("{}")                 // JSON: {md,docx,pdf} absolute paths once rendered
+  error            String?
+  ownerId          String   @default("")                   // AuthUser.id (multi-tenant scoping)
+  actor            String   @default("")
+  startedAt        DateTime?
+  completedAt      DateTime?
+  heartbeatAt      DateTime?                                // worker liveness; lets a stale "running" be reclaimed
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  items            CoverageAssessmentItem[]
+  @@index([status])
+  @@index([ownerId, createdAt])
+  @@map("coverage_assessments")
+}
+
+model CoverageAssessmentItem {
+  id           String   @id @default(uuid())
+  assessmentId String
+  assessment   CoverageAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  tech         String                                       // ATT&CK technique id (T####[.###])
+  num          Int                                          // atomic test number
+  name         String   @default("")
+  tactic       String   @default("")
+  library      String   @default("")                        // originating simulation library (for per-library table)
+  status       String   @default("pending")                // pending | executed | failed | n/a
+  executed     Boolean  @default(false)
+  observed     Boolean  @default(false)                    // distinctive indicator reached the SIEM
+  visBucket    String   @default("")                       // visible | generic-only | absent | ""(not executed)
+  obsCount     Int      @default(0)
+  indicators   String   @default("[]")                     // JSON: distinctive tokens queried
+  tail         String   @default("")                       // last line of detonation output / error
+  order        Int      @default(0)
+  processedAt  DateTime?
+  @@index([assessmentId, status])
+  @@index([assessmentId, order])
+  @@map("coverage_assessment_items")
+}

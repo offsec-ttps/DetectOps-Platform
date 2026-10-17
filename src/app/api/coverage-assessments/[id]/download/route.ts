@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, existsSync } from "node:fs";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 
 const TYPES: Record<string, string> = {
   md: "text/markdown; charset=utf-8",
@@ -19,8 +19,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const format = (new URL(req.url).searchParams.get("format") || "md").toLowerCase();
   if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx or pdf" }, { status: 400 });
 
-  const a = await prisma.coverageAssessment.findUnique({ where: { id }, select: { reportPaths: true, client: true } });
+  const a = await prisma.coverageAssessment.findUnique({ where: { id }, select: { reportPaths: true, client: true, ownerId: true } });
   if (!a) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const own = ownsOr404(auth, a.ownerId);
+  if (!own.ok) return own.response;
   let paths: Record<string, string> = {};
   try { paths = JSON.parse(a.reportPaths || "{}"); } catch { /* */ }
   const path = paths[format];

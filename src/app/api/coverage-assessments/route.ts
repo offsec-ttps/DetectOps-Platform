@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { resolveScope, type ScopeSpec } from "@/lib/coverage-assessment/scope";
 import { ensureWorkerLoop } from "@/lib/coverage-assessment/worker";
 import { listInstalledAtomicTechniques } from "@/lib/enterprise-use-cases/runner";
@@ -13,7 +13,11 @@ export async function GET() {
   // sure the in-process drive loop is running so it resumes. Idempotent.
   const active = await prisma.coverageAssessment.count({ where: { status: { in: ["queued", "running", "rendering"] } } });
   if (active > 0) ensureWorkerLoop();
+  // Multi-tenant scoping: a non-admin caller only sees their own assessments
+  // when auth is enforced (dev mode / admin see all).
+  const scope = auth.enforced && auth.user.role !== "admin" ? { ownerId: auth.user.id } : {};
   const rows = await prisma.coverageAssessment.findMany({
+    where: scope,
     orderBy: { createdAt: "desc" },
     take: 50,
     select: {
@@ -40,6 +44,21 @@ export async function POST(req: NextRequest) {
 
   const env = await prisma.environmentTarget.findUnique({ where: { id: environmentId } });
   if (!env) return NextResponse.json({ error: "environment not found" }, { status: 404 });
+  // Authorization: the caller must own the environment they want to detonate
+  // against (anti confused-deputy — a tenant must not drive a privileged sweep
+  // at another tenant's host). Admins/dev bypass. 404 to avoid leaking existence.
+  const envOwn = ownsOr404(auth, env.ownerId);
+  if (!envOwn.ok) return envOwn.response;
+
+  // Likewise the SIEM connection (it carries decrypted credentials at use time).
+  let siemConnectionId: string | null = null;
+  if (body.siemConnectionId) {
+    const conn = await prisma.siemConnection.findUnique({ where: { id: String(body.siemConnectionId) } });
+    if (!conn) return NextResponse.json({ error: "siem connection not found" }, { status: 404 });
+    const siemOwn = ownsOr404(auth, conn.ownerId);
+    if (!siemOwn.ok) return siemOwn.response;
+    siemConnectionId = conn.id;
+  }
 
   const scope: ScopeSpec = normalizeScope(body.scope);
 
@@ -59,7 +78,7 @@ export async function POST(req: NextRequest) {
     data: {
       name, assessor: String(body.assessor || ""), client: String(body.client || ""),
       lab: String(body.lab || env.name || ""),
-      environmentId, siemConnectionId: String(body.siemConnectionId || "") || null,
+      environmentId, siemConnectionId,
       scope: JSON.stringify(scope), detectionNote: String(body.detectionNote || ""),
       status: "queued", atomicsTotal: atomics.length,
       ownerId: user.id || "", actor: user.email || user.id || "",

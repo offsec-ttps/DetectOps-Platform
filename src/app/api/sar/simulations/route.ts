@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
 
   const techniqueIds = Array.isArray(body.techniqueIds) ? body.techniqueIds.map(String) : [];
   const targetServer = String(body.targetServer || "").slice(0, 240);
+  const targetKey = String(body.targetKey || "").slice(0, 240);
   if (!techniqueIds.length) return NextResponse.json({ error: "techniqueIds[] required" }, { status: 400 });
   if (!targetServer) return NextResponse.json({ error: "targetServer required" }, { status: 400 });
 
@@ -195,6 +196,7 @@ export async function POST(req: NextRequest) {
     data: {
       techniqueIds: JSON.stringify(techniqueIds),
       targetServer,
+      targetKey,
       targetIp: String(body.targetIp || "").slice(0, 64),
       source,
       executor: source === "c2" ? "caldera" : "art",

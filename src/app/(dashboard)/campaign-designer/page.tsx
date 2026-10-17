@@ -120,6 +120,7 @@ interface SimulationRecord {
   id: string;
   techniqueIds: string[];
   targetServer: string;
+  targetKey?: string;                              // LabTarget.deployedName the run was dispatched to (restore key)
   targetIp: string;
   source?: string;                                 // local | cloud | fleet | c2
   executor: string;
@@ -209,6 +210,9 @@ export default function CampaignDesignerPage() {
   // Per-technique selected atomic test number (default 1). Lets the user preview/
   // edit/save-as a custom atomic and choose which test runs (honored on fleet).
   const [techniqueTests, setTechniqueTests] = useState<Record<string, number>>({});
+  // Per-technique simulation engine: "art" (atomic runner, default) or
+  // "purplesharp" (native Windows AD adversary-simulation on a fleet node).
+  const [techniqueEngines, setTechniqueEngines] = useState<Record<string, "art" | "purplesharp">>({});
   // Full per-technique test selection from a library handoff (fleet dispatch runs
   // every entry); `techniqueTests` holds the single preview/default test.
   const [techniqueTestLists, setTechniqueTestLists] = useState<Record<string, number[]>>({});
@@ -276,7 +280,7 @@ export default function CampaignDesignerPage() {
     try { raw = sessionStorage.getItem("attack.campaignHandoff"); } catch { /* ignore */ }
     if (!raw) return;
     try { sessionStorage.removeItem("attack.campaignHandoff"); } catch { /* ignore */ }
-    let parsed: { techniques?: string[]; tests?: Record<string, number>; testLists?: Record<string, number[]> } = {};
+    let parsed: { techniques?: string[]; tests?: Record<string, number>; testLists?: Record<string, number[]>; engines?: Record<string, string> } = {};
     try { parsed = JSON.parse(raw); } catch { return; }
     const techs = [...new Set((Array.isArray(parsed.techniques) ? parsed.techniques : []).map(String).filter((t) => /^T\d{4}(\.\d{3})?$/.test(t)))];
     if (!techs.length) return;
@@ -297,6 +301,12 @@ export default function CampaignDesignerPage() {
         if (nums.length) lists[k] = nums;
       }
       if (Object.keys(lists).length) setTechniqueTestLists(lists);
+    }
+    // Per-technique engine (ART vs PurpleSharp) chosen in the library.
+    if (parsed.engines && typeof parsed.engines === "object") {
+      const eng: Record<string, "art" | "purplesharp"> = {};
+      for (const [k, v] of Object.entries(parsed.engines)) if (/^T\d{4}(\.\d{3})?$/.test(k) && (v === "art" || v === "purplesharp")) eng[k] = v;
+      if (Object.keys(eng).length) setTechniqueEngines(eng);
     }
     setWizardStep(2);
   }, []);
@@ -496,11 +506,13 @@ export default function CampaignDesignerPage() {
     return () => clearInterval(iv);
   }, [fetchFleets, fetchC2]);
 
-  // Cleanup retry timers on unmount
+  // Cleanup retry timers + any live poll on unmount (the fleet/SAR poll both
+  // live in simPollRef, so one clear covers every target type).
   useEffect(() => {
     return () => {
       if (retryTimerRef.current) clearInterval(retryTimerRef.current);
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+      if (simPollRef.current) clearInterval(simPollRef.current);
     };
   }, []);
 
@@ -592,12 +604,12 @@ export default function CampaignDesignerPage() {
   // Record a client-orchestrated run (fleet/cloud/c2) into Simulation History.
   // The local SAR path records itself server-side; these paths don't, so without
   // this they'd never appear in History. Best-effort — never blocks the run.
-  const recordHistory = async (args: { source: "cloud" | "fleet" | "c2"; targetServer: string; status: string; logs: string; durationMs?: number }): Promise<string> => {
+  const recordHistory = async (args: { source: "cloud" | "fleet" | "c2"; targetServer: string; targetKey?: string; status: string; logs: string; durationMs?: number }): Promise<string> => {
     try {
       const res = await fetch("/api/sar/simulations", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          techniqueIds: techniqueList, targetServer: args.targetServer, source: args.source,
+          techniqueIds: techniqueList, targetServer: args.targetServer, targetKey: args.targetKey || "", source: args.source,
           status: args.status, logs: args.logs, durationMs: args.durationMs,
           // Carry the run's execution mode + selected detections so the History
           // row is set up to receive the detection chain (persisted next).
@@ -616,7 +628,7 @@ export default function CampaignDesignerPage() {
   // record the row then kick off detection validation against its SIEM — the
   // results persist onto the recorded row (runIdRef), so History shows the
   // detection part just like the local SAR path.
-  const recordAndMaybeValidate = async (args: { source: "cloud" | "fleet" | "c2"; targetServer: string; status: string; logs: string; durationMs?: number; succeeded: boolean }) => {
+  const recordAndMaybeValidate = async (args: { source: "cloud" | "fleet" | "c2"; targetServer: string; targetKey?: string; status: string; logs: string; durationMs?: number; succeeded: boolean }) => {
     const id = await recordHistory(args);
     if (id) setSimResult((prev) => (prev ? { ...prev, id } : prev));
     if (id && args.succeeded && isDetectionMode && selectedDetections.length > 0) {
@@ -669,11 +681,11 @@ export default function CampaignDesignerPage() {
       }
       const finalStatus = results.length && !passed ? "failure" : "success";
       setSimResult({ id: "c2", status: finalStatus, logs, techniques: techniqueList, durationMs: Date.now() - started });
-      void recordAndMaybeValidate({ source: "c2", targetServer: target.displayName, status: finalStatus, logs, durationMs: Date.now() - started, succeeded: finalStatus === "success" });
+      void recordAndMaybeValidate({ source: "c2", targetServer: target.displayName, targetKey: target.deployedName, status: finalStatus, logs, durationMs: Date.now() - started, succeeded: finalStatus === "success" });
     } catch (e: any) {
       const errLogs = logs + `\ndispatch error: ${e?.message || String(e)}`;
       setSimResult({ id: "", status: "error", logs: errLogs, techniques: techniqueList, durationMs: Date.now() - started });
-      void recordHistory({ source: "c2", targetServer: target.displayName, status: "error", logs: errLogs, durationMs: Date.now() - started });
+      void recordHistory({ source: "c2", targetServer: target.displayName, targetKey: target.deployedName, status: "error", logs: errLogs, durationMs: Date.now() - started });
     } finally {
       setSimulating(false);
     }
@@ -687,11 +699,17 @@ export default function CampaignDesignerPage() {
     if (!target.fleetId || !target.nodeId) return;
     if (techniqueList.length === 0) { setSimulating(false); return; }
 
-    const jobs: Array<{ technique: string; testIndex: number }> = [];
+    const jobs: Array<{ technique: string; testIndex: number; engine: "art" | "purplesharp" }> = [];
     for (const technique of techniqueList) {
+      const engine = techniqueEngines[technique] === "purplesharp" ? "purplesharp" : "art";
+      if (engine === "purplesharp") {
+        // PurpleSharp simulates the whole technique once; testIndex 0 is its sentinel.
+        jobs.push({ technique, testIndex: 0, engine });
+        continue;
+      }
       const list = techniqueTestLists[technique];
       const indices = list && list.length ? list : [techniqueTests[technique] || 1];
-      for (const testIndex of indices) jobs.push({ technique, testIndex });
+      for (const testIndex of indices) jobs.push({ technique, testIndex, engine });
     }
 
     let logs = `Dispatching ${jobs.length} test(s) across ${techniqueList.length} technique(s) to fleet node ${target.displayName} (${target.labName || "fleet"}).\n`
@@ -700,13 +718,13 @@ export default function CampaignDesignerPage() {
 
     const opIds: string[] = [];
     try {
-      for (const { technique, testIndex } of jobs) {
+      for (const { technique, testIndex, engine } of jobs) {
         const res = await fetch(`/api/fleets/${target.fleetId}/nodes/${target.nodeId}/run-test`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ technique, testIndex, maxRuntimeMs: 300_000 }),
+          body: JSON.stringify({ technique, testIndex, engine, maxRuntimeMs: 300_000 }),
         });
         const j = await res.json().catch(() => ({}));
-        if (res.ok && j.operationId) { opIds.push(j.operationId); logs += `queued ${technique} #${j.testIndex} → ${j.testName || "atomic"} (op ${j.operationId.slice(0, 8)})\n`; }
+        if (res.ok && j.operationId) { opIds.push(j.operationId); logs += `queued ${technique} ${engine === "purplesharp" ? "(PurpleSharp)" : `#${j.testIndex}`} → ${j.testName || "atomic"} (op ${j.operationId.slice(0, 8)})\n`; }
         else logs += `skip ${technique} #${testIndex}: ${j.error || `HTTP ${res.status}`}\n`;
         setSimResult({ id: `fleet-${Date.now()}`, status: "running", logs, techniques: techniqueList });
       }
@@ -764,19 +782,22 @@ export default function CampaignDesignerPage() {
           const fleetStatus = allDone ? (recent.length && !anyPassed ? "failure" : "success") : "running";
           setSimResult({ id: `fleet`, status: fleetStatus, logs: liveLogs, techniques: techniqueList, durationMs: Date.now() - started });
           if (allDone) {
-            clearInterval(poll); setSimulating(false);
-            void recordAndMaybeValidate({ source: "fleet", targetServer: target.displayName, status: fleetStatus, logs: liveLogs, durationMs: Date.now() - started, succeeded: fleetStatus === "success" });
+            clearInterval(poll); simPollRef.current = null; setSimulating(false);
+            void recordAndMaybeValidate({ source: "fleet", targetServer: target.displayName, targetKey: target.deployedName, status: fleetStatus, logs: liveLogs, durationMs: Date.now() - started, succeeded: fleetStatus === "success" });
           }
         }
       } catch { /* keep polling */ }
       if (Date.now() - started > 300_000) {   // 5-min cap (tooling is pre-installed; first-run per-test prereqs may still download)
-        clearInterval(poll);
+        clearInterval(poll); simPollRef.current = null;
         const toLogs = logs + "\nTimed out waiting for the agent — check Execution Logs. Ensure the endpoint was prepped once (Deploy → Remote Fleet → install tooling) so Atomic Red Team is present locally.";
         setSimResult({ id: "fleet", status: "timeout", logs: toLogs, techniques: techniqueList, durationMs: Date.now() - started });
         setSimulating(false);
-        void recordHistory({ source: "fleet", targetServer: target.displayName, status: "timeout", logs: toLogs, durationMs: Date.now() - started });
+        void recordHistory({ source: "fleet", targetServer: target.displayName, targetKey: target.deployedName, status: "timeout", logs: toLogs, durationMs: Date.now() - started });
       }
     }, 4000);
+    // Track the poll so stopEverything()/unmount can cancel it (same slot the
+    // SAR path uses; only one run is active at a time).
+    simPollRef.current = poll;
   };
 
   const launchCloudSimulation = async (target: LabTarget) => {
@@ -830,7 +851,7 @@ export default function CampaignDesignerPage() {
         logs: cloudLogs,
         techniques: techniqueList,
       });
-      void recordAndMaybeValidate({ source: "cloud", targetServer: target.displayName, status: isError ? "failure" : "success", logs: cloudLogs, durationMs: Date.now() - started, succeeded: !isError });
+      void recordAndMaybeValidate({ source: "cloud", targetServer: target.displayName, targetKey: target.deployedName, status: isError ? "failure" : "success", logs: cloudLogs, durationMs: Date.now() - started, succeeded: !isError });
     } catch (err) {
       const errLogs =
         `Failed to dispatch simulation: ${err instanceof Error ? err.message : String(err)}\n\n` +
@@ -839,7 +860,7 @@ export default function CampaignDesignerPage() {
         `  2. The SAR controller is running (http://localhost:4321).\n` +
         `  3. The range status is "running" in the Cloud tab.`;
       setSimResult({ id: "", status: "error", logs: errLogs, techniques: techniqueList });
-      void recordHistory({ source: "cloud", targetServer: target.displayName, status: "error", logs: errLogs, durationMs: Date.now() - started });
+      void recordHistory({ source: "cloud", targetServer: target.displayName, targetKey: target.deployedName, status: "error", logs: errLogs, durationMs: Date.now() - started });
     } finally {
       setSimulating(false);
     }
@@ -914,8 +935,23 @@ export default function CampaignDesignerPage() {
   const launchSimulation = async () => {
     setSimulating(true);
     setSimResult(null);
+    // Re-arm the detection chain for this fresh run: a Stop on a PREVIOUS run
+    // leaves detectionCancelRef true, which would otherwise make the deferred
+    // auto-validation guard bail out and silently skip detection this time.
+    detectionCancelRef.current = false;
 
     const selectedTarget = labTargets.find((t) => t.deployedName === selectedServer);
+
+    // A fleet/cloud/c2 selection key that resolves to no live target (e.g. a run
+    // restored from History whose environment is offline/torn down) must NOT fall
+    // through to the local SAR path below — that would silently re-dispatch a
+    // remote run onto the local lab. Fail clearly instead.
+    if (!selectedTarget && /^(fleet|cloud|c2):/.test(selectedServer)) {
+      const kind = selectedServer.split(":")[0];
+      setSimResult({ id: "", status: "error", techniques: techniqueList, logs: `The ${kind} target this run used is no longer available (offline or removed). Bring it back online in Deploy → ${kind === "c2" ? "Fleet Simulation (C2)" : kind === "cloud" ? "Cloud Lab" : "Remote Fleet"}, then re-run.` });
+      setSimulating(false);
+      return;
+    }
 
     // LOTL selection takes the unified LOTL channel. If LOTL techniques are
     // selected, run them here (a mixed atomic+LOTL launch runs the LOTL set;
@@ -1322,14 +1358,12 @@ export default function CampaignDesignerPage() {
   ): Promise<boolean> => {
     // Bail out immediately if detection was cancelled (Stop Polling).
     if (detectionCancelRef.current) return false;
-    // Use override SPL, or the edited query from state, or the original search
-    let spl = overrideSpl || det.search || "";
-    // Check if user has edited the SPL in the results
-    setDetectionResults((prev) => {
-      const existing = prev[detIdx];
-      if (existing?.editedQuery) spl = existing.editedQuery;
-      return prev;
-    });
+    // Precedence: explicit override → the analyst's edited SPL → the original
+    // search. The edited query is read live from detectionResultsRef because a
+    // setDetectionResults updater runs async and wouldn't be applied in time for
+    // the fetch below (so the auto/retry passes previously dropped the edit).
+    const editedSpl = detectionResultsRef.current[detIdx]?.editedQuery;
+    const spl = overrideSpl || editedSpl || det.search || "";
     const techId = det.mitreTechniques?.[0] || techniqueList[0] || "";
 
     setDetectionResults((prev) =>
@@ -1487,7 +1521,11 @@ export default function CampaignDesignerPage() {
   // the detection chain ("detect") or the whole thing again ("full").
   const restoreFromRecord = useCallback((rec: SimulationRecord, resume?: "detect" | "full") => {
     stopRetryTimers();
-    setSelectedServer(rec.targetServer || "");
+    // Restore the ORIGINAL selection key (deployedName) so a re-run / detection
+    // resume targets the same environment. Fleet/cloud/c2 rows carry it in
+    // targetKey; local rows (and legacy rows) fall back to targetServer, which
+    // for the local SAR path already equals the VBox name it selects on.
+    setSelectedServer(rec.targetKey || rec.targetServer || "");
     setTechniqueList(rec.techniqueIds || []);
     setParams(rec.parameters || {});
     // If the run carried a detection chain, treat it as detection mode so the
@@ -3882,6 +3920,17 @@ export default function CampaignDesignerPage() {
                                   </div>
                                 </div>
                               )}
+                              {reportResult.localId && (
+                                <div className="mt-2 ml-5 flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] text-muted uppercase font-semibold">Download report:</span>
+                                  {(["pdf", "docx", "md"] as const).map((fmt) => (
+                                    <a key={fmt} href={`/api/reports/${reportResult.localId}/download?format=${fmt}`} download
+                                      className="text-[11px] text-accent hover:underline flex items-center gap-0.5 font-medium">
+                                      <Download className="h-2.5 w-2.5" /> {fmt.toUpperCase()}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                               {(reportResult.reportUrl || reportResult.issueUrl) && (
                                 <div className="flex items-center gap-3 mt-1.5 ml-5 flex-wrap">
                                   {reportResult.reportUrl && (
@@ -4153,6 +4202,17 @@ export default function CampaignDesignerPage() {
                                 <div className="mt-1 flex items-start gap-1.5 text-muted-foreground">
                                   <FolderOpen className="h-3 w-3 mt-0.5 shrink-0" />
                                   <span>Saved to <code className="font-mono text-foreground break-all bg-background/60 rounded px-1 py-0.5">{historyReportResult[sim.id].localPath}</code></span>
+                                </div>
+                              )}
+                              {historyReportResult[sim.id].localId && (
+                                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] text-muted uppercase font-semibold">Download:</span>
+                                  {(["pdf", "docx", "md"] as const).map((fmt) => (
+                                    <a key={fmt} href={`/api/reports/${historyReportResult[sim.id].localId}/download?format=${fmt}`} download
+                                      className="text-accent hover:underline flex items-center gap-0.5 font-medium">
+                                      <Download className="h-2.5 w-2.5" /> {fmt.toUpperCase()}
+                                    </a>
+                                  ))}
                                 </div>
                               )}
                             </div>

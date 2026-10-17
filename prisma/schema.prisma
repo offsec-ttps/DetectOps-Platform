@@ -787,7 +787,12 @@ model EmailVerification {
 model SimulationRun {
   id              String    @id @default(uuid())
   techniqueIds    String                            // JSON array of technique IDs
-  targetServer    String                            // VM name
+  targetServer    String                            // VM name (human display label)
+  // Stable selection key the Campaign Designer targets on (LabTarget.deployedName,
+  // e.g. "fleet:<id>:<node>", "cloud:<rangeId>:<name>", "c2:<id>"). Lets a run be
+  // restored/re-run against the SAME environment it originally ran on; empty for
+  // legacy/local rows, where targetServer already equals the VBox name.
+  targetKey       String    @default("")
   targetIp        String    @default("")
   source          String    @default("local")       // local | cloud | fleet | c2 — which environment ran it
   executor        String    @default("")            // art | caldera

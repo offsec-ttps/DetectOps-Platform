@@ -299,6 +299,58 @@ export async function detonateAtomicTest(
   return { status: "failed", executed: false, exitCode: r.exitCode, stdout: out, tail: tail || (r.stderr || "").slice(-150) || "no output", durationMs: r.durationMs };
 }
 
+// Result of staging one atomic's prerequisites on a WinRM host.
+export interface PrereqResult {
+  status: "satisfied" | "missing" | "n/a" | "failed";
+  stdout: string;
+  tail: string;
+  durationMs: number;
+}
+
+// Stage (download) an atomic's external prerequisites on the endpoint WHILE IT
+// HAS internet, so later runs work offline. Runs Invoke-AtomicTest -GetPrereqs
+// (which executes the test's get_prereq_command — e.g. downloading ProcDump),
+// then -CheckPrereqs to verify. It never executes the test itself and never
+// cleans up, so nothing adversarial runs: this only fetches the payloads the
+// atomic declares. Same input hardening + WinRM-only restriction as
+// detonateAtomicTest. budgetSec is generous because prereqs download files.
+export async function stagePrereqs(
+  env: EnvironmentTarget, techniqueId: string, testNumber: number, budgetSec = 120,
+): Promise<PrereqResult> {
+  const t = techniqueId, n = testNumber;
+  if (!/^T\d{4}(\.\d{3})?$/.test(t) || !Number.isInteger(n) || n < 0 || n > 999) {
+    return { status: "failed", stdout: "", tail: "invalid technique id / test number", durationMs: 0 };
+  }
+  if (env.kind !== "our-template-deployed" || env.shellMode !== "winrm") {
+    return { status: "failed", stdout: "", tail: "prereq staging supports WinRM our-template-deployed environments only", durationMs: 0 };
+  }
+  const budget = Math.max(30, Math.min(900, budgetSec));
+  const ps = [
+    `$base = @('C:\\AtomicRedTeam','C:\\ProgramData\\AtomicRedTeam') | Where-Object { Test-Path "$_\\atomics" } | Select-Object -First 1;`,
+    `if (-not $base) { Write-Output 'ART-NOT-INSTALLED'; exit 1 };`,
+    `Import-Module "$base\\invoke-atomicredteam\\Invoke-AtomicRedTeam.psd1" -Force -ErrorAction SilentlyContinue;`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -GetPrereqs -Confirm:$false -ErrorAction Continue 2>&1 | Out-String | Write-Output;`,
+    `Write-Output '---CHECK---';`,
+    `Invoke-AtomicTest ${t} -TestNumbers ${n} -PathToAtomicsFolder "$base\\atomics" -CheckPrereqs -Confirm:$false -ErrorAction Continue 2>&1 | Out-String | Write-Output;`,
+  ].join("");
+  const r = await winrmExec(env, ps, budget * 1000 + 20_000);
+  const out = r.stdout || "";
+  const tail = out.slice(-240).replace(/\s+/g, " ").trim();
+  if (/ART-NOT-INSTALLED/.test(out)) return { status: "n/a", stdout: out, tail: "ART not installed on target", durationMs: r.durationMs };
+  const check = out.split("---CHECK---").pop() || out;
+  // Invoke-AtomicTest -CheckPrereqs prints "Prerequisites met" per satisfied test.
+  if (/Prerequisites met/i.test(check) && !/Prerequisites not met/i.test(check)) {
+    return { status: "satisfied", stdout: out, tail, durationMs: r.durationMs };
+  }
+  if (/Prerequisites not met/i.test(check)) {
+    return { status: "missing", stdout: out, tail, durationMs: r.durationMs };
+  }
+  if (/applicable to|does not exist|could not find|no atomic tests/i.test(out)) {
+    return { status: "n/a", stdout: out, tail: tail || "not applicable / missing on host", durationMs: r.durationMs };
+  }
+  return { status: "failed", stdout: out, tail: tail || (r.stderr || "").slice(-150) || "no output", durationMs: r.durationMs };
+}
+
 // List the ATT&CK technique folders actually installed under the ART atomics
 // path on a WinRM host, so a "full" sweep can skip atomics the host does not
 // have (they would otherwise each cost a round-trip only to report n/a).

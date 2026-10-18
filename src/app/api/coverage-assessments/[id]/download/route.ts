@@ -7,6 +7,7 @@ const TYPES: Record<string, string> = {
   md: "text/markdown; charset=utf-8",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   pdf: "application/pdf",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
 // GET /api/coverage-assessments/:id/download?format=md|docx|pdf&type=executive|technical
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const sp = new URL(req.url).searchParams;
   const format = (sp.get("format") || "md").toLowerCase();
   const type = (sp.get("type") || "technical").toLowerCase();
-  if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx or pdf" }, { status: 400 });
+  if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx, pdf or pptx" }, { status: 400 });
   if (type !== "executive" && type !== "technical") return NextResponse.json({ error: "type must be executive or technical" }, { status: 400 });
 
   const a = await prisma.coverageAssessment.findUnique({ where: { id }, select: { reportPaths: true, client: true, ownerId: true } });

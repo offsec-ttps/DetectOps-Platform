@@ -18,7 +18,7 @@ export interface RenderInput {
   brand?: string; siem?: string;              // brand header + installed SIEM (splunk|mde|…)
   detectionNote: string; items: RenderItem[];
 }
-export type ReportSet = { md?: string; docx?: string; pdf?: string };
+export type ReportSet = { md?: string; docx?: string; pdf?: string; pptx?: string };
 export interface RenderOutput { executive: ReportSet; technical: ReportSet; markdown: string; log: string }
 
 export async function renderReport(input: RenderInput): Promise<RenderOutput> {
@@ -61,12 +61,12 @@ export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   });
 
   const set = (label: string): ReportSet => {
-    const md = `${outBase}-${label}.md`, docx = `${outBase}-${label}.docx`, pdf = `${outBase}-${label}.pdf`;
-    return {
-      md: existsSync(md) ? md : undefined,
-      docx: existsSync(docx) ? docx : undefined,
-      pdf: existsSync(pdf) ? pdf : undefined,
-    };
+    const out: ReportSet = {};
+    for (const f of ["md", "docx", "pdf", "pptx"] as const) {
+      const p = `${outBase}-${label}.${f}`;
+      if (existsSync(p)) out[f] = p;
+    }
+    return out;
   };
   const technical = set("technical");
   const markdown = technical.md ? readFileSync(technical.md, "utf8") : "";

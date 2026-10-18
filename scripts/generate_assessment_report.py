@@ -179,7 +179,7 @@ def cover(brand, client, assessor, lab, siem, title, today):
     L.append("|---|---|")
     L.append(f"| **Client** | {client} |")
     L.append(f"| **Prepared by** | {assessor} |")
-    L.append(f"| **Platform** | {brand} |")
+    L.append(f"| **Generated with** | DetectOps |")
     L.append(f"| **Environment** | {lab} |")
     L.append(f"| **SIEM** | {esc(siem_label(siem))} |")
     L.append(f"| **Date** | {today} |")
@@ -379,14 +379,19 @@ def render_one(md_text, out_base, label):
     open(path_md, "w").write(md_text)
     print("wrote", path_md)
     if shutil.which("pandoc"):
-        path_docx = f"{out_base}-{label}.docx"
         # --sandbox: pandoc cannot read local files or fetch remote resources
         # (defuses any Markdown image/link an untrusted atomic could inject).
         # Disable raw HTML/TeX so inline passthrough can't reach LaTeX either.
-        subprocess.run(["pandoc", "--sandbox", "--toc", "--toc-depth=2",
-                        "-f", "markdown-raw_html-raw_attribute-raw_tex",
+        fmt = ["-f", "markdown-raw_html-raw_attribute-raw_tex"]
+        path_docx = f"{out_base}-{label}.docx"
+        subprocess.run(["pandoc", "--sandbox", "--toc", "--toc-depth=2", *fmt,
                         path_md, "-o", path_docx], check=False)
         print("wrote", path_docx)
+        # PowerPoint deck — pandoc slices the report on headings into slides.
+        path_pptx = f"{out_base}-{label}.pptx"
+        subprocess.run(["pandoc", "--sandbox", *fmt, path_md, "-o", path_pptx], check=False)
+        if os.path.exists(path_pptx):
+            print("wrote", path_pptx)
         soffice = shutil.which("libreoffice") or shutil.which("soffice")
         if soffice and os.path.exists(path_docx):
             subprocess.run([soffice, "--headless", "--convert-to", "pdf", "--outdir",

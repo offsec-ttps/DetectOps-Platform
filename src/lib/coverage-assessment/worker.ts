@@ -191,7 +191,9 @@ async function finalize(id: string): Promise<void> {
   try {
     const r = await renderReport({
       assessmentId: id, assessor: a.assessor, client: a.client, lab: a.lab,
-      brand: "DetectOps", siem: siem?.kind || "splunk",
+      // Lead the report branding with the assessing firm (assessor, e.g. RuSecure)
+      // and the client; DetectOps is credited as the platform in the cover block.
+      brand: a.assessor || "RuSecure", siem: siem?.kind || "splunk",
       detectionNote: a.detectionNote, items: renderItems,
     });
     reportMd = r.markdown;

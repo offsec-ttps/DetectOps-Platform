@@ -180,23 +180,7 @@ export default function CoverageAssessmentTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {a.status === "completed" && (["executive", "technical"] as const).map((rtype) => {
-                      const set = a.reportPaths?.[rtype] || (rtype === "technical" ? a.reportPaths : null);
-                      const fmts = (["md", "docx", "pdf"] as const).filter((f) => set?.[f]);
-                      if (!fmts.length) return null;
-                      return (
-                        <div key={rtype} className="flex items-center gap-1">
-                          <span className="text-[9px] font-semibold text-muted uppercase">{rtype === "executive" ? "Exec" : "Tech"}</span>
-                          {fmts.map((fmt) => (
-                            <a key={fmt} href={`/api/coverage-assessments/${a.id}/download?format=${fmt}&type=${rtype}`}
-                              title={`${rtype === "executive" ? "Executive Summary" : "Technical report"} — ${fmt.toUpperCase()}`}
-                              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-card-hover hover:text-foreground transition-colors uppercase">
-                              <Download className="h-3 w-3" /> {fmt}
-                            </a>
-                          ))}
-                        </div>
-                      );
-                    })}
+                    {a.status === "completed" && <ReportDownload a={a} />}
                     {ACTIVE(a.status) && (
                       <button onClick={() => cancel(a.id)} title="Cancel" className="rounded p-1.5 text-muted hover:text-danger hover:bg-danger/10 transition-colors"><StopCircle className="h-3.5 w-3.5" /></button>
                     )}
@@ -230,6 +214,50 @@ export default function CoverageAssessmentTab() {
           creating={creating} onClose={() => setShowForm(false)} onCreate={create}
         />
       )}
+    </div>
+  );
+}
+
+// Download control: pick the report (Executive / Technical) and the format
+// (MD / DOCX / PDF / PPTX), then download. Only offers report types & formats
+// that were actually rendered for this assessment.
+const REPORT_TYPES = [
+  { key: "executive", label: "Executive Summary" },
+  { key: "technical", label: "Technical Report" },
+] as const;
+const FORMATS = [
+  { key: "md", label: "Markdown (.md)" },
+  { key: "docx", label: "Word (.docx)" },
+  { key: "pdf", label: "PDF (.pdf)" },
+  { key: "pptx", label: "PowerPoint (.pptx)" },
+] as const;
+
+function ReportDownload({ a }: { a: Assessment }) {
+  const setFor = (t: string): Record<string, string> =>
+    (a.reportPaths?.[t] as Record<string, string>) || (t === "technical" ? (a.reportPaths as Record<string, string>) : {}) || {};
+  const types = REPORT_TYPES.filter((t) => Object.keys(setFor(t.key)).length > 0);
+  const [rtype, setRtype] = useState<string>(types[0]?.key || "technical");
+  const fmtsFor = (t: string) => FORMATS.filter((f) => setFor(t)[f.key]);
+  const avail = fmtsFor(rtype);
+  const [fmt, setFmt] = useState<string>(avail[0]?.key || "pdf");
+  if (!types.length) return null;
+  const curFmt = avail.some((f) => f.key === fmt) ? fmt : (avail[0]?.key || "pdf");
+  const href = `/api/coverage-assessments/${a.id}/download?format=${curFmt}&type=${rtype}`;
+
+  const selCls = "h-7 rounded-lg border border-border bg-input px-2 text-[11px] text-foreground focus:border-input-focus focus:outline-none";
+  return (
+    <div className="flex items-center gap-1.5" title="Choose report + format to download">
+      <FileText className="h-3.5 w-3.5 text-muted" />
+      <select value={rtype} onChange={(e) => setRtype(e.target.value)} className={selCls} aria-label="Report type">
+        {types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+      <select value={curFmt} onChange={(e) => setFmt(e.target.value)} className={selCls} aria-label="Format">
+        {avail.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+      </select>
+      <a href={href} download
+        className="flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:bg-accent/90 transition-colors">
+        <Download className="h-3 w-3" /> Download
+      </a>
     </div>
   );
 }

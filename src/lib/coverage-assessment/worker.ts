@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { detonateAtomicTest } from "@/lib/enterprise-use-cases/runner";
 import { observeAtomic } from "./observe";
 import { aggregate, type ItemLite } from "./aggregate";
-import { renderReport, type RenderItem } from "./render";
+import { renderReport, renderBrandedReport, type RenderItem } from "./render";
 
 // Tick-driven worker for long-running coverage sweeps (a full sweep is ~hours,
 // so it cannot be a synchronous request). Mirrors the detection-packs worker and
@@ -211,6 +211,20 @@ async function finalize(id: string): Promise<void> {
       metrics: JSON.stringify(metrics), reportMd, reportPaths: JSON.stringify(reportPaths),
     },
   });
+
+  // Branded magazine-style report — runs AFTER the row (metrics + items) is saved,
+  // since the generator reads them from the DB. Appended to reportPaths so the UI
+  // can offer it; a failure here never fails the assessment.
+  try {
+    const b = await renderBrandedReport(id);
+    if (b.pdf || b.html) {
+      const branded: Record<string, string> = {};
+      if (b.pdf) branded.pdf = b.pdf;
+      if (b.html) branded.html = b.html;
+      reportPaths.branded = branded;
+      await prisma.coverageAssessment.update({ where: { id }, data: { reportPaths: JSON.stringify(reportPaths) } });
+    }
+  } catch { /* branded report is best-effort */ }
 }
 
 function safeArr(s: string): string[] { try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; } }

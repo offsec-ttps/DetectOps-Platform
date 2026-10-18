@@ -8,7 +8,9 @@ const TYPES: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   pdf: "application/pdf",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  html: "text/html; charset=utf-8",
 };
+const REPORT_TYPES = new Set(["executive", "technical", "branded"]);
 
 // GET /api/coverage-assessments/:id/download?format=md|docx|pdf&type=executive|technical
 // Serves a rendered report file. Paths come from the assessment's own stored
@@ -21,8 +23,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const sp = new URL(req.url).searchParams;
   const format = (sp.get("format") || "md").toLowerCase();
   const type = (sp.get("type") || "technical").toLowerCase();
-  if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx, pdf or pptx" }, { status: 400 });
-  if (type !== "executive" && type !== "technical") return NextResponse.json({ error: "type must be executive or technical" }, { status: 400 });
+  if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx, pdf, pptx or html" }, { status: 400 });
+  if (!REPORT_TYPES.has(type)) return NextResponse.json({ error: "type must be executive, technical or branded" }, { status: 400 });
 
   const a = await prisma.coverageAssessment.findUnique({ where: { id }, select: { reportPaths: true, client: true, ownerId: true } });
   if (!a) return NextResponse.json({ error: "not found" }, { status: 404 });

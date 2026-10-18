@@ -72,3 +72,25 @@ export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   const markdown = technical.md ? readFileSync(technical.md, "utf8") : "";
   return { executive: set("executive"), technical, markdown, log: log.slice(-4000) };
 }
+
+// Branded, magazine-style report (scripts/generate_branded_report.py → HTML →
+// PDF via headless Chrome). Reads the assessment from the DB by id, so it runs
+// after the assessment row (metrics + items) is persisted. Returns the rendered
+// file paths; failures are swallowed (the core md/docx reports are unaffected).
+export async function renderBrandedReport(assessmentId: string): Promise<{ pdf?: string; html?: string; log: string }> {
+  const root = process.cwd();
+  const outBase = join(root, "reports", "coverage-assessments", assessmentId, "report-branded");
+  const py = process.env.REPORT_PYTHON || process.env.WINRM_PYTHON || "python3";
+  const args = [join(root, "scripts", "generate_branded_report.py"), assessmentId, "--out", outBase];
+  const log: string = await new Promise((resolve) => {
+    const child = spawn(py, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d.toString(); });
+    child.stderr.on("data", (d) => { out += d.toString(); });
+    const killer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 120_000);
+    child.on("close", () => { clearTimeout(killer); resolve(out); });
+    child.on("error", (ee) => { clearTimeout(killer); resolve(`spawn error: ${ee.message}`); });
+  });
+  const pdf = outBase + ".pdf", html = outBase + ".html";
+  return { pdf: existsSync(pdf) ? pdf : undefined, html: existsSync(html) ? html : undefined, log: log.slice(-2000) };
+}

@@ -222,14 +222,16 @@ export default function CoverageAssessmentTab() {
 // (MD / DOCX / PDF / PPTX), then download. Only offers report types & formats
 // that were actually rendered for this assessment.
 const REPORT_TYPES = [
+  { key: "branded", label: "Branded Report" },
   { key: "executive", label: "Executive Summary" },
   { key: "technical", label: "Technical Report" },
 ] as const;
 const FORMATS = [
-  { key: "md", label: "Markdown (.md)" },
-  { key: "docx", label: "Word (.docx)" },
   { key: "pdf", label: "PDF (.pdf)" },
+  { key: "docx", label: "Word (.docx)" },
   { key: "pptx", label: "PowerPoint (.pptx)" },
+  { key: "html", label: "Web page (.html)" },
+  { key: "md", label: "Markdown (.md)" },
 ] as const;
 
 function ReportDownload({ a }: { a: Assessment }) {

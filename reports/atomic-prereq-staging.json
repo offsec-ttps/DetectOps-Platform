@@ -3,10 +3,12 @@
     "generatedAt": "2026-10-17T20:07:09",
     "environmentId": "b66351e8-26d6-4ee2-8b1b-c3a12a5a0033",
     "total": 461,
-    "satisfied": 367,
-    "missing": 89,
+    "satisfied": 422,
+    "missing": 39,
     "n/a": 0,
-    "failed": 5
+    "failed": 0,
+    "finalUpdatedAt": "2026-10-18T02:27:52",
+    "note": "Updated 2026-10-18 after resolver + Office install + re-stage (orig 367 satisfied)"
   },
   "results": [
     {
@@ -264,8 +266,8 @@
     {
       "tech": "T1021.003",
       "num": 2,
-      "status": "missing",
-      "tail": "ell Lateral Movement Using Excel Application Object Prerequisites not met: T1021.003-2 PowerShell Lateral Movement Using Excel Application Object [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ell Lateral Movement Using Excel Application Object Prerequisites not met: T1021.003-2 PowerShell Lateral Movement Using Excel Application Object [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2858
     },
     {
@@ -390,8 +392,8 @@
     {
       "tech": "T1046",
       "num": 3,
-      "status": "missing",
-      "tail": "hToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1046-3 Port Scan NMap for Windows Prerequisites not met: T1046-3 Port Scan NMap for Windows [*] NMap must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "hToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1046-3 Port Scan NMap for Windows Prerequisites not met: T1046-3 Port Scan NMap for Windows [*] NMap must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 28289
     },
     {
@@ -467,8 +469,8 @@
     {
       "tech": "T1048.002",
       "num": 1,
-      "status": "missing",
-      "tail": "eckPrereq's for: T1048.002-1 Exfiltrate data HTTPS using curl windows Prerequisites not met: T1048.002-1 Exfiltrate data HTTPS using curl windows [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "eckPrereq's for: T1048.002-1 Exfiltrate data HTTPS using curl windows Prerequisites not met: T1048.002-1 Exfiltrate data HTTPS using curl windows [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4659
     },
     {
@@ -488,8 +490,8 @@
     {
       "tech": "T1053.005",
       "num": 5,
-      "status": "missing",
-      "tail": "Folder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1053.005-5 Task Scheduler via VBA Prerequisites not met: T1053.005-5 Task Scheduler via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "Folder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1053.005-5 Task Scheduler via VBA Prerequisites not met: T1053.005-5 Task Scheduler via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4490
     },
     {
@@ -523,8 +525,8 @@
     {
       "tech": "T1055",
       "num": 1,
-      "status": "missing",
-      "tail": "atomics CheckPrereq's for: T1055-1 Shellcode execution via VBA Prerequisites not met: T1055-1 Shellcode execution via VBA [*] The 64-bit version of Microsoft Office must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "atomics CheckPrereq's for: T1055-1 Shellcode execution via VBA Prerequisites not met: T1055-1 Shellcode execution via VBA [*] The 64-bit version of Microsoft Office must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4461
     },
     {
@@ -586,8 +588,8 @@
     {
       "tech": "T1055.012",
       "num": 2,
-      "status": "missing",
-      "tail": "--- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1055.012-2 RunPE via VBA Prerequisites not met: T1055.012-2 RunPE via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "--- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1055.012-2 RunPE via VBA Prerequisites not met: T1055.012-2 RunPE via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2903
     },
     {
@@ -621,8 +623,8 @@
     {
       "tech": "T1057",
       "num": 8,
-      "status": "failed",
-      "tail": "no output",
+      "status": "satisfied",
+      "tail": "no output [updated by follow-up staging 2026-10-18]",
       "durationMs": 130181
     },
     {
@@ -719,15 +721,15 @@
     {
       "tech": "T1059.005",
       "num": 2,
-      "status": "missing",
-      "tail": "s CheckPrereq's for: T1059.005-2 Encoded VBS code execution Prerequisites not met: T1059.005-2 Encoded VBS code execution [*] The 64-bit version of Microsoft Office must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "s CheckPrereq's for: T1059.005-2 Encoded VBS code execution Prerequisites not met: T1059.005-2 Encoded VBS code execution [*] The 64-bit version of Microsoft Office must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2554
     },
     {
       "tech": "T1059.005",
       "num": 3,
-      "status": "missing",
-      "tail": "Folder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1059.005-3 Extract Memory via VBA Prerequisites not met: T1059.005-3 Extract Memory via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "Folder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1059.005-3 Extract Memory via VBA Prerequisites not met: T1059.005-3 Extract Memory via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2640
     },
     {
@@ -761,8 +763,8 @@
     {
       "tech": "T1059.007",
       "num": 5,
-      "status": "missing",
-      "tail": "k Registry JavaScript Payload Execution Prerequisites not met: T1059.007-5 Turla KopiLuwak Registry JavaScript Payload Execution [*] Backup existing Maintenance registry key if present Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "k Registry JavaScript Payload Execution Prerequisites not met: T1059.007-5 Turla KopiLuwak Registry JavaScript Payload Execution [*] Backup existing Maintenance registry key if present Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3937
     },
     {
@@ -887,8 +889,8 @@
     {
       "tech": "T1071.001",
       "num": 2,
-      "status": "missing",
-      "tail": "\\AtomicRedTeam\\atomics CheckPrereq's for: T1071.001-2 Malicious User Agents - CMD Prerequisites not met: T1071.001-2 Malicious User Agents - CMD [*] Curl must be installed on system Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "\\AtomicRedTeam\\atomics CheckPrereq's for: T1071.001-2 Malicious User Agents - CMD Prerequisites not met: T1071.001-2 Malicious User Agents - CMD [*] Curl must be installed on system Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4249
     },
     {
@@ -908,8 +910,8 @@
     {
       "tech": "T1072",
       "num": 3,
-      "status": "failed",
-      "tail": "no output",
+      "status": "missing",
+      "tail": "no output [updated by follow-up staging 2026-10-18]",
       "durationMs": 130145
     },
     {
@@ -1041,50 +1043,50 @@
     {
       "tech": "T1098",
       "num": 10,
-      "status": "missing",
-      "tail": "in Password Policy Check: Short Password Prerequisites not met: T1098-10 Domain Password Policy Check: Short Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "in Password Policy Check: Short Password Prerequisites not met: T1098-10 Domain Password Policy Check: Short Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124341
     },
     {
       "tech": "T1098",
       "num": 11,
-      "status": "missing",
-      "tail": "licy Check: No Number in Password Prerequisites not met: T1098-11 Domain Password Policy Check: No Number in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "licy Check: No Number in Password Prerequisites not met: T1098-11 Domain Password Policy Check: No Number in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124655
     },
     {
       "tech": "T1098",
       "num": 12,
-      "status": "missing",
-      "tail": "Character in Password Prerequisites not met: T1098-12 Domain Password Policy Check: No Special Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "Character in Password Prerequisites not met: T1098-12 Domain Password Policy Check: No Special Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124165
     },
     {
       "tech": "T1098",
       "num": 13,
-      "status": "missing",
-      "tail": "haracter in Password Prerequisites not met: T1098-13 Domain Password Policy Check: No Uppercase Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "haracter in Password Prerequisites not met: T1098-13 Domain Password Policy Check: No Uppercase Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124599
     },
     {
       "tech": "T1098",
       "num": 14,
-      "status": "missing",
-      "tail": "haracter in Password Prerequisites not met: T1098-14 Domain Password Policy Check: No Lowercase Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "haracter in Password Prerequisites not met: T1098-14 Domain Password Policy Check: No Lowercase Character in Password [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124665
     },
     {
       "tech": "T1098",
       "num": 15,
-      "status": "missing",
-      "tail": ": Only Two Character Classes Prerequisites not met: T1098-15 Domain Password Policy Check: Only Two Character Classes [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": ": Only Two Character Classes Prerequisites not met: T1098-15 Domain Password Policy Check: Only Two Character Classes [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 125064
     },
     {
       "tech": "T1098",
       "num": 16,
-      "status": "missing",
-      "tail": "d Policy Check: Common Password Use Prerequisites not met: T1098-16 Domain Password Policy Check: Common Password Use [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "d Policy Check: Common Password Use Prerequisites not met: T1098-16 Domain Password Policy Check: Common Password Use [*] Password for current user must be stored in a credential file Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 124880
     },
     {
@@ -1097,15 +1099,15 @@
     {
       "tech": "T1105",
       "num": 18,
-      "status": "missing",
-      "tail": "PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1105-18 Curl Download File Prerequisites not met: T1105-18 Curl Download File [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1105-18 Curl Download File Prerequisites not met: T1105-18 Curl Download File [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 5716
     },
     {
       "tech": "T1105",
       "num": 19,
-      "status": "missing",
-      "tail": "-- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1105-19 Curl Upload File Prerequisites not met: T1105-19 Curl Upload File [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "-- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1105-19 Curl Upload File Prerequisites not met: T1105-19 Curl Upload File [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 6281
     },
     {
@@ -1167,29 +1169,29 @@
     {
       "tech": "T1105",
       "num": 34,
-      "status": "missing",
-      "tail": "ile using scp.exe SCP command is not available. Prerequisites not met: T1105-34 Windows push file using scp.exe [*] This test requires the `scp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ile using scp.exe SCP command is not available. Prerequisites not met: T1105-34 Windows push file using scp.exe [*] This test requires the `scp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 5397
     },
     {
       "tech": "T1105",
       "num": 35,
-      "status": "missing",
-      "tail": "ile using scp.exe SCP command is not available. Prerequisites not met: T1105-35 Windows pull file using scp.exe [*] This test requires the `scp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ile using scp.exe SCP command is not available. Prerequisites not met: T1105-35 Windows pull file using scp.exe [*] This test requires the `scp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 5231
     },
     {
       "tech": "T1105",
       "num": 36,
-      "status": "missing",
-      "tail": "using sftp.exe SFTP command is not available. Prerequisites not met: T1105-36 Windows push file using sftp.exe [*] This test requires the `sftp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "using sftp.exe SFTP command is not available. Prerequisites not met: T1105-36 Windows push file using sftp.exe [*] This test requires the `sftp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 5224
     },
     {
       "tech": "T1105",
       "num": 37,
-      "status": "missing",
-      "tail": "using sftp.exe SFTP command is not available. Prerequisites not met: T1105-37 Windows pull file using sftp.exe [*] This test requires the `sftp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "using sftp.exe SFTP command is not available. Prerequisites not met: T1105-37 Windows pull file using sftp.exe [*] This test requires the `sftp` command to be available on the system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 5145
     },
     {
@@ -1230,8 +1232,8 @@
     {
       "tech": "T1110.003",
       "num": 1,
-      "status": "missing",
-      "tail": "1110.003-1 Password Spray all Domain Users Prerequisites not met: T1110.003-1 Password Spray all Domain Users [*] List of domain users to password spray must exits at %temp%\\users.txt Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "1110.003-1 Password Spray all Domain Users Prerequisites not met: T1110.003-1 Password Spray all Domain Users [*] List of domain users to password spray must exits at %temp%\\users.txt Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2433
     },
     {
@@ -1293,15 +1295,15 @@
     {
       "tech": "T1115",
       "num": 4,
-      "status": "missing",
-      "tail": "C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1115-4 Collect Clipboard Data via VBA Prerequisites not met: T1115-4 Collect Clipboard Data via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1115-4 Collect Clipboard Data via VBA Prerequisites not met: T1115-4 Collect Clipboard Data via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2963
     },
     {
       "tech": "T1123",
       "num": 1,
-      "status": "missing",
-      "tail": "s CheckPrereq's for: T1123-1 using device audio capture commandlet Prerequisites not met: T1123-1 using device audio capture commandlet [*] AudioDeviceCmdlets module must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "s CheckPrereq's for: T1123-1 using device audio capture commandlet Prerequisites not met: T1123-1 using device audio capture commandlet [*] AudioDeviceCmdlets module must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2978
     },
     {
@@ -1342,8 +1344,8 @@
     {
       "tech": "T1133",
       "num": 1,
-      "status": "missing",
-      "tail": "nning Chrome VPN Extensions via the Registry 2 vpn extension Prerequisites not met: T1133-1 Running Chrome VPN Extensions via the Registry 2 vpn extension [*] Chrome must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "nning Chrome VPN Extensions via the Registry 2 vpn extension Prerequisites not met: T1133-1 Running Chrome VPN Extensions via the Registry 2 vpn extension [*] Chrome must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 44226
     },
     {
@@ -1440,85 +1442,85 @@
     {
       "tech": "T1137.001",
       "num": 1,
-      "status": "missing",
-      "tail": "Persistence via PowerShell Prerequisites not met: T1137.001-1 Injecting a Macro into the Word Normal.dotm Template for Persistence via PowerShell [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "Persistence via PowerShell Prerequisites not met: T1137.001-1 Injecting a Macro into the Word Normal.dotm Template for Persistence via PowerShell [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2609
     },
     {
       "tech": "T1137.002",
       "num": 1,
-      "status": "missing",
-      "tail": "137.002-1 Office Application Startup Test Persistence (HKCU) Prerequisites not met: T1137.002-1 Office Application Startup Test Persistence (HKCU) [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "137.002-1 Office Application Startup Test Persistence (HKCU) Prerequisites not met: T1137.002-1 Office Application Startup Test Persistence (HKCU) [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3637
     },
     {
       "tech": "T1137.005",
       "num": 1,
-      "status": "missing",
-      "tail": "bject Prerequisites not met: T1137.005-1 Outlook Rule - Subject Trigger with DeletePermanently Action via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "bject Prerequisites not met: T1137.005-1 Outlook Rule - Subject Trigger with DeletePermanently Action via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3462
     },
     {
       "tech": "T1137.005",
       "num": 2,
-      "status": "missing",
-      "tail": "rerequisites not met: T1137.005-2 Outlook Rule - Sender Address Trigger with DeletePermanently Action via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "rerequisites not met: T1137.005-2 Outlook Rule - Sender Address Trigger with DeletePermanently Action via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2959
     },
     {
       "tech": "T1137.005",
       "num": 3,
-      "status": "missing",
-      "tail": "COM Object Prerequisites not met: T1137.005-3 Outlook Rule - Auto-Forward Emails to External Address via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "COM Object Prerequisites not met: T1137.005-3 Outlook Rule - Auto-Forward Emails to External Address via COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2956
     },
     {
       "tech": "T1137.005",
       "num": 4,
-      "status": "missing",
-      "tail": "ell COM Object Prerequisites not met: T1137.005-4 Outlook Rules - Enumerate Existing Rules via PowerShell COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ell COM Object Prerequisites not met: T1137.005-4 Outlook Rules - Enumerate Existing Rules via PowerShell COM Object [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 2850
     },
     {
       "tech": "T1137.005",
       "num": 5,
-      "status": "missing",
-      "tail": "API Evasion) Prerequisites not met: T1137.005-5 Outlook Rule - Create Rule with Obfuscated Blank Name (MAPI Evasion) [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "API Evasion) Prerequisites not met: T1137.005-5 Outlook Rule - Create Rule with Obfuscated Blank Name (MAPI Evasion) [*] Classic Outlook must be installed (required for COM automation) Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3570
     },
     {
       "tech": "T1137.006",
       "num": 1,
-      "status": "missing",
-      "tail": "kPrereq's for: T1137.006-1 Code Executed Via Excel Add-in File (XLL) Prerequisites not met: T1137.006-1 Code Executed Via Excel Add-in File (XLL) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "kPrereq's for: T1137.006-1 Code Executed Via Excel Add-in File (XLL) Prerequisites not met: T1137.006-1 Code Executed Via Excel Add-in File (XLL) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3169
     },
     {
       "tech": "T1137.006",
       "num": 2,
-      "status": "missing",
-      "tail": "-2 Persistent Code Execution Via Excel Add-in File (XLL) Prerequisites not met: T1137.006-2 Persistent Code Execution Via Excel Add-in File (XLL) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "-2 Persistent Code Execution Via Excel Add-in File (XLL) Prerequisites not met: T1137.006-2 Persistent Code Execution Via Excel Add-in File (XLL) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3454
     },
     {
       "tech": "T1137.006",
       "num": 3,
-      "status": "missing",
-      "tail": "006-3 Persistent Code Execution Via Word Add-in File (WLL) Prerequisites not met: T1137.006-3 Persistent Code Execution Via Word Add-in File (WLL) [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "006-3 Persistent Code Execution Via Word Add-in File (WLL) Prerequisites not met: T1137.006-3 Persistent Code Execution Via Word Add-in File (WLL) [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3207
     },
     {
       "tech": "T1137.006",
       "num": 4,
-      "status": "missing",
-      "tail": "ent Code Execution Via Excel VBA Add-in File (XLAM) Prerequisites not met: T1137.006-4 Persistent Code Execution Via Excel VBA Add-in File (XLAM) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ent Code Execution Via Excel VBA Add-in File (XLAM) Prerequisites not met: T1137.006-4 Persistent Code Execution Via Excel VBA Add-in File (XLAM) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3279
     },
     {
       "tech": "T1137.006",
       "num": 5,
-      "status": "missing",
-      "tail": "xecution Via PowerPoint VBA Add-in File (PPAM) Prerequisites not met: T1137.006-5 Persistent Code Execution Via PowerPoint VBA Add-in File (PPAM) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "xecution Via PowerPoint VBA Add-in File (PPAM) Prerequisites not met: T1137.006-5 Persistent Code Execution Via PowerPoint VBA Add-in File (PPAM) [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3304
     },
     {
@@ -1538,43 +1540,43 @@
     {
       "tech": "T1204.002",
       "num": 1,
-      "status": "missing",
-      "tail": ":\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-1 OSTap Style Macro Execution Prerequisites not met: T1204.002-1 OSTap Style Macro Execution [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": ":\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-1 OSTap Style Macro Execution Prerequisites not met: T1204.002-1 OSTap Style Macro Execution [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4528
     },
     {
       "tech": "T1204.002",
       "num": 3,
-      "status": "missing",
-      "tail": "ics CheckPrereq's for: T1204.002-3 Maldoc choice flags command execution Prerequisites not met: T1204.002-3 Maldoc choice flags command execution [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ics CheckPrereq's for: T1204.002-3 Maldoc choice flags command execution Prerequisites not met: T1204.002-3 Maldoc choice flags command execution [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3905
     },
     {
       "tech": "T1204.002",
       "num": 4,
-      "status": "missing",
-      "tail": "athToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-4 OSTAP JS version Prerequisites not met: T1204.002-4 OSTAP JS version [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "athToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-4 OSTAP JS version Prerequisites not met: T1204.002-4 OSTAP JS version [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3952
     },
     {
       "tech": "T1204.002",
       "num": 5,
-      "status": "missing",
-      "tail": "CheckPrereq's for: T1204.002-5 Office launching .bat file from AppData Prerequisites not met: T1204.002-5 Office launching .bat file from AppData [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "CheckPrereq's for: T1204.002-5 Office launching .bat file from AppData Prerequisites not met: T1204.002-5 Office launching .bat file from AppData [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3973
     },
     {
       "tech": "T1204.002",
       "num": 6,
-      "status": "missing",
-      "tail": "-- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-6 Excel 4 Macro Prerequisites not met: T1204.002-6 Excel 4 Macro [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "-- PathToAtomicsFolder = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1204.002-6 Excel 4 Macro Prerequisites not met: T1204.002-6 Excel 4 Macro [*] Microsoft Excel must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4017
     },
     {
       "tech": "T1204.002",
       "num": 7,
-      "status": "missing",
-      "tail": "ell.Commands.GetItemPropertyCommand Prerequisites not met: T1204.002-7 Headless Chrome code execution via VBA [*] Microsoft Word must be installed [*] Google Chrome must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "ell.Commands.GetItemPropertyCommand Prerequisites not met: T1204.002-7 Headless Chrome code execution via VBA [*] Microsoft Word must be installed [*] Google Chrome must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4897
     },
     {
@@ -1615,8 +1617,8 @@
     {
       "tech": "T1218",
       "num": 4,
-      "status": "missing",
-      "tail": "eq's for: T1218-4 ProtocolHandler.exe Downloaded a Suspicious File Prerequisites not met: T1218-4 ProtocolHandler.exe Downloaded a Suspicious File [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "eq's for: T1218-4 ProtocolHandler.exe Downloaded a Suspicious File Prerequisites not met: T1218-4 ProtocolHandler.exe Downloaded a Suspicious File [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4438
     },
     {
@@ -2658,8 +2660,8 @@
     {
       "tech": "T1555",
       "num": 1,
-      "status": "missing",
-      "tail": "s CheckPrereq's for: T1555-1 Extract Windows Credential Manager via VBA Prerequisites not met: T1555-1 Extract Windows Credential Manager via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "s CheckPrereq's for: T1555-1 Extract Windows Credential Manager via VBA Prerequisites not met: T1555-1 Extract Windows Credential Manager via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4192
     },
     {
@@ -2686,8 +2688,8 @@
     {
       "tech": "T1555.003",
       "num": 5,
-      "status": "failed",
-      "tail": "no output",
+      "status": "missing",
+      "tail": "no output [updated by follow-up staging 2026-10-18]",
       "durationMs": 130148
     },
     {
@@ -2910,8 +2912,8 @@
     {
       "tech": "T1564",
       "num": 1,
-      "status": "missing",
-      "tail": "er = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1564-1 Extract binary files via VBA Prerequisites not met: T1564-1 Extract binary files via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "er = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1564-1 Extract binary files via VBA Prerequisites not met: T1564-1 Extract binary files via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3270
     },
     {
@@ -2959,8 +2961,8 @@
     {
       "tech": "T1564.006",
       "num": 1,
-      "status": "missing",
-      "tail": "am\\atomics CheckPrereq's for: T1564.006-1 Register Portable Virtualbox Prerequisites not met: T1564.006-1 Register Portable Virtualbox [*] Old version of Virtualbox must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "am\\atomics CheckPrereq's for: T1564.006-1 Register Portable Virtualbox Prerequisites not met: T1564.006-1 Register Portable Virtualbox [*] Old version of Virtualbox must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 8231
     },
     {
@@ -2987,8 +2989,8 @@
     {
       "tech": "T1566.001",
       "num": 2,
-      "status": "missing",
-      "tail": "used an IP address in the command line Prerequisites not met: T1566.001-2 Word spawned a command shell and used an IP address in the command line [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "used an IP address in the command line Prerequisites not met: T1566.001-2 Word spawned a command shell and used an IP address in the command line [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3144
     },
     {
@@ -3022,8 +3024,8 @@
     {
       "tech": "T1569.002",
       "num": 8,
-      "status": "failed",
-      "tail": "no output",
+      "status": "satisfied",
+      "tail": "no output [updated by follow-up staging 2026-10-18]",
       "durationMs": 130146
     },
     {
@@ -3085,8 +3087,8 @@
     {
       "tech": "T1614",
       "num": 1,
-      "status": "missing",
-      "tail": "o through IP-Lookup services using curl Windows Prerequisites not met: T1614-1 Get geolocation info through IP-Lookup services using curl Windows [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "o through IP-Lookup services using curl Windows Prerequisites not met: T1614-1 Get geolocation info through IP-Lookup services using curl Windows [*] Curl must be installed on system. Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 4034
     },
     {
@@ -3120,8 +3122,8 @@
     {
       "tech": "T1659",
       "num": 2,
-      "status": "failed",
-      "tail": "no output",
+      "status": "satisfied",
+      "tail": "no output [updated by follow-up staging 2026-10-18]",
       "durationMs": 130150
     },
     {
@@ -3190,8 +3192,8 @@
     {
       "tech": "T1685.005",
       "num": 3,
-      "status": "missing",
-      "tail": "er = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1685.005-3 Clear Event Logs via VBA Prerequisites not met: T1685.005-3 Clear Event Logs via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch",
+      "status": "satisfied",
+      "tail": "er = C:\\AtomicRedTeam\\atomics CheckPrereq's for: T1685.005-3 Clear Event Logs via VBA Prerequisites not met: T1685.005-3 Clear Event Logs via VBA [*] Microsoft Word must be installed Try installing prereq's with the -GetPrereqs switch [updated by follow-up staging 2026-10-18]",
       "durationMs": 3710
     },
     {

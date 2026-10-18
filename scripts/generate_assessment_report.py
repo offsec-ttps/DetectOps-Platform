@@ -22,7 +22,38 @@ Usage:
 Outputs (report-type=both): <out>-executive.{md,docx,pdf} and
 <out>-technical.{md,docx,pdf}.
 """
-import argparse, json, os, subprocess, sqlite3, collections, datetime, shutil
+import argparse, json, os, subprocess, sqlite3, collections, datetime, shutil, re
+
+
+# ── Markdown-injection hardening ─────────────────────────────────────────────
+# Atomic commands / indicators / names come from the atomic library (community
+# content + user custom atomics) and must never be able to alter the Markdown
+# structure — otherwise a poisoned atomic could inject an image/link that makes
+# pandoc fetch a URL (SSRF) or embed a local file into the client-facing report.
+def esc(s):
+    """Escape an untrusted value for an inline / table-cell context."""
+    s = str(s if s is not None else "")
+    s = s.replace("\\", "\\\\")
+    for ch in "`*_[]<>|~":
+        s = s.replace(ch, "\\" + ch)
+    return s.replace("\r", " ").replace("\n", " ")
+
+
+def code_inline(s):
+    """Inline code span that can't break out via backticks in the content."""
+    s = str(s if s is not None else "").replace("\r", " ").replace("\n", " ")
+    n = max((len(r) for r in re.findall(r"`+", s)), default=0) + 1
+    pad = " " if (s.startswith("`") or s.endswith("`")) else ""
+    return f"{'`' * n}{pad}{s}{pad}{'`' * n}"
+
+
+def code_block(s):
+    """Fenced code block with a fence longer than any backtick run inside, so
+    content can't terminate the block early and resume as Markdown."""
+    s = str(s if s is not None else "")
+    n = max(max((len(r) for r in re.findall(r"`+", s)), default=0) + 1, 3)
+    fence = "`" * n
+    return f"{fence}\n{s}\n{fence}"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIB_MODULES = {
@@ -102,6 +133,9 @@ def siem_reco(r, siem):
     the atomic's distinctive indicator and technique."""
     inds = [i for i in (r.get("indicators") or []) if i]
     ind = inds[0] if inds else (r.get("name", "") or "activity")
+    # The query is emitted inside an inline code span — strip backticks/newlines
+    # and quotes so a poisoned indicator can't break out of it.
+    ind = re.sub(r'[`"\r\n]', "", str(ind))[:80]
     low = (" ".join(inds) + " " + (r.get("name", "") or "")).lower()
     tech = (r.get("tech", "") or "")
     s = (siem or "splunk").lower()
@@ -137,6 +171,7 @@ def siem_label(siem):
 
 
 def cover(brand, client, assessor, lab, siem, title, today):
+    brand, client, assessor, lab = esc(brand), esc(client), esc(assessor), esc(lab)
     L = [f"# {brand} — {title}", ""]
     L.append(f"### Prepared for: {client}")
     L.append("")
@@ -146,7 +181,7 @@ def cover(brand, client, assessor, lab, siem, title, today):
     L.append(f"| **Prepared by** | {assessor} |")
     L.append(f"| **Platform** | {brand} |")
     L.append(f"| **Environment** | {lab} |")
-    L.append(f"| **SIEM** | {siem_label(siem)} |")
+    L.append(f"| **SIEM** | {esc(siem_label(siem))} |")
     L.append(f"| **Date** | {today} |")
     L.append("")
     return L
@@ -183,7 +218,7 @@ def tactic_table(runnable, buckets):
         agg = bucketed(runnable, lambda r: [(r.get("tactic") or "other").replace("-", " ").title()])
         for t in sorted(agg, key=lambda k: -agg[k]["atomics"]):
             c = agg[t]; denom = c["visible"] + c["absent"]
-            L.append(f"| {t} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
+            L.append(f"| {esc(t)} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
         L.append("")
     return L
 
@@ -218,10 +253,10 @@ def executive_report(rows, runnable, executed, buckets, na, args, today):
         L.append("| Tactic | Blind spots |")
         L.append("|---|---|")
         for t, n in bt.most_common(8):
-            L.append(f"| {t} | {n} |")
+            L.append(f"| {esc(t)} | {n} |")
         L.append("")
         L.append("Representative gaps: " + "; ".join(
-            f"`{r['tech']}` {r.get('name','')[:48]}" for r in blind[:5]) + ".\n")
+            f"{code_inline(r['tech'])} {esc(r.get('name','')[:48])}" for r in blind[:5]) + ".\n")
     else:
         L.append("No telemetry blind spots — every executed atomic with a distinctive indicator reached the SIEM.\n")
     L.append("## Priority recommendations\n")
@@ -266,7 +301,7 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
         L.append("|---|---|---|---|---|---|---|")
         for lib in sorted(libs, key=lambda k: -agg[k]["atomics"]):
             c = agg[lib]; denom = c["visible"] + c["absent"]
-            L.append(f"| {lib} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
+            L.append(f"| {esc(lib)} | {c['atomics']} | {c['exec']} | {c['visible']} | {c['generic-only']} | {c['absent']} | {pct(c['visible'], denom)}% |")
         L.append("")
 
     def outcome(r):
@@ -281,7 +316,7 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
     for r in runnable:
         ex = cmds.get((r["tech"], int(r.get("num", 1))), ("", ""))[1] or ""
         ind = ", ".join((r.get("indicators") or [])[:2])
-        L.append(f"| {r['tech']} #{r.get('num','')} | {r.get('name','')[:50]} | {ex} | {outcome(r)} | {ind} |")
+        L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:50])} | {esc(ex)} | {outcome(r)} | {esc(ind)} |")
     L.append("")
 
     # What was detected
@@ -293,7 +328,7 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
         L.append("| Technique | Atomic | Visible indicator |")
         L.append("|---|---|---|")
         for r in visible[:60]:
-            L.append(f"| {r['tech']} #{r.get('num','')} | {r.get('name','')[:50]} | {', '.join((r.get('indicators') or [])[:2])} |")
+            L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:50])} | {esc(', '.join((r.get('indicators') or [])[:2]))} |")
         if len(visible) > 60:
             L.append(f"| … | {len(visible)-60} more | |")
         L.append("")
@@ -308,16 +343,14 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
                  f"that executed and a ready-to-deploy **{siem_label(args.siem)}** query to close the gap.\n")
         for r in blind:
             cmd = cmds.get((r["tech"], int(r.get("num", 1))), ("", ""))[0]
-            L.append(f"### {r['tech']} #{r.get('num','')} — {r.get('name','')}\n")
-            L.append(f"- **Tactic:** {(r.get('tactic') or '').replace('-', ' ').title()}  ·  "
-                     f"**Indicator:** `{', '.join((r.get('indicators') or [])[:3]) or 'n/a'}`")
+            L.append(f"### {esc(r['tech'])} #{esc(r.get('num',''))} — {esc(r.get('name',''))}\n")
+            L.append(f"- **Tactic:** {esc((r.get('tactic') or '').replace('-', ' ').title())}  ·  "
+                     f"**Indicator:** {code_inline(', '.join((r.get('indicators') or [])[:3]) or 'n/a')}")
             if cmd:
                 L.append("- **Command executed:**")
                 L.append("")
-                L.append("```")
-                L.append(cmd.strip()[:600])
-                L.append("```")
-            L.append(f"- **Detect it ({siem_label(args.siem)}):** {siem_reco(r, args.siem)}")
+                L.append(code_block(cmd.strip()[:600]))
+            L.append(f"- **Detect it ({esc(siem_label(args.siem))}):** {siem_reco(r, args.siem)}")
             L.append("")
 
     L.append("## Recommendations\n")
@@ -347,7 +380,10 @@ def render_one(md_text, out_base, label):
     print("wrote", path_md)
     if shutil.which("pandoc"):
         path_docx = f"{out_base}-{label}.docx"
-        subprocess.run(["pandoc", "--toc", "--toc-depth=2",
+        # --sandbox: pandoc cannot read local files or fetch remote resources
+        # (defuses any Markdown image/link an untrusted atomic could inject).
+        # Disable raw HTML/TeX so inline passthrough can't reach LaTeX either.
+        subprocess.run(["pandoc", "--sandbox", "--toc", "--toc-depth=2",
                         "-f", "markdown-raw_html-raw_attribute-raw_tex",
                         path_md, "-o", path_docx], check=False)
         print("wrote", path_docx)

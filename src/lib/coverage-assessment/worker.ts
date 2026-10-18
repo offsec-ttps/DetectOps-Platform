@@ -157,17 +157,18 @@ async function finalize(id: string): Promise<void> {
     vis_bucket: i.visBucket, vis_count: i.obsCount, indicators: safeArr(i.indicators), tail: i.tail,
   }));
 
-  let reportPaths: Record<string, string> = {};
+  let reportPaths: Record<string, unknown> = {};
   let reportMd = "";
   try {
     const r = await renderReport({
       assessmentId: id, assessor: a.assessor, client: a.client, lab: a.lab,
+      brand: "DetectOps", siem: siem?.kind || "splunk",
       detectionNote: a.detectionNote, items: renderItems,
     });
     reportMd = r.markdown;
-    if (r.md) reportPaths.md = r.md;
-    if (r.docx) reportPaths.docx = r.docx;
-    if (r.pdf) reportPaths.pdf = r.pdf;
+    // Nested by report type so the UI can offer both Executive + Technical in
+    // each format; keep flat md/docx/pdf (= technical) for backward compatibility.
+    reportPaths = { executive: r.executive, technical: r.technical, ...r.technical };
   } catch (e: any) {
     reportMd = `Report render failed: ${e?.message || e}`;
   }

@@ -15,9 +15,11 @@ export interface RenderItem {
 }
 export interface RenderInput {
   assessmentId: string; assessor: string; client: string; lab: string;
+  brand?: string; siem?: string;              // brand header + installed SIEM (splunk|mde|…)
   detectionNote: string; items: RenderItem[];
 }
-export interface RenderOutput { md?: string; docx?: string; pdf?: string; markdown: string; log: string }
+export type ReportSet = { md?: string; docx?: string; pdf?: string };
+export interface RenderOutput { executive: ReportSet; technical: ReportSet; markdown: string; log: string }
 
 export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   const root = process.cwd();
@@ -38,9 +40,12 @@ export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   const args = [
     join(root, "scripts", "generate_assessment_report.py"),
     "--results", jsonl, "--out", outBase,
+    "--brand", input.brand || "DetectOps",
     "--assessor", input.assessor || "RuSecure",
     "--client", input.client || "Client",
     "--lab", input.lab || "Lab",
+    "--siem", input.siem || "splunk",
+    "--report-type", "both",
     ...noteArg,
   ];
   const py = process.env.REPORT_PYTHON || process.env.WINRM_PYTHON || "python3";
@@ -55,13 +60,15 @@ export async function renderReport(input: RenderInput): Promise<RenderOutput> {
     child.on("error", (e) => { clearTimeout(killer); resolve(`spawn error: ${e.message}`); });
   });
 
-  const md = outBase + ".md", docx = outBase + ".docx", pdf = outBase + ".pdf";
-  const markdown = existsSync(md) ? readFileSync(md, "utf8") : "";
-  return {
-    md: existsSync(md) ? md : undefined,
-    docx: existsSync(docx) ? docx : undefined,
-    pdf: existsSync(pdf) ? pdf : undefined,
-    markdown,
-    log: log.slice(-4000),
+  const set = (label: string): ReportSet => {
+    const md = `${outBase}-${label}.md`, docx = `${outBase}-${label}.docx`, pdf = `${outBase}-${label}.pdf`;
+    return {
+      md: existsSync(md) ? md : undefined,
+      docx: existsSync(docx) ? docx : undefined,
+      pdf: existsSync(pdf) ? pdf : undefined,
+    };
   };
+  const technical = set("technical");
+  const markdown = technical.md ? readFileSync(technical.md, "utf8") : "";
+  return { executive: set("executive"), technical, markdown, log: log.slice(-4000) };
 }

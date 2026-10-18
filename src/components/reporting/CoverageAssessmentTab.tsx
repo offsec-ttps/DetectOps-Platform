@@ -12,7 +12,9 @@ interface Assessment {
   id: string; name: string; assessor: string; client: string; lab: string; status: string;
   atomicsTotal: number; processed: number; executedCount: number; visibleCount: number;
   genericCount: number; absentCount: number; naCount: number; failedCount: number;
-  reportPaths: Record<string, string>; error?: string | null; createdAt: string; completedAt?: string | null;
+  // Nested by report type: { executive:{md,docx,pdf}, technical:{md,docx,pdf} }
+  // (older rows may still be flat {md,docx,pdf} = technical).
+  reportPaths: Record<string, any>; error?: string | null; createdAt: string; completedAt?: string | null;
 }
 interface Options {
   environments: { id: string; name: string; kind: string; shellMode: string; hostname: string }[];
@@ -177,15 +179,24 @@ export default function CoverageAssessmentTab() {
                       {a.failedCount > 0 && <span className="text-danger">failed {a.failedCount}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {a.status === "completed" && (["md", "docx", "pdf"] as const).map((fmt) =>
-                      a.reportPaths?.[fmt] ? (
-                        <a key={fmt} href={`/api/coverage-assessments/${a.id}/download?format=${fmt}`}
-                          className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-card-hover hover:text-foreground transition-colors uppercase">
-                          <Download className="h-3 w-3" /> {fmt}
-                        </a>
-                      ) : null
-                    )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {a.status === "completed" && (["executive", "technical"] as const).map((rtype) => {
+                      const set = a.reportPaths?.[rtype] || (rtype === "technical" ? a.reportPaths : null);
+                      const fmts = (["md", "docx", "pdf"] as const).filter((f) => set?.[f]);
+                      if (!fmts.length) return null;
+                      return (
+                        <div key={rtype} className="flex items-center gap-1">
+                          <span className="text-[9px] font-semibold text-muted uppercase">{rtype === "executive" ? "Exec" : "Tech"}</span>
+                          {fmts.map((fmt) => (
+                            <a key={fmt} href={`/api/coverage-assessments/${a.id}/download?format=${fmt}&type=${rtype}`}
+                              title={`${rtype === "executive" ? "Executive Summary" : "Technical report"} — ${fmt.toUpperCase()}`}
+                              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-card-hover hover:text-foreground transition-colors uppercase">
+                              <Download className="h-3 w-3" /> {fmt}
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    })}
                     {ACTIVE(a.status) && (
                       <button onClick={() => cancel(a.id)} title="Cancel" className="rounded p-1.5 text-muted hover:text-danger hover:bg-danger/10 transition-colors"><StopCircle className="h-3.5 w-3.5" /></button>
                     )}

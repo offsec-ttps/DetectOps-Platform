@@ -15,11 +15,29 @@ const THROTTLE_MS = 1200;   // between detonations — avoids WinRM auth hammeri
 const PER_ATOMIC_BUDGET_S = 45;
 const OBSERVE_WINDOW_BUFFER_MIN = 10;  // added to the sweep duration for the visibility re-pass
 const OBSERVE_SETTLE_MS = 90_000;      // let the SIEM forwarder/indexer catch up on the last detonations before observing
+const STALE_CLAIM_MS = 10 * 60_000;    // a claimed-but-unfinished item is reclaimable after this (crash/restart safety)
 
 let ticking = false;
 let loopStarted = false;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Recompute an assessment's roll-up counters from its item rows — authoritative,
+ * so progress stays exact regardless of how many times an item was touched. */
+async function syncCounters(id: string): Promise<void> {
+  const where = (status: string) => ({ assessmentId: id, status });
+  const [executedCount, failedCount, naCount, pending] = await Promise.all([
+    prisma.coverageAssessmentItem.count({ where: where("executed") }),
+    prisma.coverageAssessmentItem.count({ where: where("failed") }),
+    prisma.coverageAssessmentItem.count({ where: where("n/a") }),
+    prisma.coverageAssessmentItem.count({ where: where("pending") }),
+  ]);
+  const total = await prisma.coverageAssessmentItem.count({ where: { assessmentId: id } });
+  await prisma.coverageAssessment.update({
+    where: { id },
+    data: { processed: total - pending, executedCount, failedCount, naCount, atomicsTotal: total, heartbeatAt: new Date() },
+  });
+}
 
 /** Process one batch. Returns whether it did work and how many items remain. */
 export async function tick(maxItems = 4): Promise<{ worked: boolean; assessmentId?: string; remaining?: number }> {
@@ -42,9 +60,25 @@ export async function tick(maxItems = 4): Promise<{ worked: boolean; assessmentI
       return { worked: true, assessmentId: a.id, remaining: 0 };
     }
 
-    const batch = await prisma.coverageAssessmentItem.findMany({
-      where: { assessmentId: a.id, status: "pending" }, orderBy: { order: "asc" }, take: maxItems,
+    // CLAIM items before detonating. Another driver (the in-process loop, the
+    // /tick endpoint, or a list-GET re-kick — all share this process) could
+    // otherwise pick the SAME pending rows and detonate them twice. We claim by
+    // compare-and-set on processedAt: only the driver whose updateMany flips the
+    // row (count===1) owns it. A claim older than STALE_CLAIM_MS is reclaimable
+    // so a crashed/restarted run doesn't strand items as permanently pending.
+    const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+    const claimable = { assessmentId: a.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] };
+    const candidates = await prisma.coverageAssessmentItem.findMany({
+      where: claimable as any, orderBy: { order: "asc" }, take: maxItems,
     });
+    const batch: typeof candidates = [];
+    for (const c of candidates) {
+      const claim = await prisma.coverageAssessmentItem.updateMany({
+        where: { id: c.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] } as any,
+        data: { processedAt: new Date() },
+      });
+      if (claim.count === 1) batch.push(c);
+    }
 
     for (const item of batch) {
       // Honour cancellation between items.
@@ -61,17 +95,12 @@ export async function tick(maxItems = 4): Promise<{ worked: boolean; assessmentI
         where: { id: item.id },
         data: { status: det.status, executed: det.executed, tail: det.tail.slice(0, 400), processedAt: new Date() },
       });
-      await prisma.coverageAssessment.update({
-        where: { id: a.id },
-        data: {
-          processed: { increment: 1 },
-          executedCount: { increment: det.status === "executed" ? 1 : 0 },
-          failedCount: { increment: det.status === "failed" ? 1 : 0 },
-          naCount: { increment: det.status === "n/a" ? 1 : 0 },
-          heartbeatAt: new Date(),
-        },
-      });
     }
+
+    // Derive the roll-up counters from the authoritative item states rather than
+    // incrementing — so the progress (processed/atomicsTotal) is always exact
+    // even if an item was processed more than once by overlapping drivers.
+    await syncCounters(a.id);
 
     const remaining = await prisma.coverageAssessmentItem.count({ where: { assessmentId: a.id, status: "pending" } });
     if (remaining === 0) await finalize(a.id);

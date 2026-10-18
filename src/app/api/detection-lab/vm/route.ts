@@ -80,8 +80,26 @@ export async function POST(req: NextRequest) {
       if (state !== "running") {
         return NextResponse.json({ error: `Cannot stop VM in state '${state}'` }, { status: 409 });
       }
-      await exec("VBoxManage", ["controlvm", vmName, "acpipowerbutton"], { timeout: 30000 });
+      // Graceful first (clean shutdown for a Linux/Splunk guest), then VERIFY.
+      // A Windows guest (e.g. the SAR domain controller) with no interactive
+      // session typically ignores the ACPI power button, so firing it and
+      // returning — as this did before — left the VM running while the UI
+      // reported "stopped". Poll for the guest to power off and hard-stop as a
+      // fallback so "Stop" is deterministic and actually halts every VM.
+      await exec("VBoxManage", ["controlvm", vmName, "acpipowerbutton"], { timeout: 30000 }).catch(() => {});
       results.push(`Sent ACPI shutdown to ${vmName}`);
+      let stopped = false;
+      for (let i = 0; i < 20; i++) {          // up to ~60s grace for a clean shutdown
+        await sleep(3000);
+        const s = await getVMState(vmName);
+        if (s === "poweroff" || s === "saved") { stopped = true; break; }
+      }
+      if (!stopped) {
+        await exec("VBoxManage", ["controlvm", vmName, "poweroff"], { timeout: 30000 });
+        results.push(`ACPI shutdown ignored after 60s — forced power off ${vmName}`);
+      } else {
+        results.push(`${vmName} shut down gracefully`);
+      }
     }
 
     else if (action === "poweroff") {

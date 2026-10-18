@@ -15,11 +15,26 @@ import argparse, json, sqlite3, os, html, math, subprocess, shutil, datetime, re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ── Branding ─────────────────────────────────────────────────────────────────
-BRAND = "DetectOps"
-BRAND_SITE = "detectops.io"
+# RuSecure is the BRAND / company that performs the assessment; DetectOps is the
+# PLATFORM (product) used to run the adversary simulation. Cover + back cover
+# lead with RuSecure (logo); DetectOps is credited as the platform throughout.
+COMPANY = "RuSecure"                       # overridden by the assessment's assessor
+COMPANY_SITE = "rusecure.in"
+COMPANY_TAGLINE = "Know the attack before you face it."
+PLATFORM = "DetectOps"
+PLATFORM_DESC = "Adversary Simulation Platform"
 REPORT_NAME = "Adversary Simulation &amp; Detection Coverage Report"
-TAGLINE = "Simulate the attack. Prove the detection."
 EDITION = "COVERAGE EDITION"
+LOGO_FILE = os.path.join(ROOT, "rusecure_logo_know_the_attack.png")
+
+
+def logo_uri():
+    import base64
+    try:
+        with open(LOGO_FILE, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
 
 # Curated, real reference links used across the report.
 REFS = {
@@ -119,8 +134,8 @@ def gap_ref(item):
 # ── CSS ──────────────────────────────────────────────────────────────────────
 CSS = """
 :root{
-  --ink:#0b1020; --ink2:#111a30; --paper:#ffffff; --muted:#5b6478; --line:#e4e8f0;
-  --accent:#4f7dff; --accent2:#22d3ee; --cyan:#22d3ee; --warn:#f59e0b; --bad:#ef4444; --good:#22c55e;
+  --ink:#0a0710; --ink2:#15101f; --paper:#ffffff; --muted:#5b6478; --line:#e6e2ee;
+  --accent:#a855f7; --accent2:#d946ef; --cyan:#c084fc; --warn:#f59e0b; --bad:#ef4444; --good:#22c55e;
 }
 *{box-sizing:border-box}
 @page{ size:A4; margin:14mm; }
@@ -147,6 +162,14 @@ h1,h2,h3{margin:0}
 .cov-brand .m{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2))}
 .cov-brand .n{font-size:21pt;font-weight:800;letter-spacing:.3px}
 .cov-brand .t{font-size:8pt;letter-spacing:3px;color:#9fb0d8;text-transform:uppercase}
+.logo{height:42mm;width:auto;display:block}
+.pghead .hlogo{height:10mm;width:auto}
+.pbadge{display:inline-block;border:1px solid var(--accent);color:#eccdff;border-radius:999px;padding:4px 13px;font-size:8.5pt;font-weight:600;letter-spacing:.4px}
+.credit{display:flex;justify-content:center;gap:44px;margin-top:30px}
+.credit .cr{text-align:center}
+.credit .k{font-size:7.5pt;letter-spacing:2px;color:#9fb0d8;text-transform:uppercase}
+.credit .v{font-size:15pt;font-weight:800;margin-top:5px}
+.credit .s{font-size:8.5pt;color:var(--accent2);margin-top:2px}
 .edition{color:var(--accent2);font-size:9pt;letter-spacing:3px;font-weight:700}
 .cov-title{font-size:33pt;font-weight:800;line-height:1.08;margin-top:40mm;max-width:11.5cm}
 .cov-sub{color:var(--accent2);font-weight:700;font-size:13pt;margin-top:10px}
@@ -215,7 +238,7 @@ def donut(pctval):
     r = 52; C = 2 * math.pi * r; dash = C * pctval / 100
     return f"""<svg width="150" height="150" viewBox="0 0 120 120">
   <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#4f7dff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+    <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#d946ef"/></linearGradient></defs>
   <circle cx="60" cy="60" r="{r}" fill="none" stroke="#1e2a44" stroke-width="13"/>
   <circle cx="60" cy="60" r="{r}" fill="none" stroke="url(#g)" stroke-width="13" stroke-linecap="round"
     stroke-dasharray="{dash:.1f} {C:.1f}" transform="rotate(-90 60 60)"/>
@@ -245,6 +268,10 @@ def build_html(a, items, cmds):
     today = datetime.date.today().isoformat()
     exec_total = len(executed)
     rating = "Strong" if vis >= 90 else "Moderate" if vis >= 70 else "Developing" if vis >= 50 else "Weak"
+    company = a.get("assessor") or COMPANY     # the brand/company performing the assessment
+    logo = logo_uri()
+    logo_img = f'<img src="{logo}" class="logo"/>' if logo else ''
+    platform_badge = f'<span class="pbadge">Powered by {PLATFORM} · {PLATFORM_DESC}</span>'
 
     def outcome_pill(i):
         if i["vis"] == "visible": return '<span class="pill vis">detected</span>'
@@ -253,39 +280,42 @@ def build_html(a, items, cmds):
         return '<span class="pill ind">—</span>'
 
     H = []
-    # ── COVER ──
+    # ── COVER (RuSecure brand lockup; DetectOps credited as the platform) ──
     H.append(f"""<div class="sheet-dark"><div class="grid-bg"></div>
       <div class="cov-top">
-        <div class="cov-brand"><span class="m"></span><div><div class="n">{BRAND}</div><div class="t">Adversary Simulation Platform</div></div></div>
+        <div class="cov-brand">{logo_img or f'<span class="m"></span><div class="n">{e(company)}</div>'}</div>
         <div class="edition">{EDITION}</div>
       </div>
       <div class="hero"><div>{donut(vis)}<div class="donut-cap">Telemetry visibility</div></div></div>
       <div class="cov-title">{REPORT_NAME}</div>
       <div class="cov-sub">{e(a["client"])}</div>
       <div class="cov-date">{e(a["lab"])} · SIEM: {e(a["siem"])} · {today}</div>
+      <div style="margin-top:12px">{platform_badge}</div>
       <div class="cov-stats">
         <div class="s"><div class="num">{len(techs)}</div><div class="lab">ATT&CK techniques exercised</div></div>
         <div class="s"><div class="num">{exec_total}</div><div class="lab">Atomic tests executed</div></div>
         <div class="s"><div class="num">{vis}%</div><div class="lab">Telemetry visibility</div></div>
         <div class="s"><div class="num">{len(blind)}</div><div class="lab">Detection blind spots</div></div>
       </div>
-      <div class="cov-foot">{TAGLINE} &nbsp;·&nbsp; Generated by {BRAND} on {today}. Every figure traces to an executed atomic test and a SIEM query — nothing in this report was written by a language model.</div>
+      <div class="cov-foot">{e(company)} — {COMPANY_TAGLINE} &nbsp;·&nbsp; Assessment run on the {PLATFORM} {PLATFORM_DESC}, {today}. Every figure traces to an executed atomic test and a SIEM query — nothing in this report was written by a language model.</div>
     </div>""")
 
     def section(no, kick, title, body, first=False):
-        head = (f'<div class="pghead"><div class="b"><span class="mark"></span>{BRAND}</div>'
+        mark = f'<img src="{logo}" class="hlogo"/>' if logo else '<span class="mark"></span>'
+        head = (f'<div class="pghead"><div class="b">{mark}<span>{e(company)}</span></div>'
                 f'<div class="meta">{REPORT_NAME} · {e(a["client"])}</div></div>')
-        foot = (f'<div class="pgfoot"><div>{BRAND} · {BRAND_SITE}</div>'
-                f'<div>Prepared by {e(a["assessor"])} · {today}</div></div>')
+        foot = (f'<div class="pgfoot"><div>{e(company)} · {COMPANY_SITE}</div>'
+                f'<div>Platform: {PLATFORM} · {today}</div></div>')
         return (f'<div class="section{" first" if first else ""}">{head}'
                 f'<div class="kick">{kick}</div>'
                 f'<div class="h"><span class="no">{no}</span><span class="tt">{title}</span></div>'
                 f'{body}{foot}</div>')
 
     # 01 About
-    about = f"""<p class="lead"><b>{BRAND}</b> is an adversary-simulation platform: it detonates real attacker techniques
-      (Atomic Red Team, Living-off-the-Land binaries, and curated TTP libraries) against a live environment, then measures
-      whether each one became <b>visible in the SIEM</b> — the prerequisite for a detection.</p>
+    about = f"""<p class="lead"><b>{e(company)}</b> performed this adversary-simulation engagement using the
+      <b>{PLATFORM}</b> {PLATFORM_DESC}. {PLATFORM} detonates real attacker techniques (Atomic Red Team,
+      Living-off-the-Land binaries, and curated TTP libraries) against a live environment, then measures whether each one
+      became <b>visible in the SIEM</b> — the prerequisite for a detection.</p>
       <div class="sub">WHAT THIS ENGAGEMENT DID</div>
       <p>This report covers the <b>LOLBAS</b> (Living Off The Land Binaries &amp; Scripts) simulation library run against
       <b>{e(a['client'])}</b>'s <b>{e(a['lab'])}</b> environment. {exec_total} atomic tests were executed on the endpoint over
@@ -297,7 +327,7 @@ def build_html(a, items, cmds):
       prerequisite for detection, not proof of a firing rule. Technique identifiers link to
       <a href="{REFS['attack'][1]}">MITRE ATT&amp;CK</a>; the library is from the
       <a href="{REFS['lolbas'][1]}">LOLBAS Project</a> and the tests from <a href="{REFS['art'][1]}">Atomic Red Team</a>.</p>"""
-    H.append(section("01", "ABOUT THIS PLATFORM", "About DetectOps", about, first=True))
+    H.append(section("01", "ABOUT THIS ENGAGEMENT", f"About {e(company)} &amp; {PLATFORM}", about, first=True))
 
     # Contents
     toc = """<div class="toc">
@@ -443,17 +473,18 @@ def build_html(a, items, cmds):
                 '<p class="note">Listed because this report draws on their public data or standards. Names and marks belong to their owners; being listed does not imply endorsement.</p>')
     H.append(section("10", "WHAT WE BUILD ON", "Resources", res_body))
 
-    # Back cover
+    # Back cover — RuSecure brand lockup + explicit "platform used" credit.
+    back_logo = f'<img src="{logo}" style="width:72mm;max-width:72mm"/>' if logo else f'<div style="font-size:34pt;font-weight:800">{e(company)}</div>'
     H.append(f"""<div class="sheet-dark" style="page-break-before:always;page-break-after:avoid;text-align:center">
       <div class="grid-bg"></div>
-      <div style="margin-top:70mm"><span class="m" style="display:inline-block;width:56px;height:56px;border-radius:15px;background:linear-gradient(135deg,var(--accent),var(--accent2))"></span></div>
-      <div style="font-size:30pt;font-weight:800;margin-top:14px">{BRAND}</div>
-      <div style="color:var(--accent2);letter-spacing:2px;margin-top:6px">{TAGLINE}</div>
-      <p style="max-width:12cm;margin:26px auto 0;color:#cdd8f3;font-size:10pt">We detonate real attacker techniques against your environment and prove, test by test,
+      <div style="margin-top:48mm">{back_logo}</div>
+      <p style="max-width:12cm;margin:22px auto 0;color:#cdd8f3;font-size:10pt">We detonate real attacker techniques against your environment and prove, test by test,
         whether your SIEM can see them — then hand you the exact query to close every gap. Evidence first: nothing in this report was written by a language model.</p>
-      <div style="font-weight:700;margin-top:22px">Run it. Detect it. Prove it.</div>
-      <div style="color:var(--accent);font-weight:700;margin-top:10px">{BRAND_SITE}</div>
-      <div class="cov-foot" style="text-align:center">Techniques &amp; mitigations: MITRE ATT&amp;CK. Tests: Atomic Red Team. Living-off-the-land: LOLBAS Project. Prepared by {e(a['assessor'])} for {e(a['client'])}.</div>
+      <div class="credit">
+        <div class="cr"><div class="k">ASSESSMENT BY</div><div class="v">{e(company)}</div><div class="s">{COMPANY_SITE}</div></div>
+        <div class="cr"><div class="k">PLATFORM USED</div><div class="v">{PLATFORM}</div><div class="s">{PLATFORM_DESC}</div></div>
+      </div>
+      <div class="cov-foot" style="text-align:center">Techniques &amp; mitigations: MITRE ATT&amp;CK. Tests: Atomic Red Team. Living-off-the-land: LOLBAS Project. Assessment by {e(company)} on the {PLATFORM} platform, for {e(a['client'])}.</div>
     </div>""")
 
     return f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body>{''.join(H)}</body></html>"

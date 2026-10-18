@@ -295,9 +295,13 @@ export default function ReportingPage() {
                 const isExpanded = expandedId === r.id;
                 return (
                   <div key={r.id} className="rounded-xl border border-border bg-card overflow-hidden">
-                    {/* Row */}
-                    <button onClick={() => setExpandedId(isExpanded ? null : r.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-card-hover transition-colors text-left">
+                    {/* Row — a div (not a button) so the Edit/Push/Delete action
+                        buttons below aren't nested inside a button (invalid HTML /
+                        hydration error). Kept keyboard-operable via role+onKeyDown. */}
+                    <div role="button" tabIndex={0}
+                      onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(isExpanded ? null : r.id); } }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-card-hover transition-colors text-left cursor-pointer">
                       {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -325,7 +329,7 @@ export default function ReportingPage() {
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
-                    </button>
+                    </div>
 
                     {/* GitHub push inline */}
                     {pushingId === r.id && (

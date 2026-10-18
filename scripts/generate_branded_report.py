@@ -25,16 +25,21 @@ PLATFORM = "DetectOps"
 PLATFORM_DESC = "Adversary Simulation Platform"
 REPORT_NAME = "Adversary Simulation &amp; Detection Coverage Report"
 EDITION = "COVERAGE EDITION"
-LOGO_FILE = os.path.join(ROOT, "rusecure_logo_know_the_attack.png")
+# Prefer the downscaled, repo-committed logo (small → lean PDF); fall back to the
+# full-resolution source if the small one isn't present.
+LOGO_CANDIDATES = [os.path.join(ROOT, "rusecure-logo-report.png"),
+                   os.path.join(ROOT, "rusecure_logo_know_the_attack.png")]
 
 
 def logo_uri():
     import base64
-    try:
-        with open(LOGO_FILE, "rb") as f:
-            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
-    except Exception:
-        return ""
+    for p in LOGO_CANDIDATES:
+        try:
+            with open(p, "rb") as f:
+                return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+        except Exception:
+            continue
+    return ""
 
 # Curated, real reference links used across the report.
 REFS = {

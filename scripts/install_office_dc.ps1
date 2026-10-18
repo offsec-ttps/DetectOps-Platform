@@ -11,9 +11,11 @@
     * Free disk was ~10.6 GB. A trimmed Current-channel install needs ~3-4 GB to
       download + unpack; monitor disk so the DC does not fill up (disk-full
       destabilises it). Consider expanding the VDI first.
-    * Installed without a product key, Office runs in reduced-functionality /
-      unlicensed mode. COM automation (Word.Application, Excel.Application, the
-      Outlook object model, XLL/VBA) still works, which is what the atomics need.
+    * This installs the RETAIL LTSC-2021 SKU and does NOT activate it (no product
+      key, no sign-in): Office runs on its built-in trial/grace licence, which is
+      what we want for testing. COM automation (Word.Application, Excel.Application,
+      the Outlook object model, XLL/VBA) works on the trial, which is what the
+      atomics need. Do not enter a key or sign in — leave it on the trial.
   Run elevated. Re-run is safe (ODT is idempotent).
 #>
 param(
@@ -42,7 +44,7 @@ $cfg = Join-Path $WorkDir "config.xml"
 @"
 <Configuration>
   <Add OfficeClientEdition="$Bitness" Channel="PerpetualVL2021">
-    <Product ID="ProPlus2021Volume">
+    <Product ID="ProPlus2021Retail">
       <Language ID="en-us" />
       <ExcludeApp ID="Teams" />
       <ExcludeApp ID="OneDrive" />

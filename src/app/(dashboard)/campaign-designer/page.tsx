@@ -7,6 +7,7 @@ import EnvironmentAccessPanel from "@/components/campaign-designer/EnvironmentAc
 import SiemConnectModal from "@/components/siem/SiemConnectModal";
 import AtomicPreview from "@/components/campaign-designer/AtomicPreview";
 import LotlCampaignPicker, { type LotlSelEntry } from "@/components/campaign-designer/LotlCampaignPicker";
+import DependencyPrompt from "@/components/campaign/DependencyPrompt";
 import {
   Plus, Play, ArrowRight, Copy,
   Clock, CheckCircle2, XCircle, Loader2,
@@ -230,6 +231,10 @@ export default function CampaignDesignerPage() {
   const [aptSelection, setAptSelection] = useState<{ group: string; atomicTestIds: string[] } | null>(null);
   const [params, setParams] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState(false);
+  // Pre-launch dependency chooser: when about to simulate atomics on a WinRM lab
+  // endpoint, let the user pick which external tool prerequisites to install.
+  const [depPromptOpen, setDepPromptOpen] = useState(false);
+  const [resolvedEnvId, setResolvedEnvId] = useState<string | null>(null);
 
   // Ingest a LOTL selection handed off from the library browser (sessionStorage)
   // → populate Step 2 and jump to it, so all simulation starts here.
@@ -2139,6 +2144,44 @@ export default function CampaignDesignerPage() {
     return targets;
   }, [sar, systemInfo, labTemplates, cloudRanges, fleetTargets, c2Targets]);
 
+  // Resolve the selected target to an owned WinRM EnvironmentTarget (matched by
+  // host IP) so the pre-launch dependency chooser can install onto it. Null when
+  // the target is remote (fleet/cloud/c2) or has no matching environment record.
+  useEffect(() => {
+    const target = labTargets.find((t) => t.deployedName === selectedServer);
+    if (!target || ["cloud", "fleet", "c2"].includes(target.source)) { setResolvedEnvId(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/environment-targets?enabled=true");
+        const data = await res.json();
+        const match = (data.items || []).find(
+          (e: { id: string; hostname: string }) => e.hostname && e.hostname === target.ip
+        );
+        if (!cancelled) setResolvedEnvId(match?.id || null);
+      } catch {
+        if (!cancelled) setResolvedEnvId(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedServer, labTargets]);
+
+  // Launch entry point from the button: for an atomic run on a local WinRM lab
+  // endpoint, first open the dependency chooser; everything else launches directly.
+  const beginLaunch = () => {
+    const target = labTargets.find((t) => t.deployedName === selectedServer);
+    const isRemote = /^(fleet|cloud|c2):/.test(selectedServer) || ["cloud", "fleet", "c2"].includes(target?.source || "");
+    const isAtomicRun =
+      !(aptSelection && aptSelection.atomicTestIds.length > 0) &&
+      lotlSelection.length === 0 &&
+      techniqueList.length > 0;
+    if (isAtomicRun && !isRemote) {
+      setDepPromptOpen(true);
+      return;
+    }
+    launchSimulation();
+  };
+
   const runningTargets = labTargets.filter((t) => t.state === "running");
   const hasAnyTargets = labTargets.length > 0;
   const hasAnyRunning = runningTargets.length > 0;
@@ -2186,6 +2229,17 @@ export default function CampaignDesignerPage() {
     <div className="space-y-5 animate-fade-in">
       {/* Guard against leaving while a simulation / detection chain is running */}
       <NavigationGuardModal ref={guardRef} active={simInProgress} onStop={stopEverything} />
+      {/* Pre-launch dependency chooser: pick which external tool prerequisites to
+          install onto the WinRM endpoint before the atomics run (skip = run anyway). */}
+      {depPromptOpen && (
+        <DependencyPrompt
+          techniques={techniqueList}
+          platform="windows"
+          environmentId={resolvedEnvId}
+          onProceed={() => { setDepPromptOpen(false); setSimResult(null); launchSimulation(); }}
+          onCancel={() => setDepPromptOpen(false)}
+        />
+      )}
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -3165,7 +3219,7 @@ export default function CampaignDesignerPage() {
               {/* Launch button — show when no active result */}
               {!simResult && (
                 <button
-                  onClick={launchSimulation}
+                  onClick={beginLaunch}
                   disabled={!canSimulate || simulating}
                   className={cn(
                     "w-full flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-40",

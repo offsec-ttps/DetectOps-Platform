@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   const platform = searchParams.get("platform") || "";
   const executor = searchParams.get("executor") || "";
   const elevation = searchParams.get("elevation"); // "true" | "false" | null
+  const sar = searchParams.get("sar") || ""; // "tested" | "detected" | "untested" | ""
   const sortBy = searchParams.get("sort_by") || "techniqueId";
   const sortDir = searchParams.get("sort_dir") === "desc" ? "desc" : "asc";
 
@@ -38,6 +39,9 @@ export async function GET(req: NextRequest) {
   if (executor) where.executorName = executor;
   if (elevation === "true") where.elevationRequired = true;
   if (elevation === "false") where.elevationRequired = false;
+  if (sar === "tested") where.sarTested = true;
+  else if (sar === "detected") where.sarStatus = "detected";
+  else if (sar === "untested") where.sarTested = false;
 
   const [tests, total] = await Promise.all([
     prisma.atomicTest.findMany({

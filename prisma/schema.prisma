@@ -298,6 +298,15 @@ model AtomicTest {
   contentHash       String   @default("")
   source            String   @default("upstream")    // "upstream" (synced from redcanaryco) | "custom" (saved from the AtomicBuilder)
   createdBy         String   @default("")            // AuthUser.id for custom rows; "" for upstream
+  // ── Tested-against-the-SAR-lab marker (coverage visibility) ──
+  // Set when this atomic has actually been detonated on the SAR lab and ran
+  // cleanly — from a successful Campaign Designer simulation or a Coverage
+  // Assessment item, backfilled from run history and updated going forward.
+  // This is DETONATED-and-working, distinct from merely having prereqs staged.
+  sarTested         Boolean  @default(false)
+  sarStatus         String   @default("")            // "" | "working" (ran clean) | "detected" (also visible in SIEM)
+  sarTestedAt       DateTime?
+  sarSource         String   @default("")            // "simulation" | "coverage"
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -308,6 +317,7 @@ model AtomicTest {
   @@index([executorName])
   @@index([elevationRequired])
   @@index([source])
+  @@index([sarTested])
   @@map("atomic_tests")
 }
 

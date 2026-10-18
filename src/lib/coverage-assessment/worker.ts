@@ -118,6 +118,30 @@ async function finalize(id: string): Promise<void> {
   }
   await prisma.coverageAssessment.update({ where: { id }, data: { visibleCount: visible, genericCount: generic, absentCount: absent } });
 
+  // Going-forward "tested on SAR" marker: when this sweep ran against a SAR lab,
+  // every atomic that executed is now detonated-and-working on SAR — "detected"
+  // if its distinctive indicator was visible in the SIEM, else "working". Keeps
+  // the coverage badge live as assessments run (backfill handles history).
+  const env = a.environmentId ? await prisma.environmentTarget.findUnique({ where: { id: a.environmentId } }) : null;
+  const isSar = !!env && (/^sar/i.test(env.templateRef) || /sar/i.test(env.name) || env.hostname === "10.0.1.14");
+  if (isSar) {
+    const done = await prisma.coverageAssessmentItem.findMany({
+      where: { assessmentId: id, status: "executed" },
+      select: { tech: true, num: true, visBucket: true },
+    });
+    for (const it of done) {
+      await prisma.atomicTest.updateMany({
+        where: { techniqueId: it.tech, testNumber: it.num },
+        data: {
+          sarTested: true,
+          sarStatus: it.visBucket === "visible" ? "detected" : "working",
+          sarSource: "coverage",
+          sarTestedAt: new Date(),
+        },
+      });
+    }
+  }
+
   const items = await prisma.coverageAssessmentItem.findMany({ where: { assessmentId: id }, orderBy: { order: "asc" } });
 
   const lite: ItemLite[] = items.map((i) => ({

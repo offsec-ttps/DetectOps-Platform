@@ -31,6 +31,10 @@ interface AtomicTest {
   tactic: string;
   sourceUrl: string;
   contentHash: string;
+  sarTested?: boolean;
+  sarStatus?: string;     // "" | "working" | "detected"
+  sarTestedAt?: string | null;
+  sarSource?: string;     // "simulation" | "coverage"
   createdAt: string;
   updatedAt: string;
 }
@@ -96,6 +100,7 @@ export default function AtomicTestLibraryPage() {
   const [platform, setPlatform] = useState("");
   const [executor, setExecutor] = useState("");
   const [elevation, setElevation] = useState<string>("");
+  const [sar, setSar] = useState<string>("");  // "" | tested | detected | untested
   const [sortBy, setSortBy] = useState("techniqueId");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
@@ -114,6 +119,20 @@ export default function AtomicTestLibraryPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [showSyncResult, setShowSyncResult] = useState(false);
+
+  // SAR-tested marker state
+  const [sarCount, setSarCount] = useState<{ tested: number; detected: number } | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const refreshSarCount = useCallback(async () => {
+    try { const r = await fetch("/api/atomic-tests/mark-sar-tested"); if (r.ok) { const d = await r.json(); setSarCount({ tested: d.tested, detected: d.detected }); } } catch { /* ignore */ }
+  }, []);
+  const backfillSar = async () => {
+    setBackfilling(true);
+    try {
+      const r = await fetch("/api/atomic-tests/mark-sar-tested", { method: "POST" });
+      if (r.ok) { await refreshSarCount(); await fetchTests(); }
+    } finally { setBackfilling(false); }
+  };
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -141,6 +160,7 @@ export default function AtomicTestLibraryPage() {
       if (platform) params.set("platform", platform);
       if (executor) params.set("executor", executor);
       if (elevation) params.set("elevation", elevation);
+      if (sar) params.set("sar", sar);
       params.set("sort_by", sortBy);
       params.set("sort_dir", sortDir);
 
@@ -156,9 +176,10 @@ export default function AtomicTestLibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, tactic, platform, executor, elevation, sortBy, sortDir]);
+  }, [page, pageSize, search, tactic, platform, executor, elevation, sar, sortBy, sortDir]);
 
   useEffect(() => { fetchTests(); }, [fetchTests]);
+  useEffect(() => { refreshSarCount(); }, [refreshSarCount]);
 
   // ── Check Updates ──
   const checkUpdates = async () => {
@@ -254,6 +275,24 @@ export default function AtomicTestLibraryPage() {
               Check Updates
             </button>
           )}
+          {sarCount && (
+            <span
+              title="Atomics actually detonated and working on the SAR lab (green = also detected in SIEM)"
+              className="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/5 px-3 py-1.5 text-xs font-medium text-success"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> {sarCount.tested} tested on SAR
+              {sarCount.detected > 0 && <span className="text-muted-foreground">· {sarCount.detected} detected</span>}
+            </span>
+          )}
+          <button
+            onClick={backfillSar}
+            disabled={backfilling}
+            title="Mark atomics that have actually been detonated and worked on SAR, from existing simulation + coverage history"
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card-hover transition-colors disabled:opacity-50"
+          >
+            {backfilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
+            {backfilling ? "Marking…" : "Mark tested on SAR"}
+          </button>
           <button
             onClick={triggerSync}
             disabled={syncing}
@@ -433,6 +472,17 @@ export default function AtomicTestLibraryPage() {
                   placeholder="Any"
                 />
                 <FilterSelect
+                  label="Tested on SAR"
+                  value={sar}
+                  onChange={(v) => { setSar(v); setPage(1); }}
+                  options={[
+                    { value: "tested", label: "Tested & working" },
+                    { value: "detected", label: "Tested & detected" },
+                    { value: "untested", label: "Not yet tested" },
+                  ]}
+                  placeholder="Any"
+                />
+                <FilterSelect
                   label="Sort By"
                   value={sortBy}
                   onChange={(v) => { setSortBy(v); setPage(1); }}
@@ -520,6 +570,7 @@ export default function AtomicTestLibraryPage() {
                       <div className="flex items-center gap-2">
                         <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-accent">{test.techniqueId}</span>
                         <span className="text-xs font-medium text-foreground truncate">{test.testName}</span>
+                        <SarBadge tested={test.sarTested} status={test.sarStatus} />
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-muted flex-wrap">
                         <span>{test.tactic}</span>
@@ -536,8 +587,9 @@ export default function AtomicTestLibraryPage() {
                         <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-accent">{test.techniqueId}</span>
                         <span className="ml-1.5 text-[10px] text-muted">#{test.testNumber}</span>
                       </div>
-                      <div className={cn("truncate", selectedTest ? "col-span-4" : "col-span-3")}>
-                        <span className="text-xs font-medium text-foreground group-hover:text-accent transition-colors">{test.testName}</span>
+                      <div className={cn("truncate flex items-center gap-1.5", selectedTest ? "col-span-4" : "col-span-3")}>
+                        <span className="text-xs font-medium text-foreground group-hover:text-accent transition-colors truncate">{test.testName}</span>
+                        <SarBadge tested={test.sarTested} status={test.sarStatus} />
                       </div>
                       <div className="col-span-2">
                         <span className="text-[10px] text-muted-foreground">{test.tactic || "—"}</span>
@@ -855,4 +907,24 @@ function paginationRange(current: number, total: number): (number | "...")[] {
     pages.push(1, "...", current - 1, current, current + 1, "...", total);
   }
   return pages;
+}
+
+/** "Tested on SAR" marker — shown when an atomic has actually been detonated and
+ *  ran cleanly on the SAR lab (green = also detected in the SIEM). */
+function SarBadge({ tested, status }: { tested?: boolean; status?: string }) {
+  if (!tested) return null;
+  const detected = status === "detected";
+  return (
+    <span
+      title={detected ? "Tested on SAR — detonated and detected in SIEM" : "Tested on SAR — detonated and ran cleanly"}
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-semibold shrink-0 border",
+        detected
+          ? "bg-success/10 text-success border-success/30"
+          : "bg-accent/10 text-accent border-accent/30"
+      )}
+    >
+      <CheckCircle2 className="h-2.5 w-2.5" /> SAR{detected ? " ✓det" : ""}
+    </span>
+  );
 }

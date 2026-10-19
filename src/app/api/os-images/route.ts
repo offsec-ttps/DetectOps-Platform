@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Per-image concurrency guard (all targets): never run two deploys of one image.
-  const existing = (await listDeployments(null).catch(() => []))
+  const ownerId = auth.enforced ? auth.user.id : null;
+  const existing = (await listDeployments(ownerId).catch(() => []))
     .find((d) => d.imageId === imageId && (d.status === "installing" || d.status === "running"));
   if (existing) {
     return NextResponse.json(

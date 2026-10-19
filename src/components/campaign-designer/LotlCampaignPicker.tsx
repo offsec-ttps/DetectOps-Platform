@@ -17,9 +17,27 @@ export interface LotlSelEntry {
 
 interface LibMeta { sourceId: string; displayName: string; platform: string; installed: boolean; count: number; }
 
-export default function LotlCampaignPicker({ selectedIds, onAdd }: { selectedIds: Set<string>; onAdd: (entries: LotlSelEntry[]) => void }) {
+// Normalise a free-text server OS ("Windows Server 2016", "ubuntu", "macOS 14",
+// agentPlatform "windows"/"linux") to one of the library platform buckets.
+function normOs(os: string | undefined): "windows" | "linux" | "macos" | "" {
+  const s = (os || "").toLowerCase();
+  if (/win/.test(s)) return "windows";
+  if (/linux|ubuntu|debian|centos|rhel|fedora|kali/.test(s)) return "linux";
+  if (/mac|darwin|osx/.test(s)) return "macos";
+  return "";
+}
+// A library runs on the target when it is cross-platform ("multi") or matches the
+// server OS. Unknown server OS ⇒ show everything (don't hide options blindly).
+function libFitsOs(platform: string, serverOs: "windows" | "linux" | "macos" | ""): boolean {
+  if (!serverOs) return true;
+  const p = (platform || "").toLowerCase();
+  return p === "multi" || p === serverOs;
+}
+
+export default function LotlCampaignPicker({ selectedIds, onAdd, serverOs }: { selectedIds: Set<string>; onAdd: (entries: LotlSelEntry[]) => void; serverOs?: string }) {
   const [libs, setLibs] = useState<LibMeta[]>([]);
   const [library, setLibrary] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -30,13 +48,28 @@ export default function LotlCampaignPicker({ selectedIds, onAdd }: { selectedIds
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [addingAll, setAddingAll] = useState(false);
 
+  const os = normOs(serverOs);
+  // Libraries compatible with the selected server's OS (unless the analyst opts to
+  // see all). A Windows DC therefore won't be offered gtfobins/LOOBins (linux/macos),
+  // and the default selection lands on a runnable library — "best feasibility".
+  const visibleLibs = (showAll || !os) ? libs : libs.filter((l) => libFitsOs(l.platform, os));
+  const hiddenCount = libs.length - visibleLibs.length;
+
   useEffect(() => {
     fetch("/api/lotl/libraries").then((r) => r.json()).then((d) => {
       const installed = (d.libraries || []).filter((l: LibMeta) => l.installed);
       setLibs(installed);
-      if (installed[0]) setLibrary(installed[0].sourceId);
     }).catch(() => {});
   }, []);
+
+  // Pick (or re-pick) a default library whenever the visible set changes — so the
+  // selected library is always one that actually runs on the chosen server.
+  useEffect(() => {
+    if (!visibleLibs.length) { setLibrary(""); return; }
+    if (!visibleLibs.some((l) => l.sourceId === library)) {
+      setLibrary(visibleLibs[0].sourceId); setPage(1); setChecked(new Set());
+    }
+  }, [visibleLibs, library]);
 
   const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -89,13 +122,22 @@ export default function LotlCampaignPicker({ selectedIds, onAdd }: { selectedIds
         <Terminal className="h-4 w-4 text-accent" />
         <span className="text-xs font-semibold text-foreground">Living-off-the-Land techniques</span>
         <select value={library} onChange={(e) => { setLibrary(e.target.value); setPage(1); setChecked(new Set()); }} className="h-7 px-2 text-[11px] rounded border border-border bg-input text-foreground">
-          {libs.map((l) => <option key={l.sourceId} value={l.sourceId}>{l.displayName} ({l.count})</option>)}
+          {visibleLibs.map((l) => <option key={l.sourceId} value={l.sourceId}>{l.displayName} · {l.platform} ({l.count})</option>)}
         </select>
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search techniques…" className="w-full h-7 pl-7 pr-2 text-[11px] rounded border border-border bg-input text-foreground focus:outline-none focus:border-accent" />
         </div>
       </div>
+      {os && (
+        <p className="text-[10px] text-muted-foreground">
+          Showing libraries runnable on the selected <span className="text-foreground font-medium">{os}</span> server.
+          {hiddenCount > 0 && <> {hiddenCount} incompatible {hiddenCount === 1 ? "library" : "libraries"} hidden. </>}
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="ml-1 underline hover:text-foreground">
+            {showAll ? "Filter to this OS" : "Show all"}
+          </button>
+        </p>
+      )}
 
       <div className="rounded border border-border divide-y divide-border/50 max-h-56 overflow-y-auto">
         {loading ? (

@@ -16,9 +16,9 @@ import { decrypt } from "@/lib/crypto/credential-vault";
 
 /** Decrypt a CloudCredential into provider env vars for Terraform/CLI subprocesses. */
 export async function cloudCredentialEnv(credentialId: string, ownerId?: string): Promise<Record<string, string>> {
-  const cred = await prisma.cloudCredential.findUnique({ where: { id: credentialId } });
-  if (!cred) throw new Error("cloud credential not found");
-  if (ownerId && cred.ownerId && cred.ownerId !== ownerId) throw new Error("cloud credential not owned by caller");
+  if (!ownerId) throw new Error("owner required for credential access");
+  const cred = await prisma.cloudCredential.findFirst({ where: { id: credentialId, ownerId } });
+  if (!cred) throw new Error("cloud credential not found or not owned by caller");
   await prisma.cloudCredential.update({ where: { id: cred.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
 
   const cfg = (() => { try { return JSON.parse(cred.configJson || "{}"); } catch { return {}; } })();
@@ -46,9 +46,9 @@ export async function cloudCredentialEnv(credentialId: string, ownerId?: string)
 
 /** Look up the default SSH user hint saved alongside a VPS SSH-key credential. */
 export async function vpsCredentialMeta(credentialId: string, ownerId?: string): Promise<{ defaultUser?: string }> {
-  const cred = await prisma.cloudCredential.findUnique({ where: { id: credentialId } });
-  if (!cred) throw new Error("ssh credential not found");
-  if (ownerId && cred.ownerId && cred.ownerId !== ownerId) throw new Error("ssh credential not owned by caller");
+  if (!ownerId) throw new Error("owner required for credential access");
+  const cred = await prisma.cloudCredential.findFirst({ where: { id: credentialId, ownerId } });
+  if (!cred) throw new Error("ssh credential not found or not owned by caller");
   try { const cfg = JSON.parse(cred.configJson || "{}"); return { defaultUser: cfg.defaultUser }; } catch { return {}; }
 }
 
@@ -58,9 +58,9 @@ export async function vpsCredentialMeta(credentialId: string, ownerId?: string):
  * cleanup() when done. Returns the key path.
  */
 export async function materializeSshKey(credentialId: string, ownerId?: string): Promise<{ keyPath: string; cleanup: () => Promise<void> }> {
-  const cred = await prisma.cloudCredential.findUnique({ where: { id: credentialId } });
-  if (!cred) throw new Error("ssh credential not found");
-  if (ownerId && cred.ownerId && cred.ownerId !== ownerId) throw new Error("ssh credential not owned by caller");
+  if (!ownerId) throw new Error("owner required for credential access");
+  const cred = await prisma.cloudCredential.findFirst({ where: { id: credentialId, ownerId } });
+  if (!cred) throw new Error("ssh credential not found or not owned by caller");
   const pem = decrypt(cred.secretKey || "");
   if (!pem) throw new Error("ssh credential has no key material");
   const dir = path.join(tmpdir(), `hbl-ssh-${randomBytes(6).toString("hex")}`);

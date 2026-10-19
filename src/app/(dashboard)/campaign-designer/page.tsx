@@ -2584,6 +2584,7 @@ export default function CampaignDesignerPage() {
                   target type (fleet → bundle path, SSH labs → enterprise runner). */}
               <div className="pt-1 border-t border-border/60">
                 <LotlCampaignPicker
+                  serverOs={labTargets.find((t) => t.deployedName === selectedServer)?.os || ""}
                   selectedIds={new Set(lotlSelection.map((l) => l.id))}
                   onAdd={(entries: LotlSelEntry[]) => setLotlSelection((prev) => {
                     const byId = new Map(prev.map((p) => [p.id, p]));

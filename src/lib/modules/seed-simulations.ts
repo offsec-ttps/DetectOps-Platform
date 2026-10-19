@@ -208,7 +208,11 @@ const PROCESS_INJECTION: ModuleManifest = {
   permissions: { frameworks: ["atomic"], integrations: ["siem"], dataScopes: ["atomic-catalogue:read"] }, dependencies: [],
   contributes: {
     scenarios: [], view: "attack-sim", nav: [{ label: "Process Injection Simulation", icon: "Syringe" }],
-    catalog: [],
+    catalog: [
+      { name: "Windows", domain: "Remote Thread & DLL", description: "Inject code into a remote process via CreateRemoteThread, DLL mapping, or memory overwrite.", techniques: [T("T1055.001", "DLL Injection (CreateRemoteThread)", "privilege-escalation"), T("T1055.002", "Reflective DLL Injection", "defense-evasion"), T("T1055.004", "APC Injection (Early Bird)", "defense-evasion"), T("T1055.003", "Thread Execution Hijacking", "defense-evasion"), T("T1055.001", "Module Stomping", "defense-evasion"), T("T1055.013", "Process Doppelgänging (TxF)", "defense-evasion"), T("T1055.012", "Process Hollowing", "defense-evasion")] },
+      { name: "Linux", domain: "System Call & Memory", description: "Inject code via ptrace syscalls or /proc memory writes.", techniques: [T("T1055.008", "Ptrace System Call Injection", "privilege-escalation"), T("T1055.009", "/proc/[pid]/mem Injection", "privilege-escalation")] },
+      { name: "macOS", domain: "Dynamic Linker & Libraries", description: "Preload attacker libraries via environment variables or task manipulation.", techniques: [T("T1574.006", "DYLD_INSERT_LIBRARIES Preload", "persistence")] },
+    ],
   },
 };
 

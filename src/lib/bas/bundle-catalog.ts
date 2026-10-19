@@ -16,6 +16,11 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { AtomicTest, LotlTechnique } from "@/generated/prisma/client";
+import { purpleSharpSupports } from "@/config/attack-libraries/purplesharp";
+
+// PurpleSharp.exe is installed next to the atomics by the agent prepare script.
+const WIN_PURPLESHARP_EXE = "C:\\ProgramData\\AtomicRedTeam\\PurpleSharp\\PurpleSharp.exe";
+const TID_RE = /^T\d{4}(\.\d{3})?$/;
 
 export interface BundleContent {
   technique: string;
@@ -206,6 +211,30 @@ export function safeSmokeBundle(): BundleContent {
 }
 
 /**
+ * Build a PurpleSharp adversary-simulation bundle for one ATT&CK technique. The
+ * command is synthesized purely and deterministically from the (validated)
+ * technique id — it invokes the locally-installed PurpleSharp.exe with `/t <TID>`
+ * — so, like atomics, the agent re-derives and hash-verifies it; nothing
+ * executable rides in the job message. Returns null for an invalid/unsupported
+ * technique so no arbitrary string can reach the command line. testIndex is 0,
+ * a sentinel that distinguishes PurpleSharp bundles from atomics (which start at 1).
+ */
+export function bundleFromPurpleSharp(techniqueId: string): BundleContent | null {
+  const tid = (techniqueId || "").trim();
+  if (!TID_RE.test(tid) || !purpleSharpSupports(tid)) return null;
+  return {
+    technique: tid,
+    testIndex: 0,
+    testName: `PurpleSharp simulation: ${tid}`,
+    executor: "powershell",
+    command: `& '${WIN_PURPLESHARP_EXE}' /t ${tid}`,
+    cleanup: "",
+    platforms: ["windows"],
+    elevationRequired: false,
+  };
+}
+
+/**
  * Resolve a bundle by its hash. The caller usually also passes the
  * (technique, testIndex) hint so we can locate the source row directly instead
  * of scanning the whole catalogue, then we verify the recomputed hash matches.
@@ -253,6 +282,15 @@ export async function resolveBundle(opts: { hash: string; technique?: string; te
       if (bundleHash(b) === opts.hash) return b;
     }
   }
+
+  // PurpleSharp fallback: testIndex 0 is the PurpleSharp sentinel. Rebuild the
+  // bundle deterministically from the technique id and verify the hash — the
+  // same integrity guarantee as atomics (the command is never trusted from the
+  // message, only re-derived server-side and hash-matched).
+  if (opts.technique && (opts.testIndex === 0 || opts.testIndex == null)) {
+    const b = bundleFromPurpleSharp(opts.technique);
+    if (b && bundleHash(b) === opts.hash) return b;
+  }
   return null;
 }
 
@@ -261,15 +299,22 @@ export async function resolveBundle(opts: { hash: string; technique?: string; te
  * Returns the operation `data` payload — note it carries NO command/cleanup,
  * only the addressing + hash, so the job message itself is not executable.
  */
-export async function buildDispatch(opts: { useSmoke?: boolean; technique?: string; testIndex?: number; lotlId?: string; maxRuntimeMs?: number }): Promise<
-  | { ok: true; data: { technique: string; testIndex: number; bundleHash: string; maxRuntimeMs: number; scope: string; lotlId?: string }; bundle: BundleContent }
+export async function buildDispatch(opts: { useSmoke?: boolean; technique?: string; testIndex?: number; lotlId?: string; engine?: "art" | "purplesharp"; maxRuntimeMs?: number }): Promise<
+  | { ok: true; data: { technique: string; testIndex: number; bundleHash: string; maxRuntimeMs: number; scope: string; engine: "art" | "purplesharp"; lotlId?: string }; bundle: BundleContent }
   | { ok: false; error: string }
 > {
   let bundle: BundleContent | null = null;
   let scope = "diagnostic";                       // safe smoke test → benign scope
   let lotlId: string | undefined;                 // addressing key for LOTL rows
+  let engine: "art" | "purplesharp" = "art";
   if (opts.useSmoke) {
     bundle = safeSmokeBundle();
+  } else if (opts.engine === "purplesharp") {
+    if (!opts.technique) return { ok: false, error: "PurpleSharp requires a technique" };
+    bundle = bundleFromPurpleSharp(opts.technique);
+    if (!bundle) return { ok: false, error: `PurpleSharp does not support ${opts.technique}` };
+    engine = "purplesharp";
+    scope = "adversary-simulation";
   } else if (opts.lotlId) {
     const l = await prisma.lotlTechnique.findUnique({ where: { id: opts.lotlId } });
     if (!l) return { ok: false, error: `LotlTechnique ${opts.lotlId} not found` };
@@ -296,6 +341,7 @@ export async function buildDispatch(opts: { useSmoke?: boolean; technique?: stri
       bundleHash: bundleHash(bundle),
       maxRuntimeMs: Math.min(600_000, Math.max(5_000, opts.maxRuntimeMs || 120_000)),
       scope,
+      engine,
       ...(lotlId ? { lotlId } : {}),
     },
     bundle,

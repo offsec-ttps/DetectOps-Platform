@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     useSmoke: body.useSmoke === true,
     technique: body.technique ? String(body.technique) : undefined,
     testIndex: body.testIndex != null ? Number(body.testIndex) : undefined,
+    engine: body.engine === "purplesharp" ? "purplesharp" : undefined,
     maxRuntimeMs: body.maxRuntimeMs != null ? Number(body.maxRuntimeMs) : undefined,
   });
   if (!dispatch.ok) return NextResponse.json({ error: dispatch.error }, { status: 400 });

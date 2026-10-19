@@ -195,10 +195,10 @@ export default function CoverageAssessmentTab() {
                     {a.error && <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{a.error}</div>}
                     {!d ? (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> loading…</div>
-                    ) : d.metrics ? (
+                    ) : (d.metrics && d.metrics.runnable != null) ? (
                       <MetricsView m={d.metrics} />
                     ) : (
-                      <p className="text-xs text-muted-foreground">No metrics yet — the sweep is still running.</p>
+                      <p className="text-xs text-muted-foreground">No metrics yet — the sweep is still running. Metrics and the detection breakdown appear once it finalises.</p>
                     )}
                   </div>
                 )}
@@ -273,16 +273,16 @@ function MetricsView({ m }: { m: Metrics }) {
         <Stat label="Indeterminate" value={String(m.generic)} sub="generic shell only" color="text-muted-foreground" />
         <Stat label="Blind spots" value={String(m.absent)} sub="ran, no log" color="text-warning" />
       </div>
-      <Table title="By ATT&CK tactic" rows={m.byTactic} />
-      <Table title="By library" rows={m.byLibrary} />
-      {m.blindSpots.length > 0 && (
+      <Table title="By ATT&CK tactic" rows={m.byTactic || []} />
+      <Table title="By library" rows={m.byLibrary || []} />
+      {(m.blindSpots?.length ?? 0) > 0 && (
         <div>
           <p className="text-[10px] font-semibold text-muted uppercase mb-1">Telemetry blind spots</p>
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-[11px]">
               <thead className="bg-card"><tr className="text-left text-muted"><th className="px-2 py-1">Technique</th><th className="px-2 py-1">Atomic</th><th className="px-2 py-1">Indicator</th></tr></thead>
               <tbody>
-                {m.blindSpots.slice(0, 15).map((b, i) => (
+                {(m.blindSpots || []).slice(0, 15).map((b, i) => (
                   <tr key={i} className="border-t border-border"><td className="px-2 py-1 font-mono text-foreground">{b.tech}</td><td className="px-2 py-1 text-muted-foreground">{b.name}</td><td className="px-2 py-1 font-mono text-muted-foreground">{(b.indicators || []).slice(0, 2).join(", ")}</td></tr>
                 ))}
               </tbody>

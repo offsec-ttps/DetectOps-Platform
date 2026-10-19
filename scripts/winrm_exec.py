@@ -46,30 +46,45 @@ def main():
         print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "host and user required"}))
         return
     try:
-        sess_kwargs = dict(auth=(user, pw), transport=transport,
-                           read_timeout_sec=timeout + 15, operation_timeout_sec=timeout)
+        from winrm.protocol import Protocol
+        proto_kwargs = dict(transport=transport, username=user, password=pw,
+                            read_timeout_sec=timeout + 15, operation_timeout_sec=timeout)
         if scheme == "https":
             # Validate the server certificate by default. Only an explicit
             # certValidation:"ignore" in the request disables it (for a self-signed
             # lab); never silently skip validation. A ca_trust_path pins a CA.
-            cv = "ignore" if req.get("certValidation") == "ignore" else "validate"
-            sess_kwargs["server_cert_validation"] = cv
+            proto_kwargs["server_cert_validation"] = "ignore" if req.get("certValidation") == "ignore" else "validate"
             if req.get("caTrustPath"):
-                sess_kwargs["ca_trust_path"] = req["caTrustPath"]
-        s = winrm.Session(f"{scheme}://{host}:{port}/wsman", **sess_kwargs)
+                proto_kwargs["ca_trust_path"] = req["caTrustPath"]
+        p = Protocol(f"{scheme}://{host}:{port}/wsman", **proto_kwargs)
         if shell == "powershell":
-            # Run via `powershell -EncodedCommand` through run_cmd, avoiding
-            # pywinrm's run_ps CLIXML post-processing (buggy in some versions).
+            # Run via `powershell -EncodedCommand`, avoiding pywinrm's run_ps CLIXML
+            # post-processing (buggy in some versions).
             import base64
             enc = base64.b64encode(command.encode("utf-16-le")).decode()
-            r = s.run_cmd("powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", enc])
+            exe, cmd_args = "powershell", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", enc]
         else:
-            r = s.run_cmd(command)
-        print(json.dumps({
-            "exitCode": r.status_code,
-            "stdout": r.std_out.decode(errors="replace"),
-            "stderr": r.std_err.decode(errors="replace")[-4000:],
-        }))
+            exe, cmd_args = command, []
+        # Low-level open/run/close with a guaranteed close_shell in finally: on a
+        # command timeout or mid-run drop, the WSMan shell is still released so it
+        # cannot leak and exhaust MaxShellsPerUser (which wedges WinRM over a long
+        # sweep). This is the source fix for the recurring WinRM hang.
+        shell_id = p.open_shell()
+        try:
+            command_id = p.run_command(shell_id, exe, cmd_args)
+            try:
+                std_out, std_err, status_code = p.get_command_output(shell_id, command_id)
+            finally:
+                try: p.cleanup_command(shell_id, command_id)
+                except Exception: pass
+            print(json.dumps({
+                "exitCode": status_code,
+                "stdout": std_out.decode(errors="replace"),
+                "stderr": std_err.decode(errors="replace")[-4000:],
+            }))
+        finally:
+            try: p.close_shell(shell_id)
+            except Exception: pass
     except Exception as e:
         print(json.dumps({"exitCode": -1, "stdout": "", "stderr": f"winrm error: {e}"}))
 

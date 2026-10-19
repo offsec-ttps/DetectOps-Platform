@@ -10,9 +10,11 @@
 
 import type { LibraryDef, TechniqueDef } from "./types";
 import { CLICKFIX_LIBRARY } from "@/config/attack-libraries/clickfix";
+import { PROCESS_INJECTION_LIBRARY } from "@/config/attack-libraries/process-injection";
 
 export const ATTACK_LIBRARIES: LibraryDef[] = [
   CLICKFIX_LIBRARY,
+  PROCESS_INJECTION_LIBRARY,
 ];
 
 export function getLibrary(key: string): LibraryDef | null {

@@ -91,7 +91,10 @@ export default function ModulePage() {
     if (viewId === "technique-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<TechniqueCatalogView moduleId={moduleId} sub={sub} /></div>;
     if (viewId === "phishing-sim") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<PhishingSimulationView /></div>;
     if (viewId === "apt-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AptCatalogView moduleId={moduleId} sub={sub} /></div>;
-    if (viewId === "attack-catalog") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AttackCatalogView moduleId={moduleId} sub={sub} /></div>;
+    // attack-catalog is a full-width table (like the Atomic Test Library). The
+    // shell's <main> already applies p-6, so this wrapper adds no padding/max-width
+    // and the table uses the whole content area instead of a centered column.
+    if (viewId === "attack-catalog") return <div>{BackBar}<AttackCatalogView moduleId={moduleId} sub={sub} /></div>;
     if (viewId === "attack-sim") return <div className="p-6 max-w-6xl mx-auto">{BackBar}<AttackSimLibraryView moduleId={moduleId} sub={sub} /></div>;
   }
 

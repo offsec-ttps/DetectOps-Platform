@@ -12,7 +12,9 @@ import { encrypt, vaultSource, tailHint } from "@/lib/crypto/credential-vault";
 import { logEvent } from "@/lib/event-log";
 import { requireUser } from "@/lib/auth-guard";
 
-const SUPPORTED_PROVIDERS = ["aws", "azure", "gcp", "kubernetes", "entra-id"];
+// "ssh" stores a VPS private key (in the encrypted secretKey field) + an optional
+// {defaultUser} in configJson — used by the OS-image VPS deploy path.
+const SUPPORTED_PROVIDERS = ["aws", "azure", "gcp", "kubernetes", "entra-id", "ssh"];
 
 export async function GET() {
   const auth = await requireUser();

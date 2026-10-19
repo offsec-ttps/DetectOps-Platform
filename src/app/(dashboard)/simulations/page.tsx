@@ -10,22 +10,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Loader2, ChevronRight, ArrowRight, Hammer, Globe, Cloud, Network, MousePointerClick,
+  ArrowUpCircle, ShieldOff, UserCog, Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // category/icon-name → component + accent
-const ICONS: Record<string, any> = { Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Globe, Hammer, Cloud, Network, MousePointerClick };
+const ICONS: Record<string, any> = { Skull, Terminal, Mail, Boxes, Crosshair, ShieldAlert, Radar, FlaskConical, Globe, Hammer, Cloud, Network, MousePointerClick, ArrowUpCircle, ShieldOff, UserCog, Crown };
 const CATEGORY_STYLE: Record<string, { icon: any; tone: string }> = {
   "deceptive-delivery": { icon: MousePointerClick, tone: "text-danger border-danger/30 bg-danger/10" },
   ransomware: { icon: Skull, tone: "text-danger border-danger/30 bg-danger/10" },
   phishing: { icon: Mail, tone: "text-warning border-warning/30 bg-warning/10" },
   discovery: { icon: Terminal, tone: "text-accent border-accent/30 bg-accent/10" },
-  "lateral-movement": { icon: Crosshair, tone: "text-purple border-purple/30 bg-purple/10" },
+  "lateral-movement": { icon: Network, tone: "text-purple border-purple/30 bg-purple/10" },
   apt: { icon: Globe, tone: "text-danger border-danger/30 bg-danger/10" },
   container: { icon: Boxes, tone: "text-accent border-accent/30 bg-accent/10" },
   cloud: { icon: Cloud, tone: "text-purple border-purple/30 bg-purple/10" },
   "active-directory": { icon: Network, tone: "text-danger border-danger/30 bg-danger/10" },
   hacktools: { icon: Hammer, tone: "text-warning border-warning/30 bg-warning/10" },
+  "privilege-escalation": { icon: ArrowUpCircle, tone: "text-warning border-warning/30 bg-warning/10" },
+  "uac-bypass": { icon: ShieldOff, tone: "text-accent border-accent/30 bg-accent/10" },
+  "user-to-admin": { icon: UserCog, tone: "text-purple border-purple/30 bg-purple/10" },
+  "user-to-system": { icon: Crown, tone: "text-danger border-danger/30 bg-danger/10" },
 };
 
 export default function SimulationsPage() {

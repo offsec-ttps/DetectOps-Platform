@@ -101,12 +101,17 @@ def load(db, aid):
             siem = {"splunk": "Splunk", "mde": "Microsoft Defender for Endpoint", "sentinel": "Microsoft Sentinel"}.get((s[1] or "").lower(), s[0] or "Splunk")
     a["siem"] = siem
     items = []
-    for t, num, name, tactic, lib, status, ex, vb, ind in c.execute(
-            "SELECT tech,num,name,tactic,library,status,executed,visBucket,indicators FROM coverage_assessment_items WHERE assessmentId=? ORDER BY \"order\"", (aid,)):
+    for t, num, name, tactic, lib, status, ex, vb, ind, oec, osrc in c.execute(
+            "SELECT tech,num,name,tactic,library,status,executed,visBucket,indicators,obsEventCodes,obsSources FROM coverage_assessment_items WHERE assessmentId=? ORDER BY \"order\"", (aid,)):
         try: ind = json.loads(ind or "[]")
         except Exception: ind = []
+        try: oec = json.loads(oec or "[]")
+        except Exception: oec = []
+        try: osrc = json.loads(osrc or "[]")
+        except Exception: osrc = []
         items.append({"tech": t, "num": num, "name": name, "tactic": tactic, "library": lib,
-                      "status": status, "executed": bool(ex), "vis": vb, "ind": ind})
+                      "status": status, "executed": bool(ex), "vis": vb, "ind": ind,
+                      "eids": [str(x) for x in oec], "sources": [str(x) for x in osrc]})
     cmds = {(t, int(n)): cmd for t, n, cmd in c.execute("SELECT techniqueId,testNumber,command FROM atomic_tests")}
     c.close()
     return a, items, cmds
@@ -134,6 +139,45 @@ def gap_ref(item):
     if any(k in low for k in ["new-", "get-", "set-", ".ps1", "invoke-", "new-localuser", "new-vm", "format-table"]):
         return "pslog", REFS["pslog"]
     return "cmdline", REFS["cmdline"]
+
+
+def eids_label(item):
+    """Real Event IDs + log sources observed carrying this atomic (visible items),
+    else '—'. For blind spots nothing was seen, by definition."""
+    codes = [c for c in (item.get("eids") or []) if str(c).strip()]
+    srcs = [s for s in (item.get("sources") or []) if str(s).strip()]
+    if not codes and not srcs: return "—"
+    parts = []
+    if codes: parts.append("EID " + ", ".join(codes[:6]))
+    if srcs: parts.append(" / ".join(srcs[:2]))
+    return e("  ·  ".join(parts))
+
+
+def _sigma_parts(item):
+    """(logsource, selection) for a Sigma rule — from real observed Event IDs if
+    present, else the indicator/technique heuristic."""
+    ind = next((i for i in item["ind"] if i), item["name"] or "activity")
+    ind = re.sub(r'[`"<>\r\n]', "", str(ind))[:80]
+    low = (" ".join(item["ind"]) + " " + (item["name"] or "")).lower()
+    obs = set(str(c) for c in (item.get("eids") or []))
+    tech = item.get("tech", "") or ""
+    if (obs & {"12", "13"}) or any(k in low for k in ["hkcu", "hklm", "registry", "uacdisable", "subkey", "mppreference", "disablereal"]):
+        return ("  product: windows\n  category: registry_set", "    TargetObject|contains: '" + ind + "'")
+    if ("4104" in obs) or any(k in low for k in ["new-", "get-", "set-", ".ps1", "invoke-", "format-table"]):
+        return ("  product: windows\n  category: ps_script", "    ScriptBlockText|contains: '" + ind + "'")
+    if ("7045" in obs) or tech.startswith("T1543") or "service" in low:
+        return ("  product: windows\n  service: system", "    EventID: 7045\n    ServiceFileName|contains: '" + ind + "'")
+    return ("  product: windows\n  category: process_creation", "    CommandLine|contains: '" + ind + "'")
+
+
+def sigma_yaml(item):
+    logsrc, sel = _sigma_parts(item)
+    tech = item.get("tech", "") or ""
+    name = re.sub(r"[\"':]", "", (item.get("name", "") or ""))[:50].strip()
+    title = (tech + " " + name).strip() or "Atomic detection"
+    tag = ("attack." + tech.lower()) if tech else "attack.execution"
+    return ("title: " + title + "\nstatus: experimental\nlogsource:\n" + logsrc +
+            "\ndetection:\n  selection:\n" + sel + "\n  condition: selection\ntags:\n  - " + tag + "\nlevel: medium")
 
 
 # ── CSS ──────────────────────────────────────────────────────────────────────
@@ -402,6 +446,8 @@ def build_html(a, items, cmds):
           <div class="meta">Tactic: {e((i['tactic'] or '').replace('-',' ').title())} · Indicator: <span class="mono">{e(', '.join(i['ind'][:3]) or 'n/a')}</span></div>
           {('<div class="code">'+e(cmd)+'</div>') if cmd else ''}
           <div class="fix">↳ <b>Detect it ({e(a['siem'])}):</b> <span class="mono">{e(q)}</span></div>
+          <div class="fix">↳ <b>Portable Sigma rule:</b></div>
+          <div class="code">{e(sigma_yaml(i))}</div>
           <div class="fix">↳ <b>Fix the telemetry:</b> <a href="{ref[1]}">{e(ref[0])}</a> · see also <a href="{REFS['sigma'][1]}">Sigma rules</a> and <a href="{REFS['splunk'][1]}">Splunk Security Content</a>.</div>
         </div>""")
     gap_body = (f'<p class="lead">{len(blind)} executed atomics produced <b>no matching telemetry</b>. For each: the command that ran, '
@@ -412,20 +458,24 @@ def build_html(a, items, cmds):
     # 06 Techniques exercised
     seen = {}
     for i in items:
-        d = seen.setdefault(i["tech"], {"name": i["techname"] if "techname" in i else i["name"], "tactic": i["tactic"], "n": 0, "vis": 0, "blind": 0})
+        d = seen.setdefault(i["tech"], {"name": i["techname"] if "techname" in i else i["name"], "tactic": i["tactic"], "n": 0, "vis": 0, "blind": 0, "eids": set()})
         d["n"] += 1
         d["vis"] += 1 if i["vis"] == "visible" else 0
         d["blind"] += 1 if i["vis"] == "absent" else 0
+        for c in (i.get("eids") or []):
+            if str(c).strip(): d["eids"].add(str(c).strip())
     GAP_PILL = '<span class="pill blind">gap</span>'
     OK_PILL = '<span class="pill vis">covered</span>'
     def tech_row(t, d):
         status = (GAP_PILL if d["blind"] else OK_PILL) if d["n"] else "—"
         tactic = e((d["tactic"] or "").replace("-", " ").title())
+        eids = e(", ".join(sorted(d["eids"], key=lambda x: (len(x), x))[:6])) if d["eids"] else "—"
         return (f'<tr><td><a href="{mitre_url(t)}">{e(t)}</a></td><td>{tactic}</td>'
-                f'<td>{d["n"]}</td><td>{d["vis"]}</td><td>{d["blind"]}</td><td>{status}</td></tr>')
+                f'<td>{d["n"]}</td><td>{d["vis"]}</td><td>{d["blind"]}</td><td>{eids}</td><td>{status}</td></tr>')
     rows = "".join(tech_row(t, d) for t, d in sorted(seen.items()))
-    tech_body = (f'<p class="lead">All {len(seen)} ATT&amp;CK techniques exercised in this engagement. Each links to its MITRE ATT&amp;CK page.</p>'
-                 '<table><tr><th>Technique</th><th>Tactic</th><th>Atomics</th><th>Visible</th><th>Blind</th><th>Status</th></tr>' + rows + '</table>')
+    tech_body = (f'<p class="lead">All {len(seen)} ATT&amp;CK techniques exercised in this engagement, with the real Windows '
+                 'Event IDs observed carrying each one. Each technique links to its MITRE ATT&amp;CK page.</p>'
+                 '<table><tr><th>Technique</th><th>Tactic</th><th>Atomics</th><th>Visible</th><th>Blind</th><th>Event IDs seen</th><th>Status</th></tr>' + rows + '</table>')
     H.append(section("06", "WHAT WE EXERCISED", "Techniques exercised", tech_body))
 
     # 07 Recommendations

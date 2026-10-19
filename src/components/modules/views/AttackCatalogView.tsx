@@ -2,21 +2,30 @@
 
 /**
  * Built-in module view for the hybrid attack libraries (Container & Orchestration,
- * Cloud, Active Directory, Hacktools). Faceted by `domain` → tactic group →
- * ATT&CK technique → the REAL Atomic Red Team tests (with the exact command the
- * Campaign Designer will execute). The analyst ticks the tests they want and
- * "Open in Campaign Designer", which hands the selection into the Designer's
- * normal technique flow (Step 2) where the environment is chosen and the run
- * happens — identical to every other simulation path. Techniques with no atomic
- * in the local library are shown for coverage but are not selectable.
+ * Cloud, Active Directory, Hacktools). Presents EVERY use case in the module as a
+ * single sortable / filterable TABLE — the same listing style as the Atomic Test
+ * Library ("Atomics Execution"): one row per Atomic Red Team test (a use case),
+ * with its technique, tactic, domain, platforms and executor. A row expands to the
+ * real command the Campaign Designer will execute. Analysts tick the use cases
+ * they want and "Open in Campaign Designer", which hands the selection into the
+ * Designer's normal technique flow (Step 2) where the environment is chosen and
+ * the run happens — identical to every other simulation path. Techniques with no
+ * atomic in the local library are still listed (for coverage) but are not selectable.
+ *
+ * All four attack libraries share this component, so they list use cases the same way.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Crosshair, Boxes, Layers, ChevronDown, ChevronRight, ArrowRight, ShieldAlert, Terminal } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { PlatformBadges } from "@/components/shared/PlatformBadge";
+import {
+  Loader2, Boxes, Layers, Crosshair, Shield, Database, Search, X, ArrowRight,
+  ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, ChevronDown, ShieldAlert, Terminal, Copy, Check, Play,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { purpleSharpSupports } from "@/config/attack-libraries/purplesharp";
 
+type Engine = "art" | "purplesharp";
 interface Tech { id: string; name: string; tactic?: string }
 interface Group { name: string; domain?: string; description?: string; techniques: Tech[] }
 interface Atomic {
@@ -24,17 +33,39 @@ interface Atomic {
   testNumber: number; testName: string; executor: string; platforms: string[];
   command: string; cleanupCommand: string; elevationRequired: boolean; tactic: string; description: string;
 }
+// One table row = one use case: an ART atomic test, a PurpleSharp technique
+// simulation, or a non-runnable coverage row. `engine` is null when neither
+// engine can run it. Selectable rows carry a `selKey`.
+interface Row {
+  key: string; engine: Engine | null; runnable: boolean; selKey?: string;
+  atomic?: Atomic;
+  techniqueId: string; techniqueName: string; domain: string; tactic: string;
+  testNumber?: number; testName: string; executor: string; platforms: string[];
+  command?: string; cleanupCommand?: string; elevationRequired?: boolean; description?: string;
+}
+// What a ticked row contributes to the Campaign Designer handoff.
+interface PickEntry { engine: Engine; techniqueId: string; testNumber: number }
+
+const titleCase = (s: string) => (s || "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function AttackCatalogView({ moduleId }: { moduleId: string; sub: string[] }) {
   const router = useRouter();
   const [mod, setMod] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [domain, setDomain] = useState<string>("");
   const [atomicsByTech, setAtomicsByTech] = useState<Record<string, Atomic[]>>({});
   const [resolving, setResolving] = useState(false);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [openTech, setOpenTech] = useState<Set<string>>(new Set());
-  const [expandedCmd, setExpandedCmd] = useState<string | null>(null);
+
+  // Filters / sort / selection / expansion
+  const [search, setSearch] = useState("");
+  const [domain, setDomain] = useState("");
+  const [tactic, setTactic] = useState("");
+  const [platform, setPlatform] = useState("");
+  const [executor, setExecutor] = useState("");
+  const [engineFilter, setEngineFilter] = useState("");
+  const [sortBy, setSortBy] = useState<keyof Row>("techniqueId");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [picked, setPicked] = useState<Record<string, PickEntry>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -44,19 +75,26 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
   }, [moduleId]);
 
   const catalog: Group[] = mod?.manifest?.contributes?.catalog || [];
-  const domains = useMemo(() => {
-    const seen: string[] = [];
-    for (const g of catalog) { const dmn = g.domain || "General"; if (!seen.includes(dmn)) seen.push(dmn); }
-    return seen;
+
+  // Windows-only disciplines (AD and the Windows escalation libraries) are scoped
+  // to Windows atomic tests. This strips Linux/macOS/cloud tests that a shared
+  // ATT&CK technique may also carry, keeping the library on-platform.
+  const WIN_ONLY = new Set(["active-directory", "uac-bypass", "user-to-admin", "user-to-system"]);
+  const platformScope: string[] | null = WIN_ONLY.has(mod?.category) ? ["windows"] : null;
+  const inScope = (a: Atomic) => !platformScope || !(a.platforms?.length) || a.platforms.some((p) => platformScope.includes(p));
+
+  // technique id → {domain, tactic, name} from the manifest (first group wins).
+  const techMeta = useMemo(() => {
+    const m = new Map<string, { domain: string; tactic: string; name: string }>();
+    for (const g of catalog) for (const t of g.techniques) {
+      if (!m.has(t.id)) m.set(t.id, { domain: g.domain || "General", tactic: g.name || t.tactic || "other", name: t.name });
+    }
+    return m;
   }, [catalog]);
-  useEffect(() => { if (domains.length && !domain) setDomain(domains[0]); }, [domains, domain]);
 
-  const groups = useMemo(() => catalog.filter((g) => (g.domain || "General") === domain), [catalog, domain]);
-
-  // Resolve the real atomic tests for every technique in the active domain.
+  // Resolve ALL techniques in the module to their real atomic tests in one call.
   useEffect(() => {
-    if (!domain || !groups.length) return;
-    const ids = [...new Set(groups.flatMap((g) => g.techniques.map((t) => t.id)))];
+    const ids = [...techMeta.keys()];
     if (!ids.length) return;
     setResolving(true);
     (async () => {
@@ -65,32 +103,100 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
       for (const a of (d.items || []) as Atomic[]) (map[a.requestedId] ||= []).push(a);
       setAtomicsByTech(map); setResolving(false);
     })();
-  }, [domain, groups]);
+  }, [techMeta]);
 
-  const atomicById = useMemo(() => {
-    const m = new Map<string, Atomic>();
-    for (const list of Object.values(atomicsByTech)) for (const a of list) m.set(a.id, a);
-    return m;
-  }, [atomicsByTech]);
+  // Flatten to rows. Per technique: one ART row per atomic test (where the
+  // library has one); one PurpleSharp row if PurpleSharp supports the technique
+  // (native AD adversary-simulation — the alternative engine, and the ONLY
+  // engine for AD techniques that ship no atomic); else a non-runnable coverage
+  // row. PurpleSharp runs on a Windows fleet node.
+  const allRows: Row[] = useMemo(() => {
+    const rows: Row[] = [];
+    for (const [id, meta] of techMeta) {
+      const atoms = (atomicsByTech[id] || []).filter(inScope);
+      for (const a of atoms) rows.push({
+        key: a.id, engine: "art", runnable: !!a.command, selKey: a.command ? a.id : undefined, atomic: a,
+        techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
+        testNumber: a.testNumber, testName: a.testName, executor: a.executor || "—", platforms: a.platforms || [],
+        command: a.command, cleanupCommand: a.cleanupCommand, elevationRequired: a.elevationRequired, description: a.description,
+      });
+      if (purpleSharpSupports(id)) {
+        rows.push({
+          key: `ps:${id}`, engine: "purplesharp", runnable: true, selKey: `ps:${id}`,
+          techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
+          testNumber: 0, testName: "PurpleSharp technique simulation (native AD)", executor: "PurpleSharp", platforms: ["windows"],
+          command: `PurpleSharp.exe /t ${id}`,
+          description: "Executes this ATT&CK technique on a Windows fleet node via PurpleSharp, generating native AD telemetry for detection scoring.",
+        });
+      } else if (!atoms.length) {
+        rows.push({
+          key: `none:${id}`, engine: null, runnable: false,
+          techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
+          testName: "No ART atomic or PurpleSharp coverage", executor: "—", platforms: [],
+        });
+      }
+    }
+    return rows;
+  }, [techMeta, atomicsByTech]);
 
-  const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleTechOpen = (key: string) => setOpenTech((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const pickMany = (ids: string[], on: boolean) => setPicked((p) => { const n = new Set(p); for (const id of ids) on ? n.add(id) : n.delete(id); return n; });
+  const domains = useMemo(() => [...new Set(allRows.map((r) => r.domain))].sort(), [allRows]);
+  const tactics = useMemo(() => [...new Set(allRows.map((r) => r.tactic))].sort(), [allRows]);
+  const platforms = useMemo(() => [...new Set(allRows.flatMap((r) => r.platforms))].sort(), [allRows]);
+  const executors = useMemo(() => [...new Set(allRows.map((r) => r.executor).filter((e) => e && e !== "—"))].sort(), [allRows]);
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const out = allRows.filter((r) =>
+      (!domain || r.domain === domain) &&
+      (!tactic || r.tactic === tactic) &&
+      (!platform || r.platforms.includes(platform)) &&
+      (!executor || r.executor === executor) &&
+      (!engineFilter || (engineFilter === "coverage" ? r.engine === null : r.engine === engineFilter)) &&
+      (!q || r.techniqueId.toLowerCase().includes(q) || r.testName.toLowerCase().includes(q) || r.techniqueName.toLowerCase().includes(q))
+    );
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...out].sort((a, b) => String(a[sortBy] ?? "").localeCompare(String(b[sortBy] ?? ""), undefined, { numeric: true }) * dir);
+  }, [allRows, search, domain, tactic, platform, executor, engineFilter, sortBy, sortDir]);
+
+  const toggleSort = (field: keyof Row) => {
+    if (sortBy === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(field); setSortDir("asc"); }
+  };
+  const entryOf = (r: Row): PickEntry => ({ engine: r.engine as Engine, techniqueId: r.techniqueId, testNumber: r.testNumber ?? 0 });
+  const togglePick = (r: Row) => { if (!r.runnable || !r.selKey) return; setPicked((p) => { const n = { ...p }; if (n[r.selKey!]) delete n[r.selKey!]; else n[r.selKey!] = entryOf(r); return n; }); };
+  const pickedCount = Object.keys(picked).length;
+  const hasFilters = !!(search || domain || tactic || platform || executor || engineFilter);
+  const clearFilters = () => { setSearch(""); setDomain(""); setTactic(""); setPlatform(""); setExecutor(""); setEngineFilter(""); };
+
+  // Select / clear every currently-visible, runnable row.
+  const visibleSel = rows.filter((r) => r.runnable && r.selKey);
+  const allVisibleOn = visibleSel.length > 0 && visibleSel.every((r) => picked[r.selKey!]);
+  const toggleAllVisible = () => setPicked((p) => {
+    const n = { ...p };
+    if (allVisibleOn) for (const r of visibleSel) delete n[r.selKey!];
+    else for (const r of visibleSel) n[r.selKey!] = entryOf(r);
+    return n;
+  });
 
   const openInDesigner = () => {
-    const sel = [...picked].map((id) => atomicById.get(id)).filter(Boolean) as Atomic[];
+    const sel = Object.values(picked);
     if (!sel.length) return;
-    const techniques = [...new Set(sel.map((a) => a.techniqueId))];
-    // `tests` = first picked test per technique (preview/default); `testLists` =
-    // every picked test per technique so the Designer runs all of them.
-    const tests: Record<string, number> = {};
+    const techniques = [...new Set(sel.map((e) => e.techniqueId))];
+    // Engine per technique: PurpleSharp wins if any PurpleSharp row is ticked for
+    // it; otherwise ART. tests/testLists carry the ART test numbers.
+    const engines: Record<string, Engine> = {};
     const testLists: Record<string, number[]> = {};
-    for (const a of sel) {
-      if (tests[a.techniqueId] == null) tests[a.techniqueId] = a.testNumber;
-      (testLists[a.techniqueId] ||= []).push(a.testNumber);
+    const tests: Record<string, number> = {};
+    for (const e of sel) {
+      if (e.engine === "purplesharp") engines[e.techniqueId] = "purplesharp";
+      else {
+        if (engines[e.techniqueId] !== "purplesharp") engines[e.techniqueId] = "art";
+        (testLists[e.techniqueId] ||= []).push(e.testNumber);
+        if (tests[e.techniqueId] == null) tests[e.techniqueId] = e.testNumber;
+      }
     }
     try {
-      sessionStorage.setItem("attack.campaignHandoff", JSON.stringify({ techniques, tests, testLists, label: `${mod?.name} · ${domain}`, source: moduleId }));
+      sessionStorage.setItem("attack.campaignHandoff", JSON.stringify({ techniques, tests, testLists, engines, label: mod?.name || "Attack library", source: moduleId }));
     } catch { /* ignore */ }
     router.push("/campaign-designer");
   };
@@ -98,126 +204,189 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
   if (loading) return <div className="p-2 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>;
   if (!mod || mod.error) return <div className="rounded-xl border border-danger/30 bg-danger/10 p-6 text-sm text-danger">Module not found.</div>;
 
-  const totalTechniques = catalog.reduce((n, g) => n + g.techniques.length, 0);
-  const runnableInDomain = Object.values(atomicsByTech).reduce((n, l) => n + l.length, 0);
+  const totalTechniques = techMeta.size;
+  const totalUseCases = allRows.filter((r) => r.runnable).length;
+  const psCount = allRows.filter((r) => r.engine === "purplesharp").length;
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className={cn("space-y-5", pickedCount > 0 && "pb-24")}>
+      {/* Header */}
       <div className="flex items-start gap-3">
         <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-accent/30 bg-accent/10 text-accent"><Boxes className="h-6 w-6" /></span>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{mod.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{mod.description}</p>
-          <div className="mt-1 text-[11px] text-muted-foreground font-mono">{mod.moduleId} · {mod.category} · {domains.length} domains · {totalTechniques} techniques</div>
+          <div className="mt-1 text-[11px] text-muted-foreground font-mono">{mod.moduleId} · {mod.category}</div>
         </div>
       </div>
 
-      {/* Domain facet rail */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Layers className="h-4 w-4 text-accent" />
-        {domains.map((dmn) => {
-          const count = catalog.filter((g) => (g.domain || "General") === dmn).reduce((n, g) => n + g.techniques.length, 0);
-          return (
-            <button key={dmn} onClick={() => { setDomain(dmn); setAtomicsByTech({}); }}
-              className={cn("inline-flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium rounded-full border transition-colors",
-                domain === dmn ? "bg-accent text-white border-accent" : "border-border text-muted-foreground hover:text-foreground hover:border-accent/40")}>
-              {dmn} <span className="text-[10px] opacity-70">{count}</span>
-            </button>
-          );
-        })}
-        <span className="text-[11px] text-muted-foreground ml-1">
-          {resolving ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> resolving atomics…</span> : `${runnableInDomain} runnable atomic tests in ${domain}`}
-        </span>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat icon={<Database className="h-4 w-4" />} label="Runnable use cases" value={String(totalUseCases)} color="text-foreground" />
+        <Stat icon={<Layers className="h-4 w-4" />} label="Techniques" value={String(totalTechniques)} color="text-accent" />
+        <Stat icon={<Crosshair className="h-4 w-4" />} label="Tactics" value={String(tactics.length)} color="text-warning" />
+        <Stat icon={<Boxes className="h-4 w-4" />} label="Domains" value={String(domains.length)} color="text-purple" />
+        <Stat icon={<Shield className="h-4 w-4" />} label="PurpleSharp-capable" value={String(psCount)} color="text-[#a855f7]" />
       </div>
 
-      {/* Tactic groups → techniques → atomic tests */}
-      <div className="space-y-4">
-        {groups.map((g) => {
-          const allIds = g.techniques.flatMap((t) => (atomicsByTech[t.id] || []).map((a) => a.id));
-          const allOn = allIds.length > 0 && allIds.every((id) => picked.has(id));
-          return (
-            <div key={`${g.domain}:${g.name}`} className="rounded-xl border border-border bg-card p-3.5">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Crosshair className="h-4 w-4 text-accent shrink-0" />
-                  <div className="text-sm font-semibold text-foreground">{g.name}</div>
-                  <span className="text-[11px] text-muted-foreground truncate">{g.description}</span>
+      {/* Search + filters */}
+      <div className="flex items-end gap-3 flex-wrap rounded-xl border border-border bg-card p-3">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search use case, technique ID or name…"
+            className="h-9 w-full rounded-lg border border-border bg-input pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none" />
+        </div>
+        {domains.length > 1 && <Select label="Domain" value={domain} onChange={setDomain} options={domains.map((d) => ({ value: d, label: d }))} placeholder="All domains" />}
+        <Select label="Tactic" value={tactic} onChange={setTactic} options={tactics.map((t) => ({ value: t, label: titleCase(t) }))} placeholder="All tactics" />
+        <Select label="Platform" value={platform} onChange={setPlatform} options={platforms.map((p) => ({ value: p, label: titleCase(p) }))} placeholder="All platforms" />
+        <Select label="Executor" value={executor} onChange={setExecutor} options={executors.map((e) => ({ value: e, label: e }))} placeholder="All executors" />
+        <Select label="Engine" value={engineFilter} onChange={setEngineFilter} options={[{ value: "art", label: "Atomic Red Team" }, { value: "purplesharp", label: "PurpleSharp" }, { value: "coverage", label: "Coverage only" }]} placeholder="Any engine" />
+        {hasFilters && <button onClick={clearFilters} className="flex items-center gap-1 h-8 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:bg-card-hover"><X className="h-3 w-3" /> Clear</button>}
+      </div>
+
+      {/* Result count + select-all */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {resolving ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> resolving use cases…</span>
+            : <>{rows.length.toLocaleString()} use case{rows.length === 1 ? "" : "s"}{hasFilters ? " (filtered)" : ""}</>}
+        </p>
+        {visibleSel.length > 0 && (
+          <button onClick={toggleAllVisible} className="text-[11px] text-accent hover:underline">
+            {allVisibleOn ? "Clear visible" : `Select all visible (${visibleSel.length})`}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl border border-border bg-card overflow-x-auto">
+        <div className="hidden md:grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-semibold uppercase text-muted-foreground tracking-wide border-b border-border">
+          <div className="col-span-1" />
+          <SortHead label="Technique" field="techniqueId" span={2} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <SortHead label="Use Case" field="testName" span={3} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <SortHead label="Engine" field="engine" span={1} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <SortHead label="Tactic" field="tactic" span={2} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <SortHead label="Domain" field="domain" span={1} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <div className="col-span-1">Platforms</div>
+          <SortHead label="Executor" field="executor" span={1} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+        </div>
+
+        {resolving && rows.length === 0 ? (
+          <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
+        ) : rows.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">No use cases match the filters.</div>
+        ) : (
+          rows.map((r) => {
+            const on = r.selKey ? !!picked[r.selKey] : false;
+            const isOpen = expanded === r.key;
+            const canExpand = !!r.command;
+            return (
+              <div key={r.key} className={cn("border-b border-border/60 last:border-0", on && "bg-accent/[0.04]")}>
+                <div className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center">
+                  <div className="col-span-2 md:col-span-1 flex items-center gap-1.5">
+                    {r.runnable && r.selKey ? (
+                      <input type="checkbox" checked={on} onChange={() => togglePick(r)} className="accent-[#3b82f6]" title="Add to simulation queue" />
+                    ) : <span className="w-3.5" title="Not runnable (coverage only)" />}
+                    <button onClick={() => canExpand && setExpanded(isOpen ? null : r.key)} className={cn(canExpand ? "text-muted-foreground hover:text-foreground" : "opacity-30 cursor-default")}>
+                      {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <div className="col-span-10 md:col-span-2 flex items-center gap-1.5">
+                    <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-accent">{r.techniqueId}</span>
+                    {r.engine === "art" && <span className="text-[10px] text-muted-foreground">#{r.testNumber}</span>}
+                  </div>
+                  <div className="col-span-12 md:col-span-3 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("text-xs font-medium truncate", r.runnable ? "text-foreground" : "text-muted-foreground italic")}>{r.testName}</span>
+                      {r.elevationRequired && <span className="inline-flex items-center gap-0.5 text-[9px] text-warning shrink-0"><ShieldAlert className="h-2.5 w-2.5" /> elev</span>}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">{r.techniqueName}</div>
+                  </div>
+                  <div className="col-span-6 md:col-span-1">
+                    {r.engine === "art" && <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded border border-accent/40 text-accent bg-accent/10">ART</span>}
+                    {r.engine === "purplesharp" && <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded border border-[#a855f7]/40 text-[#a855f7] bg-[#a855f7]/10">PurpleSharp</span>}
+                    {r.engine === null && <span className="inline-block text-[9px] text-muted-foreground">—</span>}
+                  </div>
+                  <div className="col-span-6 md:col-span-2 text-[10px] text-muted-foreground">{titleCase(r.tactic)}</div>
+                  <div className="col-span-6 md:col-span-1 text-[10px] text-muted-foreground truncate">{r.domain}</div>
+                  <div className="col-span-6 md:col-span-1"><PlatformBadges platforms={r.platforms} size="xs" max={3} /></div>
+                  <div className="col-span-6 md:col-span-1 text-[10px] text-muted-foreground truncate">{r.executor}</div>
                 </div>
-                {allIds.length > 0 && (
-                  <button onClick={() => pickMany(allIds, !allOn)} className="shrink-0 text-[11px] text-accent hover:underline">
-                    {allOn ? "Clear" : `Select all (${allIds.length})`}
-                  </button>
+
+                {isOpen && canExpand && (
+                  <div className="px-4 pb-3 md:pl-10 space-y-2 bg-background/30">
+                    {r.description && <div className="text-[11px] text-muted-foreground">{r.description}</div>}
+                    <CommandBlock label={r.engine === "purplesharp" ? "PurpleSharp command" : "Command"} text={r.command!} />
+                    {r.cleanupCommand && <CommandBlock label="Cleanup" text={r.cleanupCommand} muted />}
+                  </div>
                 )}
               </div>
-              <div className="space-y-1.5">
-                {g.techniques.map((t) => {
-                  const atoms = atomicsByTech[t.id] || [];
-                  const key = `${g.domain}:${g.name}:${t.id}`;
-                  const isOpen = openTech.has(key);
-                  const pickedHere = atoms.filter((a) => picked.has(a.id)).length;
-                  return (
-                    <div key={key} className="rounded-lg border border-border/70 bg-background/40">
-                      <button onClick={() => atoms.length && toggleTechOpen(key)} className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 text-left", atoms.length ? "cursor-pointer" : "cursor-default opacity-70")}>
-                        {atoms.length ? (isOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />) : <span className="w-3.5" />}
-                        <span className="font-mono text-[11px] text-accent">{t.id}</span>
-                        <span className="text-[12px] text-foreground truncate">{t.name}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-                          {atoms.length ? <>{pickedHere ? <span className="text-accent font-semibold">{pickedHere}/</span> : null}{atoms.length} atomic{atoms.length > 1 ? "s" : ""}</> : "no atomic test"}
-                        </span>
-                      </button>
-                      {isOpen && atoms.length > 0 && (
-                        <div className="px-2.5 pb-2 space-y-1.5">
-                          {atoms.map((a) => {
-                            const on = picked.has(a.id);
-                            const cmdOpen = expandedCmd === a.id;
-                            return (
-                              <div key={a.id} className={cn("rounded-md border p-2", on ? "border-accent/50 bg-accent/5" : "border-border bg-card")}>
-                                <div className="flex items-start gap-2">
-                                  <input type="checkbox" checked={on} onChange={() => toggle(a.id)} className="mt-0.5 accent-[#3b82f6]" />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-[11px] font-medium text-foreground">#{a.testNumber} {a.testName}</span>
-                                      <span className="text-[9px] uppercase tracking-wide px-1 py-0.5 rounded border border-border text-muted-foreground">{a.executor || "manual"}</span>
-                                      <PlatformBadges platforms={a.platforms} size="xs" max={3} />
-                                      {a.elevationRequired && <span className="inline-flex items-center gap-0.5 text-[9px] text-warning"><ShieldAlert className="h-2.5 w-2.5" /> elevated</span>}
-                                    </div>
-                                    {a.command ? (
-                                      <pre onClick={() => setExpandedCmd(cmdOpen ? null : a.id)} title="click to expand/collapse"
-                                        className={cn("mt-1 cursor-pointer rounded bg-[#0b1020] text-[#c7d2fe] text-[10.5px] font-mono p-2 overflow-x-auto whitespace-pre-wrap break-all", !cmdOpen && "max-h-16 overflow-hidden")}>
-                                        <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground"><Terminal className="h-2.5 w-2.5" /> command</span>{"\n"}{a.command}
-                                      </pre>
-                                    ) : <div className="mt-1 text-[10px] text-muted-foreground italic">manual test — no inline command</div>}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Sticky action bar → Campaign Designer */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20">
-        <div className="flex items-center gap-3 rounded-full border border-border bg-card/95 backdrop-blur px-4 py-2 shadow-lg">
-          <span className="text-xs text-muted-foreground">{picked.size} atomic test{picked.size === 1 ? "" : "s"} selected</span>
-          {picked.size > 0 && <button onClick={() => setPicked(new Set())} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>}
-          <button onClick={openInDesigner} disabled={picked.size === 0}
-            className="inline-flex items-center gap-1.5 h-8 px-3.5 text-xs font-semibold rounded-full bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-40">
-            Open in Campaign Designer <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
+            );
+          })
+        )}
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Commands are the real Atomic Red Team tests from the local library; select the ones to run and the Campaign Designer handles the target environment, execution and detection scoring. Authorized, isolated-lab use only.
+        Each use case runs via <span className="text-accent font-medium">Atomic Red Team</span> (the atomic test) or <span className="text-[#a855f7] font-medium">PurpleSharp</span> (native Windows-AD adversary simulation of the whole technique, on a fleet node). Tick the ones to run; the Campaign Designer handles the target, execution and detection scoring. PurpleSharp requires a Windows fleet endpoint (installed by the agent prepare script). Authorized, isolated-lab use only.
       </p>
+
+      {/* Sticky action bar → Campaign Designer */}
+      {pickedCount > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30">
+          <div className="flex items-center gap-3 rounded-full border border-border bg-card/95 backdrop-blur px-4 py-2 shadow-lg">
+            <span className="text-xs text-muted-foreground"><strong className="text-foreground">{pickedCount}</strong> use case{pickedCount === 1 ? "" : "s"} queued</span>
+            <button onClick={() => setPicked({})} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>
+            <button onClick={openInDesigner} className="inline-flex items-center gap-1.5 h-8 px-3.5 text-xs font-semibold rounded-full bg-accent text-white hover:bg-[#60a5fa]">
+              <Play className="h-3.5 w-3.5" /> Simulate in Campaign Designer <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── sub-components ── */
+function Stat({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 mb-1"><span className="text-muted-foreground">{icon}</span><p className="text-[10px] font-semibold text-muted-foreground uppercase">{label}</p></div>
+      <p className={cn("text-xl font-bold", color)}>{value}</p>
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options, placeholder }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder: string }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-semibold text-muted-foreground uppercase block">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="h-8 rounded-lg border border-border bg-input px-2.5 text-xs text-foreground focus:border-accent focus:outline-none min-w-[120px] block">
+        <option value="">{placeholder}</option>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function SortHead({ label, field, span, sortBy, sortDir, onSort }: { label: string; field: keyof Row; span: number; sortBy: keyof Row; sortDir: string; onSort: (f: keyof Row) => void }) {
+  const active = sortBy === field;
+  return (
+    <button onClick={() => onSort(field)} className={cn(`col-span-${span} flex items-center gap-1 hover:text-foreground transition-colors`, active && "text-accent")}>
+      {label}
+      {active ? (sortDir === "asc" ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />) : <ArrowUpDown className="h-2.5 w-2.5 opacity-40" />}
+    </button>
+  );
+}
+
+function CommandBlock({ label, text, muted }: { label: string; text: string; muted?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); };
+  return (
+    <div className={cn("rounded-lg border border-border bg-background overflow-hidden", muted && "opacity-80")}>
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-card-hover">
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase"><Terminal className="h-3 w-3" /> {label}</span>
+        <button onClick={copy} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">{copied ? <><Check className="h-3 w-3 text-success" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}</button>
+      </div>
+      <pre className="p-3 text-[11px] text-muted-foreground font-mono leading-relaxed whitespace-pre-wrap break-words overflow-auto max-h-56">{text}</pre>
     </div>
   );
 }

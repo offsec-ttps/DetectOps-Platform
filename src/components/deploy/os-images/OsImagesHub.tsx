@@ -10,21 +10,33 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Monitor, Loader2, RefreshCw, Play, Square, Trash2, ExternalLink, BookOpen,
-  Cpu, MemoryStick, HardDrive, AlertTriangle, Server, Search, Fingerprint, Bug, ShieldAlert,
+  Cpu, MemoryStick, HardDrive, AlertTriangle, Server, Search, Fingerprint, Bug, ShieldAlert, FlaskConical,
+  Cloud, Globe, KeyRound, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { OsImageEntry, OsImageCategory } from "@/config/os-images";
+import { CLOUD_HOURLY_USD, type OsImageEntry, type OsImageCategory } from "@/config/os-images";
 
 interface Deployment {
   deploymentId: string; imageId: string; name: string; vmName: string;
   status: "installing" | "running" | "stopped" | "error"; lastError?: string; createdAt: string;
+  target?: string; provider?: string; region?: string; publicIp?: string; sshUser?: string;
+  instanceType?: string; estCostUsdPerHr?: number;
+}
+interface SavedCred { id: string; provider: string; label: string }
+type DeployTargetChoice = "local" | "aws" | "vps";
+interface DeployPayload {
+  target: DeployTargetChoice;
+  cloud?: { provider: "aws"; region: string; instanceType: string; credentialId: string; allowedCidr: string; autoStopMinutes: number };
+  vps?: { host: string; sshUser?: string; sshKeyCredentialId: string };
 }
 
 const CAT_ICON: Record<OsImageCategory, any> = {
   forensics: Fingerprint, osint: Search, "reverse-eng": Bug, pentest: Server, "red-team": ShieldAlert,
+  "malware-analysis": FlaskConical,
 };
 const CAT_LABEL: Record<OsImageCategory, string> = {
   forensics: "Forensics / DFIR", osint: "OSINT", "reverse-eng": "Reverse Engineering", pentest: "Pentest", "red-team": "Red Team",
+  "malware-analysis": "Malware / Behavior Analysis",
 };
 
 export default function OsImagesHub() {
@@ -34,6 +46,7 @@ export default function OsImagesHub() {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<OsImageEntry | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [creds, setCreds] = useState<SavedCred[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -42,15 +55,18 @@ export default function OsImagesHub() {
       setCatalog(d.catalog || []); setItems(d.items || []); setLocalDeploy(!!d.localDeployAvailable);
     } catch { /* ignore */ } finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  const loadCreds = useCallback(async () => {
+    try { const d = await (await fetch("/api/cloud-credentials")).json(); setCreds(d.items || []); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { load(); loadCreds(); }, [load, loadCreds]);
   useEffect(() => {
     if (!items.some((i) => i.status === "installing")) return;
     const iv = setInterval(load, 5000); return () => clearInterval(iv);
   }, [items, load]);
 
-  const deploy = async (e: OsImageEntry) => {
+  const deploy = async (e: OsImageEntry, payload: DeployPayload) => {
     setBusy(e.id); setDetail(null);
-    try { await fetch("/api/os-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageId: e.id }) }); await load(); }
+    try { await fetch("/api/os-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageId: e.id, ...payload }) }); await load(); }
     finally { setBusy(null); }
   };
   const lifecycle = async (dep: Deployment, action: "start" | "stop") => {
@@ -96,7 +112,20 @@ export default function OsImagesHub() {
                   <div className="min-w-0 flex-1">
                     <span className="text-sm font-semibold text-foreground">{d.name}</span>
                     <span className="ml-2 text-[10px] uppercase font-bold text-muted-foreground">{d.status}</span>
-                    <div className="text-[10px] text-muted-foreground font-mono truncate">{d.vmName || "(pending)"}</div>
+                    {d.target && d.target !== "local" && (
+                      <span className="ml-2 text-[9px] uppercase px-1.5 py-0.5 rounded-full border border-accent/40 text-accent">
+                        {d.target === "aws" ? `aws · ${d.region || ""}` : "vps"}{d.estCostUsdPerHr ? ` · ~$${d.estCostUsdPerHr.toFixed(2)}/hr` : ""}
+                      </span>
+                    )}
+                    <div className="text-[10px] text-muted-foreground font-mono truncate">
+                      {d.publicIp ? <>{d.sshUser || "ubuntu"}@{d.publicIp}</> : (d.vmName || "(pending)")}
+                    </div>
+                    {d.status === "running" && d.publicIp && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-2 flex-wrap">
+                        <a href={`http://${d.publicIp}:8000`} target="_blank" rel="noreferrer" className="text-accent hover:underline">CAPE UI</a>
+                        <span className="font-mono">ssh -i &lt;key&gt; {d.sshUser || "ubuntu"}@{d.publicIp}</span>
+                      </div>
+                    )}
                     {d.status === "error" && d.lastError && <div className="text-[10px] text-danger mt-0.5">{d.lastError}</div>}
                   </div>
                   {d.status === "installing" && <span className="inline-flex items-center gap-1 text-[11px] text-info"><Loader2 className="h-3 w-3 animate-spin" /> installing…</span>}
@@ -144,16 +173,55 @@ export default function OsImagesHub() {
       })}
 
       {detail && (
-        <OsImageDetail entry={detail} localDeploy={localDeploy} busy={busy === detail.id} onClose={() => setDetail(null)} onDeploy={deploy} />
+        <OsImageDetail entry={detail} localDeploy={localDeploy} creds={creds} busy={busy === detail.id} onClose={() => setDetail(null)} onDeploy={deploy} />
       )}
     </div>
   );
 }
 
-function OsImageDetail({ entry, localDeploy, busy, onClose, onDeploy }: {
-  entry: OsImageEntry; localDeploy: boolean; busy: boolean; onClose: () => void; onDeploy: (e: OsImageEntry) => void;
+function OsImageDetail({ entry, localDeploy, creds, busy, onClose, onDeploy }: {
+  entry: OsImageEntry; localDeploy: boolean; creds: SavedCred[]; busy: boolean; onClose: () => void;
+  onDeploy: (e: OsImageEntry, payload: DeployPayload) => void;
 }) {
-  const deployable = entry.build.method === "vagrant-box" && entry.build.available;
+  const localOk = entry.build.method === "vagrant-box" && entry.build.available;
+  const supports = (t: DeployTargetChoice) => entry.targets.includes(t as any);
+  const awsCreds = creds.filter((c) => c.provider === "aws");
+  const sshCreds = creds.filter((c) => c.provider === "ssh");
+  const awsSizing = entry.build.cloud?.aws;
+
+  const [target, setTarget] = useState<DeployTargetChoice>(supports("local") && localOk ? "local" : supports("aws") ? "aws" : "vps");
+  // AWS form
+  const [region, setRegion] = useState("us-east-1");
+  const [tier, setTier] = useState<"full" | "fallback">("full");
+  const [awsCred, setAwsCred] = useState("");
+  const [allowedCidr, setAllowedCidr] = useState("");
+  const [autoStopHrs, setAutoStopHrs] = useState(4);
+  // VPS form
+  const [vpsHost, setVpsHost] = useState("");
+  const [vpsUser, setVpsUser] = useState("root");
+  const [vpsCred, setVpsCred] = useState("");
+
+  // Prefill the allowed CIDR with the analyst's detected public IP /32.
+  useEffect(() => {
+    let on = true;
+    fetch("https://api.ipify.org?format=json").then((r) => r.json()).then((d) => { if (on && d.ip) setAllowedCidr(`${d.ip}/32`); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  const instanceType = tier === "full" ? (awsSizing?.instanceType || "m7i.2xlarge") : (awsSizing?.fallbackInstanceType || "t3.2xlarge");
+  const estHr = CLOUD_HOURLY_USD[instanceType];
+
+  const submit = () => {
+    if (target === "local") { onDeploy(entry, { target: "local" }); return; }
+    if (target === "aws") {
+      if (!awsCred || !allowedCidr) return;
+      onDeploy(entry, { target: "aws", cloud: { provider: "aws", region, instanceType, credentialId: awsCred, allowedCidr, autoStopMinutes: Math.max(0, autoStopHrs) * 60 } });
+      return;
+    }
+    if (!vpsHost || !vpsCred) return;
+    onDeploy(entry, { target: "vps", vps: { host: vpsHost, sshUser: vpsUser || undefined, sshKeyCredentialId: vpsCred } });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -186,17 +254,95 @@ function OsImageDetail({ entry, localDeploy, busy, onClose, onDeploy }: {
           </div>
         </div>
 
-        {deployable ? (
-          <div className="space-y-2">
-            {!localDeploy && (
-              <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-[11px] text-warning flex items-start gap-1.5">
-                <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" /> Local deploy runs on self-hosted installs only (PLATFORM_MODE=self-hosted).
+        {(localOk || supports("aws") || supports("vps")) ? (
+          <div className="space-y-3">
+            {/* Target chooser */}
+            <div className="inline-flex rounded-lg border border-border bg-background/40 p-0.5 text-[11px]">
+              {supports("local") && (
+                <button onClick={() => setTarget("local")} className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md", target === "local" ? "bg-accent text-white" : "text-muted-foreground hover:text-foreground")}><Server className="h-3 w-3" /> Local</button>
+              )}
+              {supports("aws") && (
+                <button onClick={() => setTarget("aws")} className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md", target === "aws" ? "bg-accent text-white" : "text-muted-foreground hover:text-foreground")}><Cloud className="h-3 w-3" /> AWS (cloud)</button>
+              )}
+              {supports("vps") && (
+                <button onClick={() => setTarget("vps")} className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md", target === "vps" ? "bg-accent text-white" : "text-muted-foreground hover:text-foreground")}><Globe className="h-3 w-3" /> VPS</button>
+              )}
+            </div>
+
+            {/* LOCAL */}
+            {target === "local" && (
+              <div className="space-y-2">
+                {!localDeploy && <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-[11px] text-warning flex items-start gap-1.5"><AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" /> Local deploy runs on self-hosted installs only (PLATFORM_MODE=self-hosted).</div>}
+                <p className="text-[11px] text-muted-foreground">Materialises <span className="font-mono">{entry.build.boxRef}</span> in VirtualBox on this host (first deploy downloads the box).</p>
+                <button onClick={submit} disabled={!localDeploy || !localOk || busy} className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50">
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Server className="h-3.5 w-3.5" />} Deploy locally
+                </button>
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground">Materialises the official <span className="font-mono">{entry.build.boxRef}</span> Vagrant box in VirtualBox on this host. First deploy downloads the box (can be several GB).</p>
-            <button onClick={() => onDeploy(entry)} disabled={!localDeploy || busy} className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50">
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Server className="h-3.5 w-3.5" />} Deploy locally
-            </button>
+
+            {/* AWS */}
+            {target === "aws" && (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="space-y-1"><span className="text-muted-foreground">AWS credential</span>
+                    <select value={awsCred} onChange={(e) => setAwsCred(e.target.value)} className="w-full h-7 rounded border border-border bg-background px-2">
+                      <option value="">— select —</option>
+                      {awsCreds.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1"><span className="text-muted-foreground">Region</span>
+                    <input value={region} onChange={(e) => setRegion(e.target.value)} className="w-full h-7 rounded border border-border bg-background px-2 font-mono" />
+                  </label>
+                </div>
+                {awsCreds.length === 0 && <p className="text-[10px] text-warning inline-flex items-center gap-1"><KeyRound className="h-3 w-3" /> No AWS credentials saved — add one in Cloud Credentials first.</p>}
+                <label className="block space-y-1 text-[11px]"><span className="text-muted-foreground">Instance tier</span>
+                  <select value={tier} onChange={(e) => setTier(e.target.value as any)} className="w-full h-7 rounded border border-border bg-background px-2">
+                    <option value="full">CAPE full — {awsSizing?.instanceType} (nested virt){CLOUD_HOURLY_USD[awsSizing?.instanceType || ""] ? ` · ~$${CLOUD_HOURLY_USD[awsSizing!.instanceType].toFixed(2)}/hr` : ""}</option>
+                    <option value="fallback">Lighter — {awsSizing?.fallbackInstanceType} (Sysmon mode){CLOUD_HOURLY_USD[awsSizing?.fallbackInstanceType || ""] ? ` · ~$${CLOUD_HOURLY_USD[awsSizing!.fallbackInstanceType!].toFixed(2)}/hr` : ""}</option>
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="space-y-1"><span className="text-muted-foreground">Allowed IP (CIDR)</span>
+                    <input value={allowedCidr} onChange={(e) => setAllowedCidr(e.target.value)} placeholder="your.ip/32" className="w-full h-7 rounded border border-border bg-background px-2 font-mono" />
+                  </label>
+                  <label className="space-y-1"><span className="text-muted-foreground">Auto-stop (hours)</span>
+                    <input type="number" min={0} value={autoStopHrs} onChange={(e) => setAutoStopHrs(Number(e.target.value))} className="w-full h-7 rounded border border-border bg-background px-2" />
+                  </label>
+                </div>
+                <div className="rounded-md border border-info/30 bg-info/10 px-2.5 py-1.5 text-[11px] text-info flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1"><DollarSign className="h-3 w-3" /> Est. {estHr ? `~$${estHr.toFixed(2)}/hr (~$${(estHr * 24).toFixed(0)}/day)` : "see AWS pricing"}</span>
+                  <span>SSH + ports locked to your IP</span>
+                </div>
+                <button onClick={submit} disabled={busy || !awsCred || !allowedCidr} className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50">
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />} Deploy to AWS
+                </button>
+              </div>
+            )}
+
+            {/* VPS */}
+            {target === "vps" && (
+              <div className="space-y-2.5">
+                <p className="text-[11px] text-muted-foreground">Provision an existing remote host you own over SSH (no infra created). Ensure it has ≥8 CPU / 16 GB / 200 GB and nested virt for full CAPE.</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="space-y-1"><span className="text-muted-foreground">Host / IP</span>
+                    <input value={vpsHost} onChange={(e) => setVpsHost(e.target.value)} placeholder="203.0.113.10" className="w-full h-7 rounded border border-border bg-background px-2 font-mono" />
+                  </label>
+                  <label className="space-y-1"><span className="text-muted-foreground">SSH user</span>
+                    <input value={vpsUser} onChange={(e) => setVpsUser(e.target.value)} className="w-full h-7 rounded border border-border bg-background px-2 font-mono" />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-[11px]"><span className="text-muted-foreground">SSH key credential</span>
+                  <select value={vpsCred} onChange={(e) => setVpsCred(e.target.value)} className="w-full h-7 rounded border border-border bg-background px-2">
+                    <option value="">— select —</option>
+                    {sshCreds.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </label>
+                {sshCreds.length === 0 && <p className="text-[10px] text-warning inline-flex items-center gap-1"><KeyRound className="h-3 w-3" /> No SSH key saved — add a Cloud Credential with provider "ssh" (private key in the secret field).</p>}
+                <button onClick={submit} disabled={busy || !vpsHost || !vpsCred} className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50">
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />} Provision VPS
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">

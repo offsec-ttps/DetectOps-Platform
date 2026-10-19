@@ -30,10 +30,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (action !== "start" && action !== "stop") return NextResponse.json({ error: 'action must be "start" or "stop"' }, { status: 400 });
 
   try {
-    const m = await import("@/lib/os-images/deploy");
-    if (action === "stop") { await m.stopOsImage(id); await setStatus(id, "stopped"); }
-    else { await m.startOsImage(id); await setStatus(id, "running"); }
-    void logEvent({ category: "bas", action: `osimage.${action}`, actor: r.auth.user.email, status: "ok", targetType: "OsImage", targetId: id, message: `${action} ${r.dep.name}` });
+    const t = r.dep.target || "local";
+    if (t === "aws") {
+      const m = await import("@/lib/os-images/deploy-cloud");
+      if (action === "stop") { await m.stopCloud(r.dep); await setStatus(id, "stopped"); }
+      else { await m.startCloud(r.dep); await setStatus(id, "running"); }
+    } else if (t === "vps") {
+      const m = await import("@/lib/os-images/deploy-vps");
+      if (action === "stop") { await m.stopVps(r.dep); await setStatus(id, "stopped"); }
+      else { await m.startVps(r.dep); await setStatus(id, "running"); }
+    } else {
+      const m = await import("@/lib/os-images/deploy");
+      if (action === "stop") { await m.stopOsImage(id); await setStatus(id, "stopped"); }
+      else { await m.startOsImage(id); await setStatus(id, "running"); }
+    }
+    void logEvent({ category: "bas", action: `osimage.${action}`, actor: r.auth.user.email, status: "ok", targetType: "OsImage", targetId: id, message: `${action} ${r.dep.name} (${r.dep.target || "local"})` });
     return NextResponse.json({ ok: true, status: action === "stop" ? "stopped" : "running" });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
@@ -45,8 +56,10 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   const r = await loadOwned(id);
   if (!r.ok) return r.response;
   try {
-    const { teardownOsImage } = await import("@/lib/os-images/deploy");
-    await teardownOsImage(id);
+    const t = r.dep.target || "local";
+    if (t === "aws") { await (await import("@/lib/os-images/deploy-cloud")).teardownCloud(r.dep); }
+    else if (t === "vps") { await (await import("@/lib/os-images/deploy-vps")).teardownVps(r.dep); }
+    else { await (await import("@/lib/os-images/deploy")).teardownOsImage(id); }
   } catch { /* best-effort; still drop the record */ }
   await removeDeployment(id);
   void logEvent({ category: "bas", action: "osimage.delete", actor: r.auth.user.email, status: "ok", targetType: "OsImage", targetId: id, message: `deleted ${r.dep.name}` });

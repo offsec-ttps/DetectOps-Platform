@@ -17,10 +17,10 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, rm, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { getOsImage } from "@/config/os-images";
+import { getOsImage, type OsImageEntry } from "@/config/os-images";
 
 const exec = promisify(execFile);
 const DEPLOY_ROOT = path.join(process.cwd(), "labs", "deployments");
@@ -49,20 +49,44 @@ function run(cmd: string, args: string[], cwd: string, timeoutMs: number, onLog?
   });
 }
 
-function vagrantfile(boxRef: string, hostname: string, vmName: string, cpus: number, memoryMB: number): string {
-  return [
+function vagrantfile(entry: OsImageEntry, hostname: string, vmName: string): string {
+  const { boxRef, provision } = entry.build;
+  const { cpus, memoryMB } = entry.resources;
+  const lines = [
     'Vagrant.configure("2") do |config|',
     `  config.vm.box = "${boxRef}"`,
     `  config.vm.hostname = "${hostname}"`,
-    '  config.vm.provider "virtualbox" do |vb|',
-    `    vb.name = "${vmName}"`,
-    `    vb.cpus = ${cpus}`,
-    `    vb.memory = ${memoryMB}`,
-    "    vb.gui = true",
-    "  end",
-    "end",
-    "",
-  ].join("\n");
+  ];
+  // Port forwards (e.g. CAPE web UI, hbl server) for provisioned appliances.
+  // Bound to loopback (127.0.0.1) by default so a malware-analysis UI is NOT
+  // exposed on all host interfaces; an entry must opt in to a routable hostIp.
+  for (const p of provision?.forwardedPorts || []) {
+    const guest = Number(p.guest), host = Number(p.host);
+    if (!Number.isInteger(guest) || !Number.isInteger(host) || guest < 1 || guest > 65535 || host < 1 || host > 65535) {
+      throw new Error(`invalid forwarded port in provision spec: guest=${p.guest} host=${p.host}`);
+    }
+    const hostIp = typeof p.hostIp === "string" && /^[0-9.]{7,15}$/.test(p.hostIp) ? p.hostIp : "127.0.0.1";
+    const idLabel = p.name ? `, id: ${JSON.stringify(p.name)}` : "";
+    lines.push(`  config.vm.network "forwarded_port", guest: ${guest}, host: ${host}, host_ip: "${hostIp}", auto_correct: true${idLabel}`);
+  }
+  lines.push('  config.vm.provider "virtualbox" do |vb|');
+  lines.push(`    vb.name = "${vmName}"`);
+  lines.push(`    vb.cpus = ${cpus}`);
+  lines.push(`    vb.memory = ${memoryMB}`);
+  lines.push("    vb.gui = true");
+  // Nested virtualization: required for a sandbox that runs its own KVM analysis
+  // guest (CAPE). Harmless where the host CPU doesn't support it beyond a warning.
+  if (provision?.nestedVirt) {
+    lines.push('    vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]');
+  }
+  lines.push("  end");
+  // Shell provisioner: the recipe dir is copied into the workdir as `provision/`,
+  // so reference the entry script by its in-workdir path. Runs privileged.
+  if (provision?.script) {
+    lines.push(`  config.vm.provision "shell", path: "provision/${provision.script}", privileged: true`);
+  }
+  lines.push("end", "");
+  return lines.join("\n");
 }
 
 function assertDeployable(entryId: string) {
@@ -74,24 +98,56 @@ function assertDeployable(entryId: string) {
   return entry;
 }
 
+/** Pre-generate the ids so the caller can record an "installing" row BEFORE the
+ *  (long) `vagrant up`, then pass them here so the VM matches that row. */
+export function newOsDeploymentIds(entryId: string): { deploymentId: string; vmName: string } {
+  const deploymentId = `osvm-${entryId}-${Date.now().toString(36)}`;
+  return { deploymentId, vmName: `${deploymentId}-${randomBytes(2).toString("hex")}` };
+}
+
 /** DEPLOY: write the Vagrantfile and `vagrant up`. */
-export async function deployOsImage(entryId: string, onLog?: Logger): Promise<OsDeployResult> {
+export async function deployOsImage(entryId: string, onLog?: Logger, ids?: { deploymentId: string; vmName: string }): Promise<OsDeployResult> {
   const entry = assertDeployable(entryId);
   if (!(await has("vagrant", ["--version"]))) throw new Error("`vagrant` not found — install Vagrant + VirtualBox, then retry.");
   if (!(await has("VBoxManage", ["--version"]))) throw new Error("`VBoxManage` not found — install VirtualBox, then retry.");
 
-  const deploymentId = `osvm-${entryId}-${Date.now().toString(36)}`;
-  const vmName = `${deploymentId}-${randomBytes(2).toString("hex")}`;
+  const { deploymentId, vmName } = ids ?? newOsDeploymentIds(entryId);
   const workdir = workdirFor(deploymentId);
   await mkdir(workdir, { recursive: true });
-  await writeFile(path.join(workdir, "Vagrantfile"),
-    vagrantfile(entry.build.boxRef!, entryId, vmName, entry.resources.cpus, entry.resources.memoryMB), "utf-8");
+
+  // Copy the provisioning recipe into the workdir so the Vagrant shell
+  // provisioner can run it. Fail early (before `vagrant up`) if it's missing.
+  if (entry.build.provision?.recipeDir) {
+    const src = path.join(process.cwd(), entry.build.provision.recipeDir);
+    if (!existsSync(src)) throw new Error(`provisioning recipe not found: ${entry.build.provision.recipeDir}`);
+    await cp(src, path.join(workdir, "provision"), { recursive: true });
+  }
+  // Copy the local pipeline source into the synced folder so the provisioner
+  // installs it from /vagrant/provision/hbl-src (no external git remote needed).
+  // Heavy/ignored dirs are filtered out to keep the copy small + fast.
+  if (entry.build.provision?.localSource) {
+    const srcRoot = path.join(process.cwd(), entry.build.provision.localSource);
+    if (existsSync(srcRoot)) {
+      const SKIP = /(^|\/)(\.git|data|\.venv|node_modules|__pycache__|dist|\.pytest_cache|\.ruff_cache)(\/|$)|\.egg-info(\/|$)/;
+      await cp(srcRoot, path.join(workdir, "provision", "hbl-src"), {
+        recursive: true,
+        filter: (s) => !SKIP.test(s.slice(srcRoot.length)),
+      }).catch((e) => log(onLog, `hbl-src copy warning: ${e?.message || e}`));
+    } else {
+      log(onLog, `localSource ${entry.build.provision.localSource} not found — provisioner will fall back to git clone`);
+    }
+  }
+
+  await writeFile(path.join(workdir, "Vagrantfile"), vagrantfile(entry, entryId, vmName), "utf-8");
   await writeFile(path.join(workdir, "deployment.json"), JSON.stringify({
-    kind: "os-image", entryId, deploymentId, vmName, box: entry.build.boxRef, createdAt: new Date().toISOString(),
+    kind: "os-image", entryId, deploymentId, vmName, box: entry.build.boxRef,
+    provisioned: !!entry.build.provision, createdAt: new Date().toISOString(),
   }, null, 2), "utf-8").catch(() => {});
 
-  log(onLog, `Deploying ${entry.name} (vagrant up — box "${entry.build.boxRef}" downloads on first run)…`);
-  await run("vagrant", ["up", "--provider", "virtualbox"], workdir, 3_600_000, onLog);
+  // Provisioned appliances (box download + heavy install) get a longer budget.
+  const timeoutMs = entry.build.provision ? 7_200_000 : 3_600_000;
+  log(onLog, `Deploying ${entry.name} (vagrant up — box "${entry.build.boxRef}" downloads on first run)${entry.build.provision ? "; provisioning will take a while" : ""}…`);
+  await run("vagrant", ["up", "--provider", "virtualbox"], workdir, timeoutMs, onLog);
   log(onLog, `${entry.name} is up (VM "${vmName}").`);
   return { deploymentId, vmName, workdir };
 }

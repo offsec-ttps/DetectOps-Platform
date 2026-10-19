@@ -18,8 +18,44 @@
  * red-team appliances, which are cataloged for reference but not auto-deployed.
  */
 
-export type OsImageCategory = "forensics" | "osint" | "reverse-eng" | "pentest" | "red-team";
+export type OsImageCategory = "forensics" | "osint" | "reverse-eng" | "pentest" | "red-team" | "malware-analysis";
 export type DeployTarget = "local" | "aws" | "azure" | "gcp" | "vps";
+
+/**
+ * Optional provisioning for a `vagrant-box` entry. When present, the deploy
+ * engine copies `recipeDir` into the deployment workdir and runs `script` as a
+ * Vagrant shell provisioner, enabling an image to install heavy tooling on top
+ * of a base box (vs. referencing a prebuilt box). `nestedVirt` turns on VT-x
+ * nesting (needed by sandboxes that run their own KVM analysis guest).
+ */
+export interface OsImageProvision {
+  /** Repo-relative dir (e.g. build-recipes/os-images/behavior-lab) copied into the workdir. */
+  recipeDir: string;
+  /** Entry script within recipeDir, run privileged as a shell provisioner. */
+  script: string;
+  nestedVirt?: boolean;
+  /** Host port forwards. `hostIp` defaults to 127.0.0.1 (loopback) so an analysis
+   *  appliance's UI is never exposed on all host interfaces; set it explicitly
+   *  only when remote access is genuinely intended. */
+  forwardedPorts?: Array<{ guest: number; host: number; name?: string; hostIp?: string }>;
+  /** Local source tree (repo-relative path) copied into the deployment workdir
+   *  as provision/hbl-src and synced into the guest, so the provisioner installs
+   *  from it instead of cloning a remote. Heavy/ignored dirs are filtered out. */
+  localSource?: string;
+}
+
+/** Per-provider cloud sizing defaults for an image's Terraform deploy. */
+export interface OsImageCloudSizing {
+  instanceType: string;          // nested-virt-capable default (CAPE full mode)
+  fallbackInstanceType?: string; // cheaper, no nested virt → in-guest Sysmon mode
+  diskGB: number;
+}
+export interface OsImageCloud {
+  terraformDir: string;          // repo-relative dir holding the <provider>/ TF modules
+  aws?: OsImageCloudSizing;
+  azure?: OsImageCloudSizing;
+  gcp?: OsImageCloudSizing;
+}
 
 export interface OsImageEntry {
   id: string;
@@ -41,10 +77,32 @@ export interface OsImageEntry {
     packerRef?: string;
     /** Ordered guided setup steps when there is no automated path yet. */
     guidedSteps?: string[];
+    /** Shell-provisioning on top of the base box (method: vagrant-box). */
+    provision?: OsImageProvision;
+    /** Cloud (Terraform) sizing + module location, for targets aws/azure/gcp. */
+    cloud?: OsImageCloud;
     /** false → template-only ("coming soon"); no automated deploy. */
     available: boolean;
   };
   seeded: true;
+}
+
+/** Rough on-demand hourly USD per instance type, for the pre-launch estimate.
+ *  Approximate us-east-1 list prices; update as needed — informational only. */
+export const CLOUD_HOURLY_USD: Record<string, number> = {
+  // AWS nested-virt-capable (CAPE full mode)
+  "m7i.2xlarge": 0.4032, "m7i.4xlarge": 0.8064, "c7i.2xlarge": 0.357, "r7i.2xlarge": 0.5292,
+  "m8i.2xlarge": 0.4435,
+  // AWS cheaper / fallback + general-purpose analyst workstations (no nested virt)
+  "t3.large": 0.0832, "t3.xlarge": 0.1664, "t3.2xlarge": 0.3328, "m6i.2xlarge": 0.384,
+  // Azure (Dv5 nested-virt)
+  "Standard_D8s_v5": 0.384, "Standard_D4s_v5": 0.192,
+  // GCP (nested-virt via flag)
+  "n2-standard-8": 0.3881, "n2-standard-4": 0.1941,
+};
+
+export function priceFor(instanceType: string): number | undefined {
+  return CLOUD_HOURLY_USD[instanceType];
 }
 
 const guided = (name: string, url: string): string[] => [
@@ -63,13 +121,19 @@ export const OS_IMAGE_CATALOG: OsImageEntry[] = [
     name: "Kali Linux",
     category: "pentest",
     description:
-      "The standard authorized-pentest distribution. Deployed locally from the official Vagrant box for hands-on technique execution and detection lab work.",
+      "The standard authorized-pentest distribution. Local uses the official Kali Vagrant box; cloud/VPS install the Kali toolset (kali-linux-headless) on Ubuntu over SSH.",
     baseOs: "Kali Rolling (Debian)",
     docsUrl: "https://www.kali.org/docs/",
     tools: ["nmap", "metasploit-framework", "burpsuite", "wireshark", "hashcat"],
-    resources: { cpus: 2, memoryMB: 4096, diskGB: 30 },
-    targets: ["local"],
-    build: { method: "vagrant-box", boxRef: "kalilinux/rolling", available: true },
+    resources: { cpus: 2, memoryMB: 4096, diskGB: 40 },
+    targets: ["local", "aws", "vps"],
+    build: {
+      method: "vagrant-box",
+      boxRef: "kalilinux/rolling",
+      available: true,
+      provision: { recipeDir: "build-recipes/os-images/kali", script: "provision.sh" },
+      cloud: { terraformDir: "build-recipes/os-images/terraform", aws: { instanceType: "t3.xlarge", fallbackInstanceType: "t3.large", diskGB: 40 } },
+    },
     seeded: true,
   },
 
@@ -83,9 +147,15 @@ export const OS_IMAGE_CATALOG: OsImageEntry[] = [
     baseOs: "Ubuntu 22.04",
     docsUrl: "https://www.sans.org/tools/sift-workstation/",
     tools: ["Autopsy", "Sleuth Kit", "Volatility", "log2timeline/plaso", "bulk_extractor"],
-    resources: { cpus: 2, memoryMB: 4096, diskGB: 40 },
-    targets: ["local", "aws"],
-    build: { method: "cloud-init", guidedSteps: guided("SIFT Workstation", "https://www.sans.org/tools/sift-workstation/"), available: false },
+    resources: { cpus: 4, memoryMB: 8192, diskGB: 60 },
+    targets: ["local", "aws", "vps"],
+    build: {
+      method: "vagrant-box",
+      boxRef: "bento/ubuntu-22.04",
+      available: true,
+      provision: { recipeDir: "build-recipes/os-images/sift", script: "provision.sh" },
+      cloud: { terraformDir: "build-recipes/os-images/terraform", aws: { instanceType: "t3.xlarge", fallbackInstanceType: "t3.large", diskGB: 60 } },
+    },
     seeded: true,
   },
   {
@@ -109,12 +179,18 @@ export const OS_IMAGE_CATALOG: OsImageEntry[] = [
     category: "reverse-eng",
     description:
       "Linux toolkit for reverse-engineering and analyzing malicious software. Pairs well with SIFT for a full IR bench.",
-    baseOs: "Ubuntu 20.04",
+    baseOs: "Ubuntu 24.04",
     docsUrl: "https://remnux.org/",
     tools: ["radare2", "YARA", "CyberChef", "oletools", "capa"],
-    resources: { cpus: 2, memoryMB: 4096, diskGB: 40 },
-    targets: ["local"],
-    build: { method: "cloud-init", guidedSteps: guided("REMnux", "https://docs.remnux.org/install-distro/get-virtual-appliance"), available: false },
+    resources: { cpus: 4, memoryMB: 8192, diskGB: 60 },
+    targets: ["local", "aws", "vps"],
+    build: {
+      method: "vagrant-box",
+      boxRef: "bento/ubuntu-24.04",
+      available: true,
+      provision: { recipeDir: "build-recipes/os-images/remnux", script: "provision.sh" },
+      cloud: { terraformDir: "build-recipes/os-images/terraform", aws: { instanceType: "t3.xlarge", fallbackInstanceType: "t3.large", diskGB: 60 } },
+    },
     seeded: true,
   },
   {
@@ -145,6 +221,49 @@ export const OS_IMAGE_CATALOG: OsImageEntry[] = [
     resources: { cpus: 2, memoryMB: 4096, diskGB: 30 },
     targets: ["local"],
     build: { method: "cloud-init", guidedSteps: guided("Trace Labs OSINT VM", "https://www.tracelabs.org/initiatives/osint-vm"), available: false },
+    seeded: true,
+  },
+
+  // ── Malware / behavior analysis (detection-engineering appliance) ──
+  {
+    id: "behavior-lab",
+    name: "Behavior Analysis Workstation",
+    category: "malware-analysis",
+    description:
+      "Self-contained detection-engineering appliance for open-source hacktools. Detonates real binaries in CAPEv2, captures behavioral telemetry (Sysmon/ETW + eBPF), maps capabilities with capa, and generates behavior-based detection rules with a local open-weight model — so a student can analyze → simulate → detect → tune the whole loop in one VM. NOTE: CAPE's analysis guest needs CPU nested virtualization (VT-x/AMD-V); without it the lab falls back to lighter in-guest Sysmon detonation. Isolated-lab use only.",
+    baseOs: "Ubuntu 22.04 LTS",
+    docsUrl: "https://capev2.readthedocs.io/",
+    tools: ["CAPEv2", "mandiant capa", "Sysmon", "sigma-cli / pySigma", "hacktool-behavior-lab (hbl)", "Tetragon/Falco (eBPF)"],
+    resources: { cpus: 8, memoryMB: 16384, diskGB: 200 },
+    targets: ["local", "aws", "vps"],
+    build: {
+      method: "vagrant-box",
+      boxRef: "bento/ubuntu-22.04",
+      available: true,
+      cloud: {
+        terraformDir: "build-recipes/os-images/terraform",
+        // Nested-virt default (full CAPE); fallback is cheaper → in-guest Sysmon mode.
+        aws: { instanceType: "m7i.2xlarge", fallbackInstanceType: "t3.2xlarge", diskGB: 200 },
+      },
+      guidedSteps: [
+        "Host requirement: a CPU with nested virtualization (Intel VT-x / AMD-V) enabled in BIOS, ≥8 cores, ≥16 GB free RAM, ≥200 GB free disk.",
+        "Deploy launches an Ubuntu base box and provisions CAPEv2 + capa + the hbl pipeline automatically (first run is long — large downloads + a Windows analysis guest build).",
+        "Open the CAPE web UI at http://localhost:8000 (forwarded) once provisioning completes.",
+        "Run the hbl loop from inside the VM; export findings and import them into the main platform with scripts/import-hacktool-detections.ts.",
+      ],
+      provision: {
+        recipeDir: "build-recipes/os-images/behavior-lab",
+        script: "provision.sh",
+        nestedVirt: true,
+        // Install the pipeline from the sibling repo's synced source (no remote).
+        localSource: "../hacktool-behavior-lab",
+        forwardedPorts: [
+          { guest: 8000, host: 8000, name: "cape-web" },
+          { guest: 8888, host: 8888, name: "hbl-server" },
+          { guest: 11434, host: 11434, name: "ollama" },
+        ],
+      },
+    },
     seeded: true,
   },
 

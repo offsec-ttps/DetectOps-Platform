@@ -12,6 +12,8 @@ export interface RenderItem {
   tech: string; num: number; name: string; tactic: string;
   status: string; executed: boolean; observed: boolean;
   vis_bucket: string; vis_count: number; indicators: string[]; tail: string;
+  event_codes: string[];   // real Windows Event IDs observed carrying this atomic
+  sources: string[];       // real SIEM sourcetypes/log channels the hits came from
 }
 export interface RenderInput {
   assessmentId: string; assessor: string; client: string; lab: string;

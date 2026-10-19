@@ -2352,6 +2352,8 @@ model CoverageAssessment {
   naCount          Int      @default(0)
   failedCount      Int      @default(0)
   // results
+  snapshotRequested Boolean @default(false)                // take a VM snapshot before the sweep starts (analyst rollback point)
+  snapshotName String  @default("")                        // name(s) of the snapshot(s) taken, surfaced in history + report
   metrics          String   @default("{}")                 // JSON: aggregated tactic/library tables + headline
   reportMd         String   @default("")                   // rendered markdown (source of truth)
   reportPaths      String   @default("{}")                 // JSON: {md,docx,pdf} absolute paths once rendered
@@ -2384,6 +2386,8 @@ model CoverageAssessmentItem {
   visBucket    String   @default("")                       // visible | generic-only | absent | ""(not executed)
   obsCount     Int      @default(0)
   indicators   String   @default("[]")                     // JSON: distinctive tokens queried
+  obsEventCodes String  @default("[]")                     // JSON: Windows Event IDs that carried the indicator (e.g. ["1","4688"])
+  obsSources   String   @default("[]")                     // JSON: SIEM sourcetypes/log channels the hits came from
   tail         String   @default("")                       // last line of detonation output / error
   order        Int      @default(0)
   processedAt  DateTime?

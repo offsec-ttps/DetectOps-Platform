@@ -163,6 +163,62 @@ def siem_reco(r, siem):
             "ensure process + command-line logging (Sysmon EID 1 / Security 4688).")
 
 
+def evids(r):
+    """Human label of the real Windows Event IDs + log sources observed carrying
+    this atomic's indicator in the SIEM re-query. '—' when none were captured."""
+    codes = [str(c) for c in (r.get("event_codes") or []) if str(c).strip()]
+    srcs = [str(s) for s in (r.get("sources") or []) if str(s).strip()]
+    if not codes and not srcs:
+        return "—"
+    parts = []
+    if codes: parts.append("EID " + ", ".join(codes[:6]))
+    if srcs: parts.append(" / ".join(srcs[:3]))
+    return esc("  ·  ".join(parts))
+
+
+def _sigma_logsource_and_sel(r):
+    """(logsource-block, selection-block) for a Sigma rule, chosen from the REAL
+    observed Event IDs when present, else from the technique/indicator heuristic."""
+    inds = [i for i in (r.get("indicators") or []) if i]
+    raw = str(inds[0] if inds else (r.get("name", "") or "activity"))
+    ind = re.sub(r'[`"\r\n]', "", raw)[:80]
+    tech = (r.get("tech", "") or "")
+    low = (" ".join(inds) + " " + (r.get("name", "") or "")).lower()
+    obs = set(str(c) for c in (r.get("event_codes") or []))
+    reg_kw = ["hkcu", "hklm", "registry", "software\\", "mppreference", "uacdisable", "disablereal", "subkey"]
+    ps_kw = ["powershell", "invoke-", ".ps1", "new-", "set-", "get-", "format-table"]
+    if (obs & {"12", "13"}) or any(k in low for k in reg_kw):
+        return ("    product: windows\n    category: registry_set",
+                "        TargetObject|contains: '" + ind + "'")
+    if ("4104" in obs) or any(k in low for k in ps_kw):
+        return ("    product: windows\n    category: ps_script",
+                "        ScriptBlockText|contains: '" + ind + "'")
+    if ("7045" in obs) or tech.startswith("T1543") or "service" in low:
+        return ("    product: windows\n    service: system",
+                "        EventID: 7045\n        ServiceFileName|contains: '" + ind + "'")
+    return ("    product: windows\n    category: process_creation",
+            "        CommandLine|contains: '" + ind + "'")
+
+
+def sigma_rule(r):
+    """A minimal, deployable Sigma rule keyed to the atomic's distinctive indicator
+    and the Windows log that should carry it — the rule to ship once the telemetry
+    gap is closed (or to document an existing detection)."""
+    logsrc, sel = _sigma_logsource_and_sel(r)
+    tech = (r.get("tech", "") or "")
+    name = re.sub(r"[\"':]", "", (r.get("name", "") or ""))[:60].strip()
+    title = (tech + " " + name).strip() or "Atomic detection"
+    tag = ("attack." + tech.lower()) if tech else "attack.execution"
+    yml = ("title: " + title + "\n"
+           "status: experimental\n"
+           "description: Distinctive indicator of " + (tech or "the technique") + " seen during adversary simulation.\n"
+           "logsource:\n" + logsrc + "\n"
+           "detection:\n    selection:\n" + sel + "\n    condition: selection\n"
+           "tags:\n    - " + tag + "\n"
+           "level: medium")
+    return yml
+
+
 def siem_label(siem):
     s = (siem or "splunk").lower()
     if s in ("mde", "kql") or "defender" in s: return "Microsoft Defender for Endpoint (KQL)"
@@ -280,6 +336,7 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
     L += toc(["Table of contents", "Methodology", "Coverage by ATT&CK tactic",
               "Coverage by simulation library", "Execution detail (what ran)",
               "What was detected", "What was missed — blind spots & how to detect them",
+              "Scope → outcome map (simulated vs. detected)",
               "Recommendations", "Scope and limitations"])
     L.append("## Methodology\n")
     L.append(f"Each atomic was detonated on **{args.lab}** over the configured transport, then re-queried "
@@ -325,13 +382,15 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
     L.append(f"{len(visible)} atomics produced a distinctive indicator that reached the SIEM — these are "
              "defensible with a rule keyed to that indicator.\n")
     if visible:
-        L.append("| Technique | Atomic | Visible indicator |")
-        L.append("|---|---|---|")
+        L.append("| Technique | Atomic | Visible indicator | Event ID(s) / Log source |")
+        L.append("|---|---|---|---|")
         for r in visible[:60]:
-            L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:50])} | {esc(', '.join((r.get('indicators') or [])[:2]))} |")
+            L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:50])} | {esc(', '.join((r.get('indicators') or [])[:2]))} | {evids(r)} |")
         if len(visible) > 60:
-            L.append(f"| … | {len(visible)-60} more | |")
+            L.append(f"| … | {len(visible)-60} more | | |")
         L.append("")
+        L.append("*Event ID(s) / Log source = the actual Windows telemetry observed carrying each indicator "
+                 "in the SIEM (e.g. Sysmon EID 1 process-create, 12/13 registry, 11 file-create; Security 4688/4104/7045).*\n")
 
     # What was missed — blind spots, each with command + SIEM query
     blind = [r for r in executed if r.get("vis_bucket") == "absent"]
@@ -351,7 +410,27 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
                 L.append("")
                 L.append(code_block(cmd.strip()[:600]))
             L.append(f"- **Detect it ({esc(siem_label(args.siem))}):** {siem_reco(r, args.siem)}")
+            L.append("- **Portable Sigma rule (deploy once the telemetry is restored):**")
             L.append("")
+            L.append(code_block(sigma_rule(r)))
+            L.append("")
+
+    # Scope → outcome map: the full "what we simulated vs. what happened vs. what
+    # the SIEM saw" ledger — one row per attempted atomic, end to end.
+    L.append("## Scope → outcome map (simulated vs. detected)\n")
+    L.append("Every atomic in scope, mapped to the command simulated, whether it executed on the endpoint, "
+             "and the detection outcome with the real Event ID(s)/log source observed — so the simulation "
+             "scope and its outcomes are auditable at a glance.\n")
+    L.append("| Technique | Atomic | Library | Command (simulated) | Executed | Detection | Event ID(s) / Source |")
+    L.append("|---|---|---|---|---|---|---|")
+    for r in runnable:
+        cmd = (cmds.get((r["tech"], int(r.get("num", 1))), ("", ""))[0] or "").strip().replace("\n", " ")
+        cmd_disp = code_inline(cmd[:70] + ("…" if len(cmd) > 70 else "")) if cmd else "—"
+        lib = r.get("library") or ", ".join(list(libmap.get(r["tech"], ()))[:1]) or "—"
+        ran = "✅" if r.get("executed") else "❌"
+        L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:40])} | {esc(lib)} | "
+                 f"{cmd_disp} | {ran} | {outcome(r)} | {evids(r)} |")
+    L.append("")
 
     L.append("## Recommendations\n")
     L.append(f"1. Deploy each {siem_label(args.siem)} query above and validate it fires by re-running the "

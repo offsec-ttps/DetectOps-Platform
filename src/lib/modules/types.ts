@@ -15,7 +15,8 @@ export type ModuleFramework = (typeof MODULE_FRAMEWORKS)[number];
 export const MODULE_CATEGORIES = [
   "ransomware", "phishing", "lateral-movement", "exfiltration", "persistence",
   "credential-access", "c2", "discovery", "impact", "apt",
-  "container", "cloud", "active-directory", "hacktools", "deceptive-delivery", "other",
+  "container", "cloud", "active-directory", "hacktools", "deceptive-delivery",
+  "privilege-escalation", "uac-bypass", "user-to-admin", "user-to-system", "other",
 ] as const;
 export type ModuleCategory = (typeof MODULE_CATEGORIES)[number];
 

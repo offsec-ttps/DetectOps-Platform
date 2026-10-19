@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { detonateAtomicTest } from "@/lib/enterprise-use-cases/runner";
+import { snapshotActiveLab } from "./snapshot";
 import { observeAtomic } from "./observe";
 import { aggregate, type ItemLite } from "./aggregate";
 import { renderReport, renderBrandedReport, type RenderItem } from "./render";
@@ -39,72 +40,101 @@ async function syncCounters(id: string): Promise<void> {
   });
 }
 
-/** Process one batch. Returns whether it did work and how many items remain. */
-export async function tick(maxItems = 4): Promise<{ worked: boolean; assessmentId?: string; remaining?: number }> {
+/** Promote a queued assessment to running, taking its pre-simulation snapshot once. */
+async function promoteAssessment(a: any): Promise<any> {
+  a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { status: "running", startedAt: a.startedAt ?? new Date() } });
+  // Pre-simulation snapshot: a rollback point taken BEFORE the first atomic
+  // detonates, so the analyst can restore the lab and knows the run is what
+  // changed it. Once only (guarded by empty snapshotName); never blocks the sweep.
+  if (a.snapshotRequested && !a.snapshotName) {
+    try {
+      const snap = await snapshotActiveLab(a.id.slice(0, 8));
+      if (snap.name) a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { snapshotName: snap.name } });
+    } catch { /* best-effort */ }
+  }
+  return a;
+}
+
+/** Detonate one batch for a single assessment against its own host. Returns how
+ * many items remain pending. Designed to run concurrently for DIFFERENT hosts —
+ * the per-item compare-and-set claim keeps two drivers off the same row, and each
+ * call targets its own environment, so two labs detonate in parallel while a
+ * single host stays sequential (one assessment per host per tick). */
+async function processAssessmentBatch(a: any, maxItems: number): Promise<{ assessmentId: string; remaining: number }> {
+  const env = a.environmentId ? await prisma.environmentTarget.findUnique({ where: { id: a.environmentId } }) : null;
+  if (!env) {
+    await prisma.coverageAssessment.update({ where: { id: a.id }, data: { status: "failed", error: "environment not found", completedAt: new Date() } });
+    return { assessmentId: a.id, remaining: 0 };
+  }
+
+  // CLAIM items before detonating (compare-and-set on processedAt) so overlapping
+  // drivers never detonate the same row twice; a claim older than STALE_CLAIM_MS is
+  // reclaimable so a crashed run doesn't strand items as permanently pending.
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+  const candidates = await prisma.coverageAssessmentItem.findMany({
+    where: { assessmentId: a.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] } as any,
+    orderBy: { order: "asc" }, take: maxItems,
+  });
+  const batch: typeof candidates = [];
+  for (const c of candidates) {
+    const claim = await prisma.coverageAssessmentItem.updateMany({
+      where: { id: c.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] } as any,
+      data: { processedAt: new Date() },
+    });
+    if (claim.count === 1) batch.push(c);
+  }
+
+  for (const item of batch) {
+    const fresh = await prisma.coverageAssessment.findUnique({ where: { id: a.id }, select: { status: true } });
+    if (!fresh || fresh.status === "cancelled") return { assessmentId: a.id, remaining: 0 };
+    await sleep(THROTTLE_MS);
+    const det = await detonateAtomicTest(env, item.tech, item.num, PER_ATOMIC_BUDGET_S);
+    await prisma.coverageAssessmentItem.update({
+      where: { id: item.id },
+      data: { status: det.status, executed: det.executed, tail: det.tail.slice(0, 400), processedAt: new Date() },
+    });
+  }
+
+  await syncCounters(a.id);
+  const remaining = await prisma.coverageAssessmentItem.count({ where: { assessmentId: a.id, status: "pending" } });
+  if (remaining === 0) await finalize(a.id);
+  return { assessmentId: a.id, remaining };
+}
+
+/** Process one batch PER DISTINCT HOST, concurrently. Different labs (e.g. the
+ * 10.0.1.x SAR DC and a 192.168.56.x Fleet DC) detonate in parallel; each host
+ * runs its own assessments one at a time (oldest first). Returns whether any work
+ * was done and the total remaining across the hosts touched this tick. */
+export async function tick(maxItems = 4): Promise<{ worked: boolean; assessmentId?: string; remaining?: number; hosts?: number }> {
   if (ticking) return { worked: false };
   ticking = true;
   try {
-    // Promote the oldest queued assessment to running, else pick an already-running one.
-    let a = await prisma.coverageAssessment.findFirst({ where: { status: "queued" }, orderBy: { createdAt: "asc" } });
-    if (a) {
-      a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { status: "running", startedAt: a.startedAt ?? new Date() } });
-    } else {
-      a = await prisma.coverageAssessment.findFirst({ where: { status: "running" }, orderBy: { createdAt: "asc" } });
+    const running = await prisma.coverageAssessment.findMany({ where: { status: "running" }, orderBy: { createdAt: "asc" } });
+    const runningHosts = new Set(running.map((r) => r.environmentId || "none"));
+    // Promote the oldest queued assessment for any host that has none running yet,
+    // so a newly-queued second lab starts immediately alongside the first.
+    const queued = await prisma.coverageAssessment.findMany({ where: { status: "queued" }, orderBy: { createdAt: "asc" } });
+    for (const q of queued) {
+      const h = q.environmentId || "none";
+      if (!runningHosts.has(h)) {
+        running.push(await promoteAssessment(q));
+        runningHosts.add(h);
+      }
     }
-    if (!a) return { worked: false };
+    if (!running.length) return { worked: false };
 
-    const env = a.environmentId ? await prisma.environmentTarget.findUnique({ where: { id: a.environmentId } }) : null;
-    const siem = a.siemConnectionId ? await prisma.siemConnection.findUnique({ where: { id: a.siemConnectionId } }) : null;
-    if (!env) {
-      await prisma.coverageAssessment.update({ where: { id: a.id }, data: { status: "failed", error: "environment not found", completedAt: new Date() } });
-      return { worked: true, assessmentId: a.id, remaining: 0 };
+    // One assessment per host (the oldest), processed concurrently across hosts.
+    const perHost = new Map<string, any>();
+    for (const r of running) {
+      const h = r.environmentId || "none";
+      if (!perHost.has(h)) perHost.set(h, r);
     }
-
-    // CLAIM items before detonating. Another driver (the in-process loop, the
-    // /tick endpoint, or a list-GET re-kick — all share this process) could
-    // otherwise pick the SAME pending rows and detonate them twice. We claim by
-    // compare-and-set on processedAt: only the driver whose updateMany flips the
-    // row (count===1) owns it. A claim older than STALE_CLAIM_MS is reclaimable
-    // so a crashed/restarted run doesn't strand items as permanently pending.
-    const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
-    const claimable = { assessmentId: a.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] };
-    const candidates = await prisma.coverageAssessmentItem.findMany({
-      where: claimable as any, orderBy: { order: "asc" }, take: maxItems,
-    });
-    const batch: typeof candidates = [];
-    for (const c of candidates) {
-      const claim = await prisma.coverageAssessmentItem.updateMany({
-        where: { id: c.id, status: "pending", OR: [{ processedAt: null }, { processedAt: { lt: staleBefore } }] } as any,
-        data: { processedAt: new Date() },
-      });
-      if (claim.count === 1) batch.push(c);
-    }
-
-    for (const item of batch) {
-      // Honour cancellation between items.
-      const fresh = await prisma.coverageAssessment.findUnique({ where: { id: a.id }, select: { status: true } });
-      if (!fresh || fresh.status === "cancelled") return { worked: true, assessmentId: a.id, remaining: 0 };
-
-      await sleep(THROTTLE_MS);
-      // Detonation only — telemetry observation happens in a full-window re-pass
-      // at finalize (SIEM forwarder/indexing lag means an event is not yet
-      // searchable 2–3s after detonation; the proven methodology queries the
-      // whole sweep window once execution is done).
-      const det = await detonateAtomicTest(env, item.tech, item.num, PER_ATOMIC_BUDGET_S);
-      await prisma.coverageAssessmentItem.update({
-        where: { id: item.id },
-        data: { status: det.status, executed: det.executed, tail: det.tail.slice(0, 400), processedAt: new Date() },
-      });
-    }
-
-    // Derive the roll-up counters from the authoritative item states rather than
-    // incrementing — so the progress (processed/atomicsTotal) is always exact
-    // even if an item was processed more than once by overlapping drivers.
-    await syncCounters(a.id);
-
-    const remaining = await prisma.coverageAssessmentItem.count({ where: { assessmentId: a.id, status: "pending" } });
-    if (remaining === 0) await finalize(a.id);
-    return { worked: true, assessmentId: a.id, remaining };
+    const targets = [...perHost.values()];
+    const results = await Promise.all(
+      targets.map((a) => processAssessmentBatch(a, maxItems).catch((e) => ({ assessmentId: a.id, remaining: -1, error: String(e?.message || e) })))
+    );
+    const remaining = results.reduce((s, r) => s + Math.max(0, (r as any).remaining || 0), 0);
+    return { worked: true, assessmentId: results[0]?.assessmentId, remaining, hosts: targets.length };
   } finally {
     ticking = false;
   }
@@ -134,15 +164,22 @@ async function finalize(id: string): Promise<void> {
   let visible = 0, generic = 0, absent = 0;
   for (const it of executedItems) {
     let bucket = "generic-only", count = 0, indicators: string[] = [];
+    let eventCodes: string[] = [], sources: string[] = [];
     if (siem) {
       const cmd = (await atomicCommand(it.tech, it.num)) || "";
       const obs = await observeAtomic(siem, cmd, windowMinutes);
       bucket = obs.bucket; count = obs.count; indicators = obs.indicators;
+      eventCodes = obs.eventCodes || []; sources = obs.sources || [];
     }
     if (bucket === "visible") visible++; else if (bucket === "absent") absent++; else generic++;
     await prisma.coverageAssessmentItem.update({
       where: { id: it.id },
-      data: { observed: bucket === "visible", visBucket: bucket, obsCount: count, indicators: JSON.stringify(indicators) },
+      data: {
+        observed: bucket === "visible", visBucket: bucket, obsCount: count,
+        indicators: JSON.stringify(indicators),
+        obsEventCodes: JSON.stringify(eventCodes),
+        obsSources: JSON.stringify(sources),
+      },
     });
   }
   await prisma.coverageAssessment.update({ where: { id }, data: { visibleCount: visible, genericCount: generic, absentCount: absent } });
@@ -184,6 +221,7 @@ async function finalize(id: string): Promise<void> {
     tech: i.tech, num: i.num, name: i.name, tactic: i.tactic,
     status: i.status, executed: i.executed, observed: i.observed,
     vis_bucket: i.visBucket, vis_count: i.obsCount, indicators: safeArr(i.indicators), tail: i.tail,
+    event_codes: safeArr(i.obsEventCodes), sources: safeArr(i.obsSources),
   }));
 
   let reportPaths: Record<string, unknown> = {};

@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       lab: String(body.lab || env.name || ""),
       environmentId, siemConnectionId,
       scope: JSON.stringify(scope), detectionNote: String(body.detectionNote || ""),
+      snapshotRequested: body.snapshotBeforeRun === true || body.snapshotBeforeRun === "true",
       status: "queued", atomicsTotal: atomics.length,
       ownerId: user.id || "", actor: user.email || user.id || "",
     },

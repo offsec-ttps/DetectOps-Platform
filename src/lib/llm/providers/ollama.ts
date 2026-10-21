@@ -16,6 +16,7 @@
 import type { LlmProvider } from "./types";
 import { runToolOpenAiCompatible } from "./openai-compatible";
 import { validateRequiredKeys } from "./types";
+import { safeFetch } from "@/lib/net/ssrf";
 import { resolveRuntime } from "@/lib/llm/db-config";
 import type { RunToolInput, RunToolResult } from "@/lib/llm/anthropic";
 
@@ -81,7 +82,7 @@ ${schemaText}`;
     if (corrective) {
       messages.push({ role: "user", content: corrective });
     }
-    const res = await fetch(`${baseHost}/api/chat`, {
+    const res = await safeFetch(`${baseHost}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -91,7 +92,7 @@ ${schemaText}`;
         options: { num_predict: input.maxTokens ?? 4096 },
         messages,
       }),
-    });
+    }, { allowPrivate: true, allowLoopback: true });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       throw new Error(`Ollama HTTP ${res.status}: ${txt.slice(0, 400)}`);

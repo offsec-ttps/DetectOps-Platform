@@ -7,7 +7,7 @@ A plugin architecture where **declarative simulation modules** compile down to t
 ## Pages
 
 - **Browse** (`/marketplace`) — search/filter installable modules; kicks the validation worker.
-- **Build** (`/marketplace/build`) — a module builder for authoring a manifest.
+- **Build** (`/marketplace/build`) — the Module Builder, with two tabs: **New module** (author a whole manifest) and **Add technique to a library** (add one newly discovered technique to an *existing* library as an atomic-style YAML entry, merged into that library without editing it — see [Updating a Library](../simulation/updating-libraries.md)).
 - **Detail** (`/marketplace/[moduleId]`) — module info, versions, install/approve.
 
 ## Lifecycle

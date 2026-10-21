@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import https from "https";
 import { randomUUID } from "crypto";
 import { getEffectiveHecConfig } from "@/lib/hec-config";
+import { safeLookup, labOutboundPolicy, syncUrlBlockReason } from "@/lib/net/ssrf";
 
 function hecRequest(host: string, port: number, token: string): Promise<{ status: number; text: string }> {
   return new Promise((resolve, reject) => {
@@ -35,9 +36,11 @@ function hecRequest(host: string, port: number, token: string): Promise<{ status
       },
       rejectUnauthorized: false,
       timeout: 15000,
+      lookup: safeLookup(labOutboundPolicy("SIEM_ALLOW_LOOPBACK")) as any,
     }, (res) => {
       const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
+      let n = 0;
+      res.on("data", (c: Buffer) => { n += c.length; if (n <= 64 * 1024) chunks.push(c); });
       res.on("end", () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks).toString("utf-8") }));
     });
     req.on("timeout", () => { req.destroy(new Error("request timed out")); });
@@ -55,6 +58,9 @@ export async function POST() {
       message: "HEC is not configured. Click 'Auto-configure from cloud range' or fill in the manual form.",
     }, { status: 400 });
   }
+
+  const blocked = syncUrlBlockReason(`https://${eff.host.includes(":") && !eff.host.startsWith("[") ? `[${eff.host}]` : eff.host}:${eff.port}/`, labOutboundPolicy("SIEM_ALLOW_LOOPBACK"));
+  if (blocked) return NextResponse.json({ status: "error", message: `HEC host blocked: ${blocked}` }, { status: 400 });
 
   try {
     const r = await hecRequest(eff.host, eff.port, eff.token);

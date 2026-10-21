@@ -15,7 +15,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/crypto/credential-vault";
 import { logEvent } from "@/lib/event-log";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
+import { checkC2Url, isSafeHost, isSafeSshUser } from "@/lib/c2/url-guard";
 
 const ENV_KINDS = new Set(["our-template-deployed", "user-cloud", "agent", "shell"]);
 const SHELL_MODES = new Set(["reverse", "bind"]);
@@ -90,19 +91,29 @@ export async function POST(req: NextRequest) {
   if (kind === "our-template-deployed") {
     if (!body.hostname) return NextResponse.json({ error: "hostname is required for our-template-deployed" }, { status: 400 });
     if (!body.sshUser) return NextResponse.json({ error: "sshUser is required for our-template-deployed" }, { status: 400 });
+    // These reach the ssh argv on the platform host — reject option-like / shell-y values.
+    if (!isSafeHost(String(body.hostname))) return NextResponse.json({ error: "hostname must be a plain hostname or IP address" }, { status: 400 });
+    if (!isSafeSshUser(String(body.sshUser))) return NextResponse.json({ error: "sshUser contains disallowed characters" }, { status: 400 });
+    if (body.sshKeyRef && String(body.sshKeyRef).startsWith("-")) return NextResponse.json({ error: "sshKeyRef must be a file path" }, { status: 400 });
   } else if (kind === "user-cloud") {
     if (!body.cloudProvider || !CLOUD_PROVIDERS.has(body.cloudProvider)) {
       return NextResponse.json({ error: `cloudProvider must be one of ${[...CLOUD_PROVIDERS].join("|")}` }, { status: 400 });
     }
     if (!body.credentialId) return NextResponse.json({ error: "credentialId is required for user-cloud" }, { status: 400 });
-    // Verify the credential exists
+    // Verify the credential exists AND belongs to the caller — otherwise an env
+    // could borrow another user's cloud credential to run Stratus detonations.
     const cred = await prisma.cloudCredential.findUnique({ where: { id: String(body.credentialId) } });
     if (!cred) return NextResponse.json({ error: "credentialId points at a missing CloudCredential" }, { status: 400 });
+    if (!ownsOr404(auth, cred.ownerId).ok) {
+      return NextResponse.json({ error: "credentialId points at a missing CloudCredential" }, { status: 400 });
+    }
   } else if (kind === "agent") {
     const backend = String(body.agentBackend || "native-fleet");
     if (backend === "caldera") {
       if (!body.calderaUrl || !String(body.calderaUrl).trim()) return NextResponse.json({ error: "calderaUrl is required for a Caldera agent env" }, { status: 400 });
       if (!body.calderaApiKey || !String(body.calderaApiKey).trim()) return NextResponse.json({ error: "calderaApiKey is required for a Caldera agent env" }, { status: 400 });
+      const checked = checkC2Url(String(body.calderaUrl));
+      if (!checked.ok) return NextResponse.json({ error: `calderaUrl: ${checked.error}` }, { status: 400 });
     } else if (!body.agentEnrollmentToken || !String(body.agentEnrollmentToken).trim()) {
       return NextResponse.json({ error: "agentEnrollmentToken is required for a native-fleet agent env" }, { status: 400 });
     }

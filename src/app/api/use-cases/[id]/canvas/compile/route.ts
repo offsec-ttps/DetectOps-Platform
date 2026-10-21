@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { compileCanvasToSteps } from "@/lib/use-cases/canvas/compile";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
@@ -17,12 +18,16 @@ function safeJson<T>(s: string | null | undefined, fb: T): T {
 }
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const useCase = await prisma.useCase.findUnique({
     where: { id },
     include: { canvas: true },
   });
   if (!useCase) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const owns = ownsOr404(auth, useCase.authorId);
+  if (!owns.ok) return owns.response;
   if (!useCase.canvas) {
     return NextResponse.json({ error: "no canvas saved for this UseCase" }, { status: 400 });
   }

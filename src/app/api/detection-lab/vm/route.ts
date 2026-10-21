@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { requireRole } from "@/lib/auth-guard";
 
 const exec = promisify(execFile);
 
@@ -44,11 +45,16 @@ async function ensureRegisteredVM(vmName: string): Promise<boolean> {
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
 export async function POST(req: NextRequest) {
+  // Host VM power control / deletion of ANY registered VirtualBox VM.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const { vmName, action } = body;
 
-  if (!vmName || typeof vmName !== "string") {
-    return NextResponse.json({ error: "vmName required" }, { status: 400 });
+  // VirtualBox names: no leading '-' (would be parsed as a VBoxManage option),
+  // no quotes/control chars (would spoof the `list vms` registration check).
+  if (!vmName || typeof vmName !== "string" || !/^[A-Za-z0-9_.][A-Za-z0-9_. ()-]{0,127}$/.test(vmName)) {
+    return NextResponse.json({ error: "vmName required (letters, digits, space, . _ - ( ) only)" }, { status: 400 });
   }
   if (!VALID_ACTIONS.includes(action)) {
     return NextResponse.json(

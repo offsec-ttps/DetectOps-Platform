@@ -8,6 +8,7 @@
 import { prisma } from "@/lib/prisma";
 import type { ModuleManifest } from "./types";
 import { moduleContentHash, signModule } from "./signing";
+import { SHELLCODE_INJECTION_LIBRARY, SHELLCODE_CATALOG } from "@/config/attack-libraries/shellcode-injection";
 
 function T(id: string, name: string, tactic: string) { return { id, name, tactic }; }
 
@@ -216,6 +217,25 @@ const PROCESS_INJECTION: ModuleManifest = {
   },
 };
 
+// Shellcode Injection — the third Attack Technique Library. Built from the
+// "Shellcode Injection Technique Catalog" and "Basic to Advanced" reference
+// documents: remote-thread / self-injection / APC / thread-hijack / section-mapping
+// / callback / hollowing / syscall-evasion on Windows; ptrace / procfs / memfd /
+// shared-memory / dynamic-linker on Linux; Mach task-port / dylib / XPC on macOS.
+// The list-view catalog is derived from the library definition (one named entry per
+// technique; `match` maps each to its own vetted ART tests, `[]` = coverage-only),
+// so the two cannot drift apart. Defensive: detections, mitigations, no payloads.
+const SHELLCODE_INJECTION: ModuleManifest = {
+  id: SHELLCODE_INJECTION_LIBRARY.moduleId, name: SHELLCODE_INJECTION_LIBRARY.name, version: "1.0.0",
+  category: "privilege-escalation", description: SHELLCODE_INJECTION_LIBRARY.description,
+  author: "DetectOps", icon: "Syringe", compatibleCoreVersion: "^1.0.0",
+  permissions: { frameworks: ["atomic"], integrations: ["siem"], dataScopes: ["atomic-catalogue:read"] }, dependencies: [],
+  contributes: {
+    scenarios: [], view: "attack-catalog", nav: [{ label: "Shellcode Injection Simulation", icon: "Syringe" }],
+    catalog: SHELLCODE_CATALOG,
+  },
+};
+
 // ─── Tactic-lens Attack Simulation libraries (Windows + Linux) ────────────────
 // These are a TACTIC lens over the same atomic library (like AD/Hacktools are a
 // domain/tool lens): Privilege Escalation and Lateral Movement across OSes, plus
@@ -314,7 +334,7 @@ const USER_TO_SYSTEM: ModuleManifest = {
   },
 };
 
-const MODULES = [LOTL, PHISHING, APT, CONTAINER, CLOUD, AD_LIB, HACKTOOLS, CLICKFIX, PROCESS_INJECTION, PRIVESC, LATERAL, UAC_BYPASS, USER_TO_ADMIN, USER_TO_SYSTEM];
+const MODULES = [LOTL, PHISHING, APT, CONTAINER, CLOUD, AD_LIB, HACKTOOLS, CLICKFIX, PROCESS_INJECTION, SHELLCODE_INJECTION, PRIVESC, LATERAL, UAC_BYPASS, USER_TO_ADMIN, USER_TO_SYSTEM];
 
 export async function ensureSimulationModules(): Promise<void> {
   for (const manifest of MODULES) {

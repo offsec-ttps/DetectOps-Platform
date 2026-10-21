@@ -7,6 +7,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
+import { cpSync } from "node:fs";
+import { requireRole, requireUser } from "@/lib/auth-guard";
+import { isSafeBranch, isSafeSegment, isSafeGitUrl, ENVIRONMENTS, ARCHES, PROFILES } from "@/lib/build-forge/validate";
 
 const BUILD_BASE = resolve(process.cwd(), "..", "MCP-DetecOps", "tmp");
 const BUILD_CACHE = join(BUILD_BASE, "build-cache");
@@ -18,6 +21,8 @@ const ARTIFACTS_DIR = join(BUILD_BASE, "artifacts");
  */
 
 export async function GET(req: NextRequest) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const repoId = req.nextUrl.searchParams.get("repoId");
   const status = req.nextUrl.searchParams.get("status");
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") || 50), 100);
@@ -37,7 +42,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  // Building runs the repository's own build code on this host — admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
+  const body = await req.json().catch(() => ({}));
   const { repoId, target, branch, environment, architecture, buildProfile } = body;
 
   if (!repoId || !target) {
@@ -62,6 +70,14 @@ export async function POST(req: NextRequest) {
   const effectiveEnv = environment || repo.defaultEnvironment || "linux";
   const effectiveArch = architecture || repo.defaultArch || "x64";
   const effectiveProfile = buildProfile || "release";
+  // These reach git argv, filesystem paths and build-command placeholders.
+  if (!isSafeBranch(effectiveBranch)) return NextResponse.json({ error: "invalid branch name" }, { status: 400 });
+  if (!ENVIRONMENTS.has(effectiveEnv)) return NextResponse.json({ error: `environment must be one of ${[...ENVIRONMENTS].join(", ")}` }, { status: 400 });
+  if (!ARCHES.has(effectiveArch)) return NextResponse.json({ error: `architecture must be one of ${[...ARCHES].join(", ")}` }, { status: 400 });
+  if (!PROFILES.has(effectiveProfile)) return NextResponse.json({ error: "buildProfile must be release or debug" }, { status: 400 });
+  if (!isSafeSegment(repo.owner) || !isSafeSegment(repo.repoName) || !isSafeGitUrl(repo.gitUrl)) {
+    return NextResponse.json({ error: "repository record has an unsafe owner/name/url — re-add it" }, { status: 400 });
+  }
 
   // Create build record
   const buildId = randomUUID();
@@ -110,19 +126,21 @@ async function runBuildAsync(
     const repoDir = join(BUILD_CACHE, repo.owner, repo.repoName);
     mkdirSync(join(BUILD_CACHE, repo.owner), { recursive: true });
 
+    // git via argv (no shell); `--` ends option parsing; https-only transport.
     if (existsSync(join(repoDir, ".git"))) {
-      await exec(`git -C "${repoDir}" fetch origin ${branch} && git -C "${repoDir}" checkout ${branch} && git -C "${repoDir}" reset --hard origin/${branch}`);
+      await git(["-C", repoDir, "fetch", "origin", "--", branch]);
+      await git(["-C", repoDir, "checkout", "-f", "FETCH_HEAD"]);
     } else {
-      await exec(`git clone --depth 1 --branch ${branch} ${repo.gitUrl} "${repoDir}"`);
+      await git(["clone", "--depth", "1", "--branch", branch, "--", repo.gitUrl, repoDir]);
     }
 
     // Get commit SHA
-    const commitSha = (await exec(`git -C "${repoDir}" rev-parse HEAD`)).trim();
+    const commitSha = (await git(["-C", repoDir, "rev-parse", "HEAD"])).trim();
 
     // Step 2: Create isolated workspace
     const workDir = join(BUILD_CACHE, "_workspaces", buildId);
     mkdirSync(workDir, { recursive: true });
-    await exec(`cp -r "${repoDir}/." "${workDir}/"`);
+    cpSync(repoDir, workDir, { recursive: true });
 
     // Step 3: Resolve and run build command
     let command = targetDef.build_command as string;
@@ -180,12 +198,21 @@ async function runBuildAsync(
   }
 }
 
+/** git without a shell. Only https transports are allowed (blocks ext::, file://, ssh option tricks). */
+function git(args: string[], timeoutMs = 300_000): Promise<string> {
+  return run("git", args, undefined, timeoutMs, { GIT_ALLOW_PROTOCOL: "https", GIT_TERMINAL_PROMPT: "0" });
+}
+
 function exec(command: string, cwd?: string, timeoutMs = 120_000): Promise<string> {
+  return run("bash", ["-c", command], cwd, timeoutMs);
+}
+
+function run(bin: string, argv: string[], cwd?: string, timeoutMs = 120_000, extraEnv: Record<string, string> = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
 
-    const proc = spawn("bash", ["-c", command], {
+    const proc = spawn(bin, argv, {
       cwd: cwd || process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
       env: {
@@ -194,6 +221,7 @@ function exec(command: string, cwd?: string, timeoutMs = 120_000): Promise<strin
         PATH: `${homedir()}/.dotnet:${process.env.PATH}`,
         DOTNET_ROOT: `${homedir()}/.dotnet`,
         DOTNET_CLI_TELEMETRY_OPTOUT: "1",
+        ...extraEnv,
       },
     });
 

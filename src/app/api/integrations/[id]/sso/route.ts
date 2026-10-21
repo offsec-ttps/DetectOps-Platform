@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { requireRole } from "@/lib/auth-guard";
+import { safeFetch, labOutboundPolicy } from "@/lib/net/ssrf";
+
+const xmlEsc = (v: unknown) => String(v ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]!));
 
 /**
  * POST /api/integrations/[id]/sso
@@ -10,12 +14,20 @@ import crypto from "crypto";
  * For OIDC: constructs the authorization URL with proper parameters.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const { id } = await params;
   const item = await prisma.integration.findUnique({ where: { id } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const callbackBase = body.callbackUrl || `${req.nextUrl.origin}/api/integrations/${id}/sso`;
+  // Only accept a same-origin callback (prevents pointing the ACS / redirect_uri
+  // at an attacker host and injecting markup into the AuthnRequest).
+  const defaultCb = `${req.nextUrl.origin}/api/integrations/${id}/sso`;
+  let callbackBase = defaultCb;
+  if (typeof body.callbackUrl === "string") {
+    try { if (new URL(body.callbackUrl).origin === req.nextUrl.origin) callbackBase = body.callbackUrl; } catch { /* default */ }
+  }
   const provider = item.ssoProvider || item.authMethod.replace("_sso", "");
 
   if (provider === "saml") {
@@ -30,9 +42,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ID="${requestId}"
         Version="2.0"
         IssueInstant="${issueInstant}"
-        AssertionConsumerServiceURL="${acsUrl}"
-        Destination="${item.ssoIdpUrl}">
-        <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${entityId}</saml:Issuer>
+        AssertionConsumerServiceURL="${xmlEsc(acsUrl)}"
+        Destination="${xmlEsc(item.ssoIdpUrl)}">
+        <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${xmlEsc(entityId)}</saml:Issuer>
       </samlp:AuthnRequest>
     `.trim()).toString("base64");
 
@@ -63,10 +75,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Try to fetch the OIDC discovery document for the authorization endpoint
     let authorizationEndpoint = `${discoveryUrl}/authorize`;
     try {
-      const discoRes = await fetch(`${discoveryUrl}/.well-known/openid-configuration`);
+      const discoRes = await safeFetch(`${discoveryUrl}/.well-known/openid-configuration`,
+        { signal: AbortSignal.timeout(8000) }, labOutboundPolicy("INTEGRATIONS_ALLOW_LOOPBACK"));
       if (discoRes.ok) {
         const disco = await discoRes.json();
-        authorizationEndpoint = disco.authorization_endpoint || authorizationEndpoint;
+        const ep = typeof disco.authorization_endpoint === "string" ? disco.authorization_endpoint : "";
+        if (/^https?:\/\//i.test(ep)) authorizationEndpoint = ep;
       }
     } catch { /* use default */ }
 
@@ -108,6 +122,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  * the SAML assertion or exchange the OIDC authorization code for tokens.
  */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Unverified "callback" that flips connected/enabled — admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const { id } = await params;
   const body = await req.json();
   const { email, status } = body;

@@ -7,8 +7,12 @@ import { NextResponse } from "next/server";
 import { syncPurpleSharpTemplates } from "@/lib/use-cases/sync/purplesharp-templates";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth-guard";
 
 export async function POST() {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const t0 = Date.now();
   const sessionUser = await getSessionUser().catch(() => null);
   try {

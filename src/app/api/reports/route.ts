@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { generateMarkdownReport } from "@/lib/github";
 import { logEvent } from "@/lib/event-log";
+import { pickReportFields, pickSimulations, parseDate } from "../_shared/report-fields";
 
 // Where locally-saved detection reports are written on disk. Override with
 // REPORTS_LOCAL_DIR; defaults to <cwd>/reports/local.
@@ -50,23 +51,17 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { simulations, ...fields } = body;
+  const body = await req.json().catch(() => ({}));
+  const fields = pickReportFields(body || {});
 
   if (!fields.name) return NextResponse.json({ error: "name is required" }, { status: 400 });
 
   const report = await prisma.detectionReport.create({
     data: {
-      ...fields,
-      startDate: fields.startDate ? new Date(fields.startDate) : null,
-      endDate: fields.endDate ? new Date(fields.endDate) : null,
-      simulations: {
-        create: (simulations || []).map((s: any, i: number) => ({
-          description: s.description || "",
-          output: s.output || "",
-          order: s.order ?? i,
-        })),
-      },
+      ...(fields as any),
+      startDate: parseDate(body.startDate),
+      endDate: parseDate(body.endDate),
+      simulations: { create: pickSimulations(body.simulations) },
     },
     include: { simulations: { orderBy: { order: "asc" } } },
   });

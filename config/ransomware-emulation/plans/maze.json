@@ -1,0 +1,486 @@
+{
+  "gang": "maze",
+  "displayName": "Maze",
+  "aliases": [
+    "ChaCha ransomware",
+    "TWISTED SPIDER (operator)"
+  ],
+  "status": "defunct",
+  "activeSince": "2019",
+  "lineage": "Announced shutdown Nov 2020; Egregor is widely regarded as its successor; Maze pioneered the data-leak-site extortion model later adopted by nearly all RaaS",
+  "summary": "Maze appeared in May 2019 via spam and exploit kits and shifted to post-compromise, affiliate-driven deployment by late 2019, being the first major group to run a public leak site. Mandiant observed access via RDP/Citrix with valid credentials and malspam, Cobalt Strike BEACON, AdFind/BloodHound discovery, ProcDump/Mimikatz credential theft, archiving with 7-Zip/WinRAR and FTP/WinSCP exfiltration, then PsExec deployment. In 2020 affiliates adopted Ragnar Locker's trick of running the encryptor inside a VirtualBox VM.",
+  "uniqueTraits": [
+    "First large-scale name-and-shame data leak site (Nov 2019)",
+    "Exfiltration of archived data over FTP/WinSCP to actor servers",
+    "Encryptor launched inside a Windows 7 VirtualBox VM to evade host security (Sep 2020)",
+    "Batch-script propagation of the payload across hosts"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Navigating the MAZE: Tactics, Techniques and Procedures Associated With MAZE Ransomware Incidents",
+      "publisher": "Mandiant",
+      "date": "2020-05-07",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/tactics-techniques-procedures-associated-with-maze-ransomware-incidents"
+    },
+    {
+      "id": "S2",
+      "title": "Maze (S0449)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/software/S0449/"
+    },
+    {
+      "id": "S3",
+      "title": "Maze attackers adopt Ragnar Locker virtual machine technique",
+      "publisher": "Sophos",
+      "date": "2020-09-17",
+      "url": "https://news.sophos.com/en-us/2020/09/17/maze-attackers-adopt-ragnar-locker-virtual-machine-technique/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Malspam with weaponised documents delivering loaders/Cobalt Strike.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Macro-enabled phishing attachment (local ART T1566.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "RDP and Citrix/VPN access with valid (often brute-forced or purchased) credentials.",
+      "tools": [
+        "RDP",
+        "Citrix"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test reproduces external VPN/Citrix logon; validate via remote-access logs."
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell used to stage and run Cobalt Strike BEACON.",
+      "tools": [
+        "Cobalt Strike",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle (local ART T1059.001 #9)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task/Job: Scheduled Task",
+      "procedure": "Scheduled tasks (masquerading names) to relaunch BEACON.",
+      "tools": [
+        "schtasks"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "exact",
+          "note": "Local scheduled task creation (local ART T1053.005 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1136.002",
+      "techniqueName": "Create Account: Domain Account",
+      "procedure": "Creates new domain accounts for persistent access.",
+      "tools": [
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fcec2963-9951-4173-9bfa-98d8b7834e62",
+          "testNumber": 1,
+          "testName": "Create a new Windows domain admin user",
+          "fidelity": "close",
+          "note": "Create new domain admin user (local ART T1136.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AdFind and BloodHound/SharpHound to map AD.",
+      "tools": [
+        "AdFind",
+        "BloodHound"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user enumeration (local ART T1087.002 #7)"
+        },
+        {
+          "testGuid": "7486cd67-88b7-4695-9aa5-c4429fb4e00a",
+          "testNumber": 16,
+          "testName": "SharpHound detonation (T1069.002)",
+          "fidelity": "close",
+          "note": "SharpHound collection (local ART T1069.002 #16)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Network scanners (e.g. Advanced IP Scanner) to find hosts and open services.",
+      "tools": [
+        "Advanced IP Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "PowerShell /24 port scan (local ART T1046 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "ProcDump of LSASS and Mimikatz.",
+      "tools": [
+        "ProcDump",
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "exact",
+          "note": "ProcDump LSASS dump (local ART T1003.001 #1)"
+        },
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "PowerShell Mimikatz (local ART T1003.001 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP with stolen domain credentials.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "collection",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "Enumerates directories and files to find data to steal and encrypt.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c6c34f61-1c3e-40fb-8a58-d017d88286d8",
+          "testNumber": 5,
+          "testName": "Simulating MAZE Directory Enumeration",
+          "fidelity": "exact",
+          "note": "Simulating MAZE directory enumeration (local ART T1083 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "7-Zip/WinRAR archives of collected data before exfiltration.",
+      "tools": [
+        "7-Zip",
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "close",
+          "note": "Password-protected 7-Zip archive (local ART T1560.001 #4)"
+        },
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "close",
+          "note": "RAR archive creation (local ART T1560.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048.003",
+      "techniqueName": "Exfiltration Over Alternative Protocol: Exfiltration Over Unencrypted Non-C2 Protocol",
+      "procedure": "Exfiltrates archives over FTP (and WinSCP) to actor-controlled servers for the leak site.",
+      "tools": [
+        "FTP",
+        "WinSCP"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "57799bc2-ad1e-4130-a793-fb0c385130ba",
+          "testNumber": 6,
+          "testName": "MAZE FTP Upload",
+          "fidelity": "exact",
+          "note": "MAZE FTP upload (local ART T1048.003 #6)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Batch scripts copy the encryptor to each host over admin shares and launch it (PsExec/WMIC).",
+      "tools": [
+        "batch scripts",
+        "PsExec"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "70f4d07c-5c3e-4d53-bb0a-cdf3ada14baf",
+          "testNumber": 21,
+          "testName": "MAZE Propagation Script",
+          "fidelity": "exact",
+          "note": "MAZE propagation script (local ART T1105 #21)"
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote execution (local ART T1569.002 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1564.006",
+      "techniqueName": "Hide Artifacts: Run Virtual Instance",
+      "procedure": "MSI installs VirtualBox and a Windows 7 VM; starter.bat runs the encryptor inside the guest against mapped host drives.",
+      "tools": [
+        "VirtualBox",
+        "starter.bat"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c59f246a-34f8-4e4d-9276-c295ef9ba0dd",
+          "testNumber": 1,
+          "testName": "Register Portable Virtualbox",
+          "fidelity": "exact",
+          "note": "Registers portable VirtualBox (local ART T1564.006 #1)"
+        },
+        {
+          "testGuid": "88b81702-a1c0-49a9-95b2-2dd53d755767",
+          "testNumber": 2,
+          "testName": "Create and start VirtualBox virtual machine",
+          "fidelity": "exact",
+          "note": "Creates and starts a VirtualBox VM (local ART T1564.006 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies via WMIC.",
+      "tools": [
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete (local ART T1490 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "ChaCha20/RSA encryption and ransom note; desktop wallpaper changed.",
+      "tools": [
+        "Maze encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop as a non-destructive encryption-impact proxy (local ART T1486 #5)"
+        },
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "close",
+          "note": "Wallpaper replacement as performed by Maze (local ART T1491.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

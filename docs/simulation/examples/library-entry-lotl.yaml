@@ -1,0 +1,20 @@
+# Example 3 — Living-off-the-Land entry. Adds one technique to the LOLBAS library.
+# It carries a command, so publishing is queued for admin approval for non-admins.
+# Use a harmless marker command in the lab — never real payloads or live infrastructure.
+schema: 1
+kind: lotl
+library: lotl:lolbas
+key: forfiles-marker-execution
+name: Forfiles indirect command execution (lab marker)
+description: Forfiles can launch a command for each matching file, giving an indirect parent/child chain that some process-lineage rules miss.
+command: forfiles /p C:\Windows\System32 /m notepad.exe /c "cmd /c echo lab-marker"
+executor: cmd                  # cmd | powershell | bash | sh | manual
+cleanup_command: ""
+attack_id: T1202
+tactic: defense-evasion
+binary_path: C:\Windows\System32\forfiles.exe
+elevation_required: false
+risk_level: low                # low | medium | high
+platforms: [windows]
+source_url: https://attack.mitre.org/techniques/T1202/
+changelog: Initial entry

@@ -8,11 +8,16 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth-guard";
 import { buildSshCommand, createSession, TOOL_RUNNERS, type ToolId } from "@/lib/terminal-sessions";
 
 const TOOL_IDS = new Set<ToolId>(Object.keys(TOOL_RUNNERS) as ToolId[]);
 
 export async function POST(req: NextRequest) {
+  // Same privilege as the sessions route — runs a tool over SSH on a cloud-range
+  // host with shared SAR keys, so admin-only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const rangeId: string | undefined = body?.rangeId;
   const serverName: string | undefined = body?.serverName;
@@ -39,7 +44,7 @@ export async function POST(req: NextRequest) {
       message: `Cannot prepare SSH session: ${e?.message || e}`,
     }, { status: 500 });
   }
-  const session = createSession({ rangeId, serverName, command: fullCmd });
+  const session = createSession({ ownerId: auth.user.id, rangeId, serverName, command: fullCmd });
 
   return NextResponse.json({
     status: "ok",

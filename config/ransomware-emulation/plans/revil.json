@@ -1,0 +1,486 @@
+{
+  "gang": "revil",
+  "displayName": "REvil (Sodinokibi)",
+  "aliases": [
+    "Sodinokibi",
+    "Sodin",
+    "GOLD SOUTHFIELD"
+  ],
+  "status": "defunct",
+  "activeSince": "2019",
+  "lineage": "Widely assessed successor of GandCrab (GOLD GARDEN/GOLD SOUTHFIELD); infrastructure taken down Oct 2021, members arrested by Russia's FSB Jan 2022",
+  "summary": "REvil/Sodinokibi was a RaaS that appeared in April 2019 exploiting Oracle WebLogic and grew into one of the most prolific double-extortion operations (JBS, Kaseya). Affiliates used vulnerable edge services, RDP brute force, malspam and MSP compromise. The July 2021 Kaseya VSA attack abused CVE-2021-30116 to push a malicious VSA procedure that decoded the payload with certutil, disabled Defender and side-loaded the encryptor through an outdated, signed MsMpEng.exe.",
+  "uniqueTraits": [
+    "Supply-chain/MSP deployment via Kaseya VSA zero-day CVE-2021-30116 and VSA agent procedures",
+    "certutil -decode of agent.crt and DLL side-loading of mpsvc.dll through an old signed Windows Defender binary",
+    "Privilege escalation exploit CVE-2018-8453 (win32k) embedded in the payload",
+    "2021 variants reboot into Safe Mode (-smode) to encrypt with security tools offline",
+    "Initial wave exploited Oracle WebLogic CVE-2019-2725"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "REvil (S0496)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/software/S0496/"
+    },
+    {
+      "id": "S2",
+      "title": "Sodinokibi ransomware exploits WebLogic Server vulnerability",
+      "publisher": "Cisco Talos",
+      "date": "2019-04-30",
+      "url": "https://blog.talosintelligence.com/sodinokibi-ransomware-exploits-weblogic/"
+    },
+    {
+      "id": "S3",
+      "title": "REvil/Sodinokibi Ransomware",
+      "publisher": "Secureworks CTU",
+      "date": "2019-09-24",
+      "url": "https://www.secureworks.com/research/revil-sodinokibi-ransomware"
+    },
+    {
+      "id": "S4",
+      "title": "REvil ransomware actors attack Kaseya",
+      "publisher": "Cisco Talos",
+      "date": "2021-07-02",
+      "url": "https://blog.talosintelligence.com/revil-ransomware-actors-attack-kaseya/"
+    },
+    {
+      "id": "S5",
+      "title": "IT Management Platform Kaseya Hit With Sodinokibi/REvil Ransomware Attack",
+      "publisher": "Trend Micro",
+      "date": "2021-07-05",
+      "url": "https://www.trendmicro.com/en_us/research/21/g/it-management-platform-kaseya-hit-with-sodinokibi-revil-ransomwa.html"
+    },
+    {
+      "id": "S6",
+      "title": "GOLD SOUTHFIELD (G0115)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/groups/G0115/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploitation of Oracle WebLogic CVE-2019-2725 (and other edge flaws) to drop the payload.",
+      "tools": [
+        "WebLogic exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits WebLogic; validate with vulnerability scanning/exploit range."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1195.002",
+      "techniqueName": "Supply Chain Compromise: Compromise Software Supply Chain",
+      "procedure": "Kaseya VSA zero-day CVE-2021-30116 used to push a malicious 'Kaseya VSA Agent Hot-fix' procedure to MSP-managed endpoints.",
+      "tools": [
+        "Kaseya VSA"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Only local T1195 test is an open-source package (Octopus Scanner) supply-chain proxy, which does not represent RMM-pushed deployment; see the T1072 step for the deployment behaviour."
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Malspam campaigns delivering the loader/payload.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Macro-enabled phishing attachment download (local ART T1566.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Brute Force: Password Guessing",
+      "procedure": "Affiliates brute-forced exposed RDP accounts to gain an initial foothold.",
+      "tools": [
+        "RDP brute-force tooling"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "proxy",
+          "note": "SMB password guessing against a domain user - same credential-guessing telemetry (4625 bursts) as RDP brute force (local ART T1110.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1072",
+      "techniqueName": "Software Deployment Tools",
+      "procedure": "VSA agent procedure executed on every managed endpoint, turning the RMM into the ransomware deployment channel.",
+      "tools": [
+        "Kaseya VSA agent"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e447b83b-a698-4feb-bed1-a7aaf45c3443",
+          "testNumber": 2,
+          "testName": "PDQ Deploy RAT",
+          "fidelity": "proxy",
+          "note": "Payload execution through a legitimate deployment tool (PDQ Deploy) (local ART T1072 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1140",
+      "techniqueName": "Deobfuscate/Decode Files or Information",
+      "procedure": "Procedure copies certutil.exe and runs it with -decode on agent.crt to produce agent.exe.",
+      "tools": [
+        "certutil"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "71abc534-3c05-4d0c-80f7-cbe93cb2aa94",
+          "testNumber": 2,
+          "testName": "Certutil Rename and Decode",
+          "fidelity": "exact",
+          "note": "Renamed certutil decoding a file, matching the Kaseya agent.crt procedure (local ART T1140 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "PowerShell Set-MpPreference disables Defender real-time monitoring, script scanning and network protection.",
+      "tools": [
+        "PowerShell Set-MpPreference"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8df440-51ec-4d53-bf83-899591c9b5d7",
+          "testNumber": 19,
+          "testName": "Tamper with Windows Defender ATP PowerShell",
+          "fidelity": "exact",
+          "note": "Set-MpPreference Defender tampering (catalogued under T1685, formerly T1562.001)"
+        },
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Defender tampering from cmd (local ART T1685 #20)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1574.001",
+      "techniqueName": "Hijack Execution Flow: DLL",
+      "procedure": "agent.exe drops an old signed MsMpEng.exe plus malicious mpsvc.dll and side-loads the encryptor.",
+      "tools": [
+        "MsMpEng.exe",
+        "mpsvc.dll"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "65526037-7079-44a9-bda1-2cb624838040",
+          "testNumber": 4,
+          "testName": "DLL Side-Loading using the Notepad++ GUP.exe binary",
+          "fidelity": "close",
+          "note": "Signed-binary DLL side-loading (Notepad++ GUP.exe) - same technique, different host binary (local ART T1574.001 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Payload embeds an exploit for win32k CVE-2018-8453 to elevate to SYSTEM.",
+      "tools": [
+        "CVE-2018-8453 exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local T1068 tests are BYOVD/driver specific and do not reproduce a win32k kernel exploit."
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1614.001",
+      "techniqueName": "System Location Discovery: System Language Discovery",
+      "procedure": "Checks keyboard layout/system language and exits on CIS-region systems.",
+      "tools": [
+        "GetKeyboardLayoutList"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "631d4cf1-42c9-4209-8fe9-6bd4de9421be",
+          "testNumber": 1,
+          "testName": "Discover System Language by Registry Query",
+          "fidelity": "exact",
+          "note": "Registry query of system language (local ART T1614.001 #1)"
+        },
+        {
+          "testGuid": "e39b99e9-ce7f-4b24-9c88-0fbad069e6c6",
+          "testNumber": 8,
+          "testName": "Discover System Language by Windows API Query",
+          "fidelity": "close",
+          "note": "Windows API language query (local ART T1614.001 #8)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys",
+      "procedure": "Safe-mode variants write a RunOnce value so the encryptor relaunches after the reboot.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "554cbd88-cde1-4b56-8168-0be552eed9eb",
+          "testNumber": 2,
+          "testName": "Reg Key RunOnce",
+          "fidelity": "exact",
+          "note": "RunOnce registry key persistence (local ART T1547.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1688",
+      "techniqueName": "Impair Defenses: Safe Mode Boot",
+      "procedure": "-smode option sets bcdedit safeboot and reboots so encryption runs while EDR is not loaded.",
+      "tools": [
+        "bcdedit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2a78362e-b79a-4482-8e24-be397bce4d85",
+          "testNumber": 1,
+          "testName": "Safe Mode Boot",
+          "fidelity": "exact",
+          "note": "bcdedit safeboot configuration (catalogued under T1688, formerly T1562.009)"
+        },
+        {
+          "testGuid": "c173c948-65e5-499c-afbe-433722ed5bd4",
+          "testNumber": 35,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode with Network",
+          "fidelity": "close",
+          "note": "Registers a service to load in Safe Mode with Network (local ART T1112 #35)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Kills processes/services from its config (databases, backup, mail) before encrypting.",
+      "tools": [
+        "Sodinokibi encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "Stop service via sc (local ART T1489 #1)"
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "close",
+          "note": "Kill service process (local ART T1489 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies and disables recovery (vssadmin, bcdedit recoveryenabled No).",
+      "tools": [
+        "vssadmin",
+        "bcdedit"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recovery disable (local ART T1490 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Salsa20 file encryption with Curve25519 key exchange, random extension and ransom note.",
+      "tools": [
+        "Sodinokibi encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop as a non-destructive encryption-impact proxy (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1491.001",
+      "techniqueName": "Defacement: Internal Defacement",
+      "procedure": "Changes the desktop wallpaper to the ransom message.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "exact",
+          "note": "Replaces desktop wallpaper (local ART T1491.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

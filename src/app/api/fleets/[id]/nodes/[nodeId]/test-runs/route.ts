@@ -7,9 +7,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireFleetAccess } from "@/lib/bas/fleet";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string; nodeId: string }> }) {
   const { id, nodeId } = await ctx.params;
+  // Session + fleet ownership (was unguarded: any caller could read another
+  // tenant's test stdout/stderr by fleet+node id).
+  const access = await requireFleetAccess(id);
+  if (!access.ok) return access.response;
   const node = await prisma.fleetNode.findUnique({ where: { id: nodeId } });
   if (!node || node.fleetId !== id) return NextResponse.json({ error: "node not found" }, { status: 404 });
 

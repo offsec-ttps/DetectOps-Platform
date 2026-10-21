@@ -1,0 +1,493 @@
+{
+  "gang": "babuk",
+  "displayName": "Babuk",
+  "aliases": [
+    "Babyk",
+    "Vasa Locker"
+  ],
+  "status": "defunct",
+  "activeSince": "2020",
+  "lineage": "Source code leaked September 2021 and reused by many families (Rorschach/BabLock, RTM Locker, Mario ESXi, Termite, etc.)",
+  "summary": "Babuk was a RaaS that emerged in late 2020/early 2021, hitting high-profile targets (e.g. Washington DC Metropolitan Police) before pivoting to pure data extortion and later leaking its builder and source code in 2021. Post-leak, a Babuk-built payload was deployed by the 'Tortilla' actor via ProxyShell exploitation of Exchange, China Chopper web shells, PowerShell/certutil downloaders and process hollowing into AddInProcess32.exe. The locker uses ChaCha8+ECDH, stops backup services, deletes shadow copies and enumerates network shares; later 'Babuk' leak-site rebrands (2025) recycled old data and are not associated with new intrusion tradecraft.",
+  "uniqueTraits": [
+    "ProxyShell (CVE-2021-34473/34523/31207) exploitation of Exchange followed by China Chopper web shell (Tortilla campaign)",
+    "w3wp.exe-spawned obfuscated PowerShell using Invoke-WebRequest and certutil to fetch 'tortilla.exe'",
+    "Multi-stage .NET loader injecting the payload into a suspended AddInProcess32.exe (process hollowing) after stripping Mark-of-the-Web",
+    "Modified EfsPotato (CVE-2021-36942 / PetitPotam) for privilege escalation",
+    "ChaCha8 + ECDH locker with Windows, ESXi and NAS builds; source leak spawned many derivative families"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Babuk (S0638)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2021-08-11",
+      "url": "https://attack.mitre.org/software/S0638/"
+    },
+    {
+      "id": "S2",
+      "title": "Babuk ransomware deployed via ProxyShell exploitation of Microsoft Exchange",
+      "publisher": "Cisco Talos",
+      "date": "2021-11-03",
+      "url": "https://blog.talosintelligence.com/2021/11/babuk-exploits-exchange.html"
+    },
+    {
+      "id": "S3",
+      "title": "Babuk: Biting off More than they Could Chew by Aiming to Encrypt VM and *nix Systems?",
+      "publisher": "Trellix (McAfee Enterprise ATR)",
+      "date": "2021",
+      "url": "https://www.trellix.com/blogs/research/babuk-biting-off-more-than-they-could-chew-by-aiming-to-encrypt-vm-and-nix-systems/"
+    },
+    {
+      "id": "S4",
+      "title": "Babuk Source Code Sparks 9 Different Ransomware Strains Targeting VMware ESXi Systems (SentinelOne research)",
+      "publisher": "The Hacker News",
+      "date": "2023-05-11",
+      "url": "https://thehackernews.com/2023/05/babuk-source-code-sparks-9-new.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploited ProxyShell (CVE-2021-34473, CVE-2021-34523, CVE-2021-31207) on internet-facing Microsoft Exchange servers.",
+      "tools": [
+        "ProxyShell exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test exploits Exchange ProxyShell; detect via IIS/Exchange logs and w3wp.exe child-process telemetry."
+    },
+    {
+      "order": 2,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "A China Chopper web shell on the Exchange server likely ran the initial download command.",
+      "tools": [
+        "China Chopper"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "close",
+          "note": "[T1505.003] Writes a web shell to an IIS web root."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "A modified EfsPotato exploit (CVE-2021-36942, PetitPotam) was used to escalate privileges.",
+      "tools": [
+        "EfsPotato"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has only BYOVD/driver-based T1068 tests; none reproduce EFSRPC/potato-style token escalation."
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "When the stage-1 downloader's parent is w3wp.exe it launches an obfuscated PowerShell command.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8b3f4ed6-077b-4bdd-891c-2d237f19410f",
+          "testNumber": 7,
+          "testName": "Obfuscated Command in PowerShell",
+          "fidelity": "close",
+          "note": "[T1027] Obfuscated command in PowerShell."
+        },
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "[T1059.001] PowerShell download cradle."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Invoke-WebRequest and certutil.exe fetch the main loader (tortilla.exe) from attacker infrastructure; the unpacker is pulled from pastebin.pl.",
+      "tools": [
+        "certutil.exe",
+        "Invoke-WebRequest"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "dd3b61dd-7bbc-48cd-ab51-49ad1a776df0",
+          "testNumber": 7,
+          "testName": "certutil download (urlcache)",
+          "fidelity": "exact",
+          "note": "[T1105] certutil -urlcache download."
+        },
+        {
+          "testGuid": "c01cad7f-7a4c-49df-985e-b190dcf6a279",
+          "testNumber": 29,
+          "testName": "iwr or Invoke Web-Request download",
+          "fidelity": "exact",
+          "note": "[T1105] Invoke-WebRequest download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "PowerShell AMSI bypass, and Set-MpPreference used to disable Defender real-time, script-scanning and behaviour monitoring; locker also stops AV services.",
+      "tools": [
+        "PowerShell",
+        "Set-MpPreference"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8df440-51ec-4d53-bf83-899591c9b5d7",
+          "testNumber": 19,
+          "testName": "Tamper with Windows Defender ATP PowerShell",
+          "fidelity": "exact",
+          "note": "[T1685] Tamper with Defender via PowerShell Set-MpPreference."
+        },
+        {
+          "testGuid": "695eed40-e949-40e5-b306-b4031e4154bd",
+          "testNumber": 16,
+          "testName": "AMSI Bypass - AMSI InitFailed",
+          "fidelity": "close",
+          "note": "[T1685] AMSI bypass via amsiInitFailed."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1553.005",
+      "techniqueName": "Subvert Trust Controls: Mark-of-the-Web Bypass",
+      "procedure": "Intermediate unpacker deletes the Zone.Identifier alternate data stream of its files.",
+      "tools": [
+        "Tortilla unpacker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "64b12afc-18b8-4d3f-9eab-7f6cae7c73f9",
+          "testNumber": 3,
+          "testName": "Remove the Zone.Identifier alternate data stream",
+          "fidelity": "exact",
+          "note": "[T1553.005] Removes the Zone.Identifier ADS."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1497.001",
+      "techniqueName": "Virtualization/Sandbox Evasion: System Checks",
+      "procedure": "Unpacker checks for sandboxes and virtual machines before reassembling the payload.",
+      "tools": [
+        "Tortilla unpacker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "502a7dc4-9d6f-4d28-abf2-f0e84692562d",
+          "testNumber": 3,
+          "testName": "Detect Virtualization Environment (Windows)",
+          "fidelity": "close",
+          "note": "[T1497.001] Virtualization environment detection on Windows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1055.012",
+      "techniqueName": "Process Injection: Process Hollowing",
+      "procedure": "Payload is reassembled from encrypted bitmap resources and injected into a suspended copy of AddInProcess32.exe in %TEMP%.",
+      "tools": [
+        "AddInProcess32.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "562427b4-39ef-4e8c-af88-463a78e70b9c",
+          "testNumber": 1,
+          "testName": "Process Hollowing using PowerShell",
+          "fidelity": "close",
+          "note": "[T1055.012] Process hollowing using PowerShell."
+        },
+        {
+          "testGuid": "c8f98fe1-c89b-4c49-a7e3-d60ee4bc2f5a",
+          "testNumber": 3,
+          "testName": "Process Hollowing in Go using CreateProcessW WinAPI",
+          "fidelity": "proxy",
+          "note": "[T1055.012] Process hollowing via CreateProcessW (suspended) in Go."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1057",
+      "techniqueName": "Process Discovery",
+      "procedure": "Locker inspects running processes to terminate those holding file locks.",
+      "tools": [
+        "Babuk locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c5806a4f-62b8-4900-980b-c7ec004e9908",
+          "testNumber": 2,
+          "testName": "Process Discovery - tasklist",
+          "fidelity": "proxy",
+          "note": "[T1057] tasklist process discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "discovery",
+      "techniqueId": "T1007",
+      "techniqueName": "System Service Discovery",
+      "procedure": "Enumerates services on the host and checks service status.",
+      "tools": [
+        "Babuk locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "89676ba1-b1f8-47ee-b940-2e1a113ebc71",
+          "testNumber": 1,
+          "testName": "System Service Discovery",
+          "fidelity": "close",
+          "note": "[T1007] System service discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "discovery",
+      "techniqueId": "T1680",
+      "techniqueName": "Local Storage Discovery",
+      "procedure": "Lists disk volumes and retrieves disk details before encryption.",
+      "tools": [
+        "Babuk locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c11a623-e783-4b2f-ad4a-0a62591e8f85",
+          "testNumber": 2,
+          "testName": "Local Storage Discovery via wmic ",
+          "fidelity": "close",
+          "note": "[T1680] Local storage discovery via wmic."
+        },
+        {
+          "testGuid": "3a4d51bd-b0f5-4249-821c-ba8997c42c00",
+          "testNumber": 1,
+          "testName": "Local Storage Discovery via PSDrive",
+          "fidelity": "close",
+          "note": "[T1680] Local storage discovery via PSDrive."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Enumerates network shares and resources (WNet APIs) to encrypt remote files.",
+      "tools": [
+        "Babuk locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "[T1135] Network share discovery from the command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Terminates backup-related services and processes such as Veeam via the ControlService API.",
+      "tools": [
+        "Babuk locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "[T1489] Stops a service via Service Controller."
+        },
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "[T1489] Stops a service via net.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies with vssadmin.exe delete shadows /all /quiet.",
+      "tools": [
+        "vssadmin.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "[T1490] vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts local and mounted drives with ChaCha8 + ECDH, appends .babyk and drops 'How To Restore Your Files.txt'; Linux/ESXi builds encrypt VMs and the leaked code underpins many ESXi lockers.",
+      "tools": [
+        "Babuk locker (Windows/ESXi)"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "proxy",
+          "note": "[T1529] ESXi vim-cmd VM power-off, as performed by Babuk-derived ESXi lockers."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

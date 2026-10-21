@@ -1,0 +1,585 @@
+{
+  "gang": "hunters",
+  "displayName": "Hunters International",
+  "aliases": [
+    "Hunters International",
+    "World Leaks (successor brand)"
+  ],
+  "status": "rebranded",
+  "activeSince": "2023",
+  "lineage": "Assessed to reuse Hive ransomware source code (Rust encryptor with substantial Hive overlap); announced shutdown in July 2025 with operators pivoting to the extortion-only 'World Leaks' brand",
+  "summary": "Hunters International emerged in October 2023 using a Rust encryptor that shares much of its code with the disrupted Hive operation. Intrusions combined exploitation of exposed services (including an Oracle WebLogic debug port) with targeted malvertising of IT administrators via SharpRhino, a signed C# RAT disguised as Angry IP Scanner. Post-compromise tradecraft relied on Cobalt Strike, Impacket, Plink tunnelling, AnyDesk/TeamViewer and RDP, with registry-hive and NTDS credential theft and data theft to MEGA before encryption. In 2025 the group announced closure and its operators shifted to World Leaks, a data-theft-only extortion brand.",
+  "uniqueTraits": [
+    "SharpRhino RAT: signed C# implant delivered from a typosquatted Angry IP Scanner domain aimed at IT staff",
+    "Exploitation of exposed Oracle WebLogic (debug port 8453, CVE-2020-14644) for initial access",
+    "Hive-derived Rust encryptor (.locked extension, TOR chat portal)",
+    "Evolution from double extortion to exfiltration-only extortion (World Leaks)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "From Hunters to Hunted: Quorum Cyber exposes new Hunters International malware (SharpRhino)",
+      "publisher": "Quorum Cyber",
+      "date": "2024-08",
+      "url": "https://www.quorumcyber.com/insights/from-hunters-to-hunted-quorum-cyber-exposes-new-hunters-international-malware/"
+    },
+    {
+      "id": "S2",
+      "title": "Hunters International ransomware: what we learned from an Oracle WebLogic attack",
+      "publisher": "Forescout",
+      "date": "2025",
+      "url": "https://www.forescout.com/blog/hunters-international-ransomware-what-we-learned-from-an-oracle-ws-attack/"
+    },
+    {
+      "id": "S3",
+      "title": "Hunters International Ransomware: Tactics, Impact, and Defense Strategies",
+      "publisher": "Picus Security",
+      "date": "2025-02-13",
+      "url": "https://www.picussecurity.com/resource/blog/hunters-international-ransomware"
+    },
+    {
+      "id": "S4",
+      "title": "Emulating the Splintered Hunters International Ransomware",
+      "publisher": "AttackIQ",
+      "date": "2025-01-27",
+      "url": "https://www.attackiq.com/2025/01/27/emulating-the-splintered-hunters/"
+    },
+    {
+      "id": "S5",
+      "title": "Hunters International ransomware gang targets IT workers with new SharpRhino malware",
+      "publisher": "BleepingComputer",
+      "date": "2024-08",
+      "url": "https://www.bleepingcomputer.com/news/security/hunters-international-ransomware-gang-targets-it-workers-with-new-sharprhino-malware/"
+    },
+    {
+      "id": "S6",
+      "title": "Hunters International RaaS group closes its doors",
+      "publisher": "OpenText Cybersecurity",
+      "date": "2025-07",
+      "url": "https://community.opentextcybersecurity.com/ransomware-spotlight-226/hunters-international-raas-group-closes-its-doors-361437"
+    },
+    {
+      "id": "S7",
+      "title": "Hunters International threat profile",
+      "publisher": "Blackpoint Cyber",
+      "date": "2024-10",
+      "url": "https://blackpointcyber.com/threat-profile/hunters-international-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits an internet-exposed Oracle WebLogic server via its debug port (TCP 8453, CVE-2020-14644) to gain code execution on the perimeter host.",
+      "tools": [
+        "Oracle WebLogic exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Exploitation of an internet-facing service is not reproducible with a local Windows atomic; validate with perimeter/WAF and application logs instead."
+    },
+    {
+      "order": 2,
+      "tactic": "execution",
+      "techniqueId": "T1204.002",
+      "techniqueName": "User Execution: Malicious File",
+      "procedure": "IT administrators are lured (typosquatted Angry IP Scanner domain) into running a signed NSIS installer that drops the SharpRhino C# RAT.",
+      "tools": [
+        "SharpRhino"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02f35d62-9fdc-4a97-b899-a5d9a876d295",
+          "testNumber": 8,
+          "testName": "Potentially Unwanted Applications (PUA)",
+          "fidelity": "proxy",
+          "note": "Executes a downloaded potentially-unwanted application; stands in for the user running a trojanised admin-tool installer."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "SharpRhino establishes persistence by modifying the Windows Registry Run key and creating a shortcut (LNK) so the RAT relaunches at logon.",
+      "tools": [
+        "SharpRhino"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "close",
+          "note": "Run-key persistence as reported for SharpRhino."
+        },
+        {
+          "testGuid": "24e55612-85f6-4bd6-ae74-a73d02e3441d",
+          "testNumber": 7,
+          "testName": "Add Executable Shortcut Link to User Startup Folder",
+          "fidelity": "close",
+          "note": "Executable shortcut placed in the user Startup folder, matching the LNK-based relaunch."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell is used post-compromise (SharpRhino tasking and on the WebLogic host) to pull down additional tooling such as Cobalt Strike.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell file download, matching staged tool retrieval."
+        },
+        {
+          "testGuid": "a538de64-1c74-46ed-aa60-b995ed302598",
+          "testNumber": 17,
+          "testName": "PowerShell Command Execution",
+          "fidelity": "proxy",
+          "note": "Generic PowerShell command execution telemetry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Cobalt Strike beacons provide HTTP(S) C2 after initial foothold.",
+      "tools": [
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "Suspicious user-agent web C2 traffic from PowerShell; approximates beacon HTTP check-ins."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Plink (PuTTY) SSH tunnels expose internal RDP to attacker infrastructure.",
+      "tools": [
+        "Plink"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "Runs ngrok to tunnel a local service outward; same tunnelling detection surface as Plink reverse tunnels."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "Network and host discovery with IP/port scanners and native commands to locate servers, shares and the domain controller.",
+      "tools": [
+        "Angry IP Scanner",
+        "native Windows utilities"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "close",
+          "note": "Netscan host enumeration."
+        },
+        {
+          "testGuid": "52ab5108-3f6f-42fb-8ba3-73bc054f22c8",
+          "testNumber": 3,
+          "testName": "Remote System Discovery - nltest",
+          "fidelity": "proxy",
+          "note": "nltest-based domain controller discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.002",
+      "techniqueName": "OS Credential Dumping: Security Account Manager",
+      "procedure": "Saves the SAM and SYSTEM registry hives (reg save) for offline hash extraction.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5c2571d0-1572-416d-9676-812e64ca9f44",
+          "testNumber": 1,
+          "testName": "Registry dump of SAM, creds, and secrets",
+          "fidelity": "exact",
+          "note": "reg save of SAM/SYSTEM/SECURITY hives."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "Dumps the Active Directory database with ntdsutil on a domain controller.",
+      "tools": [
+        "ntdsutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "exact",
+          "note": "ntdsutil IFM dump of NTDS.dit."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "LSASS memory scraping with Mimikatz to obtain domain-admin credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation against LSASS."
+        },
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "proxy",
+          "note": "comsvcs.dll MiniDump of LSASS, an alternative LSASS-dump path."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1047",
+      "techniqueName": "Windows Management Instrumentation",
+      "procedure": "Impacket (wmiexec-style) remote execution with harvested domain-admin credentials.",
+      "tools": [
+        "Impacket"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a3ddaf15-d1a1-4bc3-8683-84c7c67120fe",
+          "testNumber": 11,
+          "testName": "Impacket wmiexec.py",
+          "fidelity": "exact",
+          "note": "Impacket wmiexec.py remote execution."
+        },
+        {
+          "testGuid": "9c8ef159-c666-472f-9874-90c8d60d136b",
+          "testNumber": 6,
+          "testName": "WMI Execute Remote Process",
+          "fidelity": "close",
+          "note": "WMI remote process creation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Interactive RDP between servers using domain-admin accounts.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP connection to a remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "PsExec over SMB admin shares to execute tooling and stage the encryptor on remote hosts.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copy and execute a file with PsExec."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote command execution as a service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "AnyDesk and TeamViewer are installed for redundant interactive access.",
+      "tools": [
+        "AnyDesk",
+        "TeamViewer"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk artefacts on Windows."
+        },
+        {
+          "testGuid": "8ca3b96d-8983-4a7f-b125-fc98cc0a2aa0",
+          "testNumber": 1,
+          "testName": "TeamViewer Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "TeamViewer artefacts on Windows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.004",
+      "techniqueName": "Impair Defenses: Disable or Modify System Firewall",
+      "procedure": "Disables Windows Firewall (and Data Execution Prevention via bcdedit) before running the encryptor.",
+      "tools": [
+        "netsh",
+        "bcdedit"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "88d05800-a5e4-407e-9b53-ece4174f197f",
+          "testNumber": 1,
+          "testName": "Disable Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "Disable Microsoft Defender Firewall (catalogue lists firewall tampering under T1686)."
+        },
+        {
+          "testGuid": "91f348e6-3760-4997-a93b-2ceee7f254ee",
+          "testNumber": 22,
+          "testName": "Blackbit - Disable Windows Firewall using netsh firewall",
+          "fidelity": "close",
+          "note": "netsh firewall disable."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Stolen data is uploaded to MEGA prior to encryption; under the World Leaks brand exfiltration alone is used for extortion.",
+      "tools": [
+        "MEGA"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S6",
+        "S7"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone upload to MEGA cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies with vssadmin before encryption.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Hive-derived Rust encryptor renames files to .locked and drops a README directing victims to a TOR chat portal.",
+      "tools": [
+        "Hunters International encryptor (Rust)"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop; benign stand-in for the encryptor's note-writing behaviour."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

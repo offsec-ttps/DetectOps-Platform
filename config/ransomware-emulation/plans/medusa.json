@@ -1,0 +1,648 @@
+{
+  "gang": "Medusa",
+  "displayName": "Medusa",
+  "aliases": [
+    "Spearwing",
+    "Medusa Blog"
+  ],
+  "status": "active",
+  "activeSince": "2021",
+  "lineage": "Closed operation that moved to an affiliate (RaaS) model in early 2023; unrelated to MedusaLocker",
+  "summary": "Medusa is a double-extortion RaaS operation active since June 2021 that buys access from initial access brokers and rapidly weaponises newly disclosed edge/RMM CVEs (ScreenConnect, FortiClient EMS, GoAnywhere, BeyondTrust). Operators live off the land with heavily obfuscated PowerShell, rotate through many RMM tools and tunnels, kill EDR with signed malicious/vulnerable drivers (ABYSSWORKER, POORTRY/KillAV), and push the gaze.exe encryptor network-wide with PDQ Deploy.",
+  "uniqueTraits": [
+    "Exploits newly published CVEs within ~24h (CVE-2024-1709, CVE-2023-48788, CVE-2025-10035, CVE-2026-1731) and verifies exploitation via Interactsh OOB domains",
+    "ABYSSWORKER driver (smuol.sys) masquerading as CrowdStrike CSAgent.sys, plus POORTRY/KillAV BYOVD, distributed with PDQ Deploy",
+    "PDQ Deploy playbook that excludes C:\\ from Defender, robocopies gaze.exe into System32 and runs it",
+    "openrdp.bat pushed via PsExec (netsh RDP/WMI firewall rules + fDenyTSConnections=0)",
+    "mimilib.dll SSP registration logging plaintext passwords to kiwissp.log; Default Domain Policy set Enabled/Enforced",
+    "Rclone renamed lsp.exe with ngconf.txt config staged in pre-existing Defender-excluded folders; Nezha/MeshAgent/Ligolo-ng/Cloudflared for C2"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Medusa Ransomware (AA25-071A, updated Aug. 18, 2026)",
+      "publisher": "CISA / FBI / HHS",
+      "date": "2026-08-18",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-071a"
+    },
+    {
+      "id": "S2",
+      "title": "Medusa Ransomware Activity Continues to Increase",
+      "publisher": "Symantec Threat Hunter Team",
+      "date": "2025-03-06",
+      "url": "https://www.security.com/threat-intelligence/medusa-ransomware-attacks"
+    },
+    {
+      "id": "S3",
+      "title": "Medusa Ransomware Uses Malicious Driver to Disable Anti-Malware with Stolen Certificates (ABYSSWORKER, Elastic Security Labs research)",
+      "publisher": "The Hacker News",
+      "date": "2025-03-21",
+      "url": "https://thehackernews.com/2025/03/medusa-ransomware-uses-malicious-driver.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits unpatched internet-facing software within ~24h of disclosure: ScreenConnect CVE-2024-1709, FortiClient EMS CVE-2023-48788, GoAnywhere MFT CVE-2025-10035, BeyondTrust CVE-2026-1731 and Microsoft Exchange; confirms success by beaconing to Interactsh (oast.site/.pro/.fun) subdomains. Access is also bought from IABs.",
+      "tools": [
+        "Interactsh"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Windows atomic for exploiting this public-facing product/CVE; validate via perimeter/WAF and product logs instead."
+    },
+    {
+      "order": 2,
+      "tactic": "execution",
+      "techniqueId": "T1027",
+      "techniqueName": "Obfuscated Files or Information",
+      "procedure": "Runs PowerShell with -exec bypass -enc base64 blobs, string-sliced 'DownloadFile' invocations and gzip+base64 scriptblocks (powerfun.ps1 TLS bind/reverse shell on 443); deletes PowerShell history afterwards.",
+      "tools": [
+        "PowerShell",
+        "powerfun.ps1"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a50d5a97-2531-499e-a1de-5544c74432c6",
+          "testNumber": 2,
+          "testName": "Execute base64-encoded PowerShell",
+          "fidelity": "exact",
+          "note": "Base64 -EncodedCommand PowerShell, as in the advisory's first stealth example"
+        },
+        {
+          "testGuid": "6683baf0-6e77-4f58-b114-814184ea8150",
+          "testNumber": 11,
+          "testName": "Obfuscated PowerShell Command via Character Array",
+          "fidelity": "close",
+          "note": "Character-array/concatenation obfuscation mirrors the sliced 'DownloadFile' string"
+        },
+        {
+          "testGuid": "da75ae8d-26d6-4483-b0fe-700e4df4f037",
+          "testNumber": 12,
+          "testName": "Clear Powershell History by Deleting History File",
+          "fidelity": "close",
+          "note": "Covers the follow-on deletion of PowerShell console history"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Uses certutil.exe and PowerShell Net.WebClient to pull RMM MSI installers and tooling onto the foothold.",
+      "tools": [
+        "certutil",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "dd3b61dd-7bbc-48cd-ab51-49ad1a776df0",
+          "testNumber": 7,
+          "testName": "certutil download (urlcache)",
+          "fidelity": "exact",
+          "note": "certutil -urlcache download is the named LOTL ingress method"
+        },
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell WebClient file download"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs legitimate RMM chosen to match tools already in the victim estate: SimpleHelp, AnyDesk, MeshAgent, Atera, ConnectWise, N-able, BeyondTrust, eHorus, Splashtop; also the Nezha monitoring agent installed by PowerShell for backdoor access.",
+      "tools": [
+        "SimpleHelp",
+        "AnyDesk",
+        "MeshAgent",
+        "Atera",
+        "ConnectWise",
+        "N-able",
+        "Splashtop",
+        "Nezha"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk is repeatedly named"
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop is named in the 2026 update"
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "close",
+          "note": "ScreenConnect (ConnectWise) install"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Builds reverse tunnels with Ligolo-ng, Cloudflared (Cloudflare Tunnel) and GSocket to reach internal services through egress filtering.",
+      "tools": [
+        "Ligolo-ng",
+        "Cloudflared",
+        "GSocket"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "ngrok exercises the same reverse-tunnel-to-SaaS-edge pattern as Cloudflared/Ligolo-ng"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Scans with Advanced IP Scanner, SoftPerfect Network Scanner and CrackMapExec/NetExec for ports 21,22,23,80,115,443,1433,3050,3128,3306,3389; WMI used for host queries.",
+      "tools": [
+        "Advanced IP Scanner",
+        "SoftPerfect NetScan",
+        "NetExec"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner (netscan.exe) execution"
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "PowerShell /24 port sweep approximates the targeted port scan"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "BYOVD/malicious-driver EDR killing: ABYSSWORKER (smuol.sys, signed with stolen certificates, masquerading as CrowdStrike CSAgent.sys) loaded by a HeartCrypt-packed loader, plus POORTRY and KillAV drivers pushed to every endpoint; Defender disabled via local Group Policy during LSASS theft.",
+      "tools": [
+        "ABYSSWORKER",
+        "POORTRY",
+        "KillAV",
+        "HeartCrypt"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "Loads a known vulnerable signed driver (BYOVD) - same driver-load telemetry as Medusa's KillAV chain"
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Backstab abuses a signed driver (procexp) to kill protected AV processes"
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "proxy",
+          "note": "Stop and remove a security service"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1564.012",
+      "techniqueName": "File/Path Exclusions",
+      "procedure": "Stages Rclone and other tooling in pre-existing Windows Defender excluded folders; the PDQ playbook runs a base64 PowerShell command that excludes the entire C: drive from Defender.",
+      "tools": [
+        "PowerShell",
+        "PDQ Deploy"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0303c07b-545e-4c0b-89f4-aea84a7a8d8e",
+          "testNumber": 1,
+          "testName": "Stage and execute a payload from a Windows Defender excluded path",
+          "fidelity": "exact",
+          "note": "Stage and execute a payload from a Defender-excluded path"
+        },
+        {
+          "testGuid": "0b19f4ee-de90-4059-88cb-63c800c683ed",
+          "testNumber": 26,
+          "testName": "Tamper with Windows Defender Evade Scanning -Folder",
+          "fidelity": "close",
+          "note": "Add-MpPreference folder exclusion, as used to exclude C:\\"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "LSASS Memory",
+      "procedure": "Dumps LSASS with comsvcs.dll MiniDump, Task Manager and Mimikatz.",
+      "tools": [
+        "comsvcs.dll",
+        "Task Manager",
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "exact",
+          "note": "rundll32 comsvcs.dll MiniDump"
+        },
+        {
+          "testGuid": "dea6c349-f1c6-44f3-87a1-1ed33a59a607",
+          "testNumber": 5,
+          "testName": "Dump LSASS.exe Memory using Windows Task Manager",
+          "fidelity": "exact",
+          "note": "Task Manager LSASS dump"
+        },
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "close",
+          "note": "Mimikatz execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "persistence",
+      "techniqueId": "T1547.005",
+      "techniqueName": "Security Support Provider",
+      "procedure": "Registers Mimikatz mimilib.dll in HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa 'Security Packages' so plaintext logons are written to C:\\Windows\\System32\\kiwissp.log.",
+      "tools": [
+        "mimilib.dll"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "afdfd7e3-8a0b-409f-85f7-886fdf249c9e",
+          "testNumber": 1,
+          "testName": "Modify HKLM:\\System\\CurrentControlSet\\Control\\Lsa Security Support Provider configuration in registry",
+          "fidelity": "close",
+          "note": "Modifies the LSA Security Packages value to load a custom SSP"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "NTDS",
+      "procedure": "Creates a C: shadow copy with vssadmin, copies ntds.dit, SYSTEM and SECURITY hives out of it, then deletes the shadow copy; also accesses ntds.dit with other dumping tools.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "dcebead7-6c28-4b4b-bf3c-79deb1b1fc7f",
+          "testNumber": 1,
+          "testName": "Create Volume Shadow Copy with vssadmin",
+          "fidelity": "exact",
+          "note": "vssadmin create shadow"
+        },
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "exact",
+          "note": "Copy NTDS.dit and hives from the shadow copy"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Group Policy Modification",
+      "procedure": "Sets the AD Default Domain Policy to 'Enabled, Enforced' so the attacker's settings override stricter GPOs.",
+      "tools": [
+        "Group Policy Management"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "proxy",
+          "note": "Domain GPO modification from the command line (LockBit-style); same GPO-change telemetry"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "Pushes openrdp.bat with PsExec (-c -s): netsh adds an inbound TCP/3389 rule, enables the WMI firewall rule group and sets fDenyTSConnections=0, then moves laterally over RDP; small files are exfiltrated through rdpclip.",
+      "tools": [
+        "PsExec",
+        "openrdp.bat",
+        "netsh",
+        "reg"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "16bdbe52-371c-4ccf-b708-79fba61f1db4",
+          "testNumber": 70,
+          "testName": "Enable RDP via Registry (fDenyTSConnections)",
+          "fidelity": "exact",
+          "note": "Enable RDP via fDenyTSConnections"
+        },
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "netsh firewall rules allowing RDP/SMB inbound"
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote execution used to deliver the script"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "Archives data with Bandizip, locates databases with Navicat, and exfiltrates with Rclone renamed lsp.exe using an ngconf.txt config to Medusa servers; Robocopy also used.",
+      "tools": [
+        "Rclone (lsp.exe)",
+        "Bandizip",
+        "Navicat",
+        "Robocopy"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Rclone to cloud storage - same binary/arguments pattern; rename not reproduced"
+        },
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "Rclone over FTP/alternate protocol"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "execution",
+      "techniqueId": "T1072",
+      "techniqueName": "Software Deployment Tools",
+      "procedure": "Uses PDQ Inventory/PDQ Deploy (or BigFix) to push the KillAV driver and then gaze.exe: RunFileCopy.cmd robocopies gaze.exe into C:\\Windows\\System32 and command.cmd executes it; same PDQ path seen in ~2/3 of Symantec's Medusa cases.",
+      "tools": [
+        "PDQ Deploy",
+        "PDQ Inventory",
+        "BigFix",
+        "Robocopy"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e447b83b-a698-4feb-bed1-a7aaf45c3443",
+          "testNumber": 2,
+          "testName": "PDQ Deploy RAT",
+          "fidelity": "exact",
+          "note": "PDQ Deploy used to push and run a payload"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "gaze.exe stops services related to backups, security, databases, communication, file sharing and web servers before encrypting.",
+      "tools": [
+        "gaze.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "net stop of services"
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "exact",
+          "note": "sc stop of services"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "gaze.exe deletes volume shadow copies prior to encryption.",
+      "tools": [
+        "gaze.exe",
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "AES-256 encryption with .medusa extension and ransom note (!!!READ_ME_MEDUSA!!!.txt) per folder; VMs are powered off and encrypted, Linux hosts hit with gaze.py over SFTP; tools deleted afterwards.",
+      "tools": [
+        "gaze.exe",
+        "gaze.py"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop telemetry (non-Medusa note)"
+        },
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "proxy",
+          "note": "Drops renamed files + ransom note, approximating the .medusa pattern"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

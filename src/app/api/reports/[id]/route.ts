@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { pickReportFields, pickSimulations, parseDate } from "../../_shared/report-fields";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,8 +14,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await req.json();
-  const { simulations, ...fields } = body;
+  const body = await req.json().catch(() => ({}));
+  const fields = pickReportFields(body || {});
+  const simulations = Array.isArray(body?.simulations) ? pickSimulations(body.simulations) : null;
 
   // Delete existing simulations and recreate
   if (simulations) {
@@ -24,18 +26,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const report = await prisma.detectionReport.update({
     where: { id },
     data: {
-      ...fields,
-      startDate: fields.startDate ? new Date(fields.startDate) : undefined,
-      endDate: fields.endDate ? new Date(fields.endDate) : undefined,
-      ...(simulations ? {
-        simulations: {
-          create: simulations.map((s: any, i: number) => ({
-            description: s.description || "",
-            output: s.output || "",
-            order: s.order ?? i,
-          })),
-        },
-      } : {}),
+      ...(fields as any),
+      startDate: parseDate(body.startDate) ?? undefined,
+      endDate: parseDate(body.endDate) ?? undefined,
+      ...(simulations ? { simulations: { create: simulations } } : {}),
     },
     include: { simulations: { orderBy: { order: "asc" } } },
   });

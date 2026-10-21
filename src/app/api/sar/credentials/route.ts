@@ -13,10 +13,21 @@
 
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { getActiveLab } from "@/lib/active-lab";
-import { getSessionUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth-guard";
+
+// Resolved deployPaths the platform actually created (deployments registry).
+// A requested deployPath must match one of these — so this plaintext-credential
+// endpoint can't be pointed at an arbitrary attack_range_local.conf on the host.
+function registeredDeployPaths(): Set<string> {
+  try {
+    const raw = readFileSync(path.join(process.cwd(), "labs", ".deployments-registry.json"), "utf8");
+    const arr = JSON.parse(raw);
+    return new Set((Array.isArray(arr) ? arr : []).map((e: any) => e?.deployPath).filter(Boolean).map((p: string) => path.resolve(p)));
+  } catch { return new Set(); }
+}
 
 function parseConf(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -33,16 +44,23 @@ function parseConf(raw: string): Record<string, string> {
 }
 
 export async function GET(req: Request) {
-  // Gate plaintext behind a session when auth is enforced.
-  if (process.env.AUTH_ENFORCED === "true") {
-    const user = await getSessionUser().catch(() => null);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  // This returns PLAINTEXT lab service credentials, so it is admin-only (the
+  // previous `AUTH_ENFORCED==="true"` gate used a non-standard env name the rest
+  // of the app never sets, so it effectively never fired — a disclosure hole).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
 
   // An explicit ?deployPath= targets a specific deployed lab, so the Campaign
   // Designer can show credentials for the lab that's actually running (local vs
   // fleet). Without it, fall back to the single active lab.
-  const dp = new URL(req.url).searchParams.get("deployPath");
+  const rawDp = new URL(req.url).searchParams.get("deployPath");
+  // SECURITY: a requested deployPath must be a lab the platform actually created
+  // (present in the deployments registry) AND still carry deployment.json —
+  // otherwise an arbitrary `*/attack_range_local.conf` on the host is readable.
+  const dp = rawDp ? path.resolve(rawDp.replace(/^~(?=$|\/)/, process.env.HOME || "~")) : "";
+  if (rawDp && (!registeredDeployPaths().has(dp) || !existsSync(path.join(dp, "deployment.json")))) {
+    return NextResponse.json({ available: false, reason: "deployPath is not a registered platform lab deployment" }, { status: 400 });
+  }
   const sarPath = dp
     ? (existsSync(path.join(dp, "sar", "attack_range_local.conf")) ? path.join(dp, "sar") : dp)
     : getActiveLab().sarPath;

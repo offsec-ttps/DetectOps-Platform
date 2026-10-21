@@ -1,0 +1,596 @@
+{
+  "gang": "cactus",
+  "displayName": "Cactus",
+  "aliases": [
+    "CACTUS"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Reported overlap with ex-Black Basta operators (shared BackConnect / Teams vishing playbook, 2025)",
+  "summary": "Cactus emerged in March 2023 targeting large enterprises via edge-device exploitation (Fortinet VPN, Qlik Sense CVE-2023-41265/41266/48365, Ivanti Sentry CVE-2023-38035). In 2025 it adopted the Black Basta playbook of email bombing plus Microsoft Teams vishing to get victims to start Quick Assist, followed by OneDriveStandaloneUpdater DLL side-loading of the QakBot-linked BackConnect malware. Post-exploitation uses RMM (AnyDesk, ManageEngine UEMS, Splashtop), SSH/Plink tunnels, WinRM, Rclone, ESXi SSH/firewall tampering and a self-encrypting payload.",
+  "uniqueTraits": [
+    "Encryptor is itself AES-encrypted and only unpacked with a key supplied at run time (-i/-r flags, 7-Zip/batch unpacking)",
+    "Qlik Sense Scheduler exploitation (CVE-2023-41265/41266/48365) pulling ManageEngine UEMS disguised as Qlik files",
+    "2025: email bombing + Teams vishing -> Quick Assist -> .bpx/.cab payload -> OneDriveStandaloneUpdater.exe side-loading wscapi.dll (BackConnect)",
+    "BackConnect C2 list in HKLM\\SOFTWARE\\TitanPlus",
+    "ESXi: enable root SSH, disable execInstalledOnly and firewall, run socks.out (SystemBC)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "CACTUS Ransomware: Prickly New Variant Evades Detection",
+      "publisher": "Kroll",
+      "date": "2023-05-09",
+      "url": "https://www.kroll.com/en/insights/publications/cyber/cactus-ransomware-prickly-new-variant-evades-detection"
+    },
+    {
+      "id": "S2",
+      "title": "Qlik Sense Exploited in Cactus Ransomware Campaign",
+      "publisher": "Arctic Wolf Labs",
+      "date": "2023-11-28",
+      "url": "https://arcticwolf.com/resources/blog/qlik-sense-exploited-in-cactus-ransomware-campaign/"
+    },
+    {
+      "id": "S3",
+      "title": "CACTUS: Analyzing a Coordinated Ransomware Attack on Corporate Networks",
+      "publisher": "Bitdefender Labs",
+      "date": "2024-04-12",
+      "url": "https://www.bitdefender.com/en-us/blog/businessinsights/cactus-analyzing-a-coordinated-ransomware-attack-on-corporate-networks"
+    },
+    {
+      "id": "S4",
+      "title": "Black Basta and Cactus Ransomware Groups Add BackConnect Malware to Their Arsenal",
+      "publisher": "Trend Micro",
+      "date": "2025-03-03",
+      "url": "https://www.trendmicro.com/en_us/research/25/b/black-basta-cactus-ransomware-backconnect.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits Fortinet VPN appliances, Qlik Sense (CVE-2023-41265, CVE-2023-41266, CVE-2023-48365) and Ivanti MobileIron Sentry CVE-2023-38035 within a day of PoC release.",
+      "tools": [
+        "Fortinet VPN exploit",
+        "Qlik Sense exploit",
+        "Ivanti Sentry exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Windows atomic for exploiting this public-facing product/CVE; validate via perimeter/WAF and product logs instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "After an email-bombing flood, an external Teams account posing as IT support talks the user into launching Quick Assist and granting remote control.",
+      "tools": [
+        "Microsoft Teams",
+        "Quick Assist"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1aea6d15-70f1-4b4e-8b02-397b5d5ffe75",
+          "testNumber": 15,
+          "testName": "Microsoft App Quick Assist Execution",
+          "fidelity": "exact",
+          "note": "Microsoft Quick Assist execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1140",
+      "techniqueName": "Deobfuscate/Decode Files or Information",
+      "procedure": "Downloads kb*.bpx chunks, concatenates them into pack.zip, extracts with tar and expands .cab files into the OneDrive folder.",
+      "tools": [
+        "tar",
+        "expand.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9f8b1c54-cb76-4d5e-bb1f-2f5c0e8f5a11",
+          "testNumber": 11,
+          "testName": "Expand CAB with expand.exe",
+          "fidelity": "exact",
+          "note": "Expand CAB with expand.exe"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1574.001",
+      "techniqueName": "DLL",
+      "procedure": "OneDriveStandaloneUpdater.exe side-loads a malicious wscapi.dll (with OpenSSL DLLs) giving a BackConnect foothold that looks like OneDrive activity.",
+      "tools": [
+        "OneDriveStandaloneUpdater.exe",
+        "BackConnect (QBACKCONNECT)"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "65526037-7079-44a9-bda1-2cb624838040",
+          "testNumber": 4,
+          "testName": "DLL Side-Loading using the Notepad++ GUP.exe binary",
+          "fidelity": "close",
+          "note": "DLL side-loading via a signed updater (Notepad++ GUP.exe)"
+        },
+        {
+          "testGuid": "3dd6a6cf-9c78-462c-bd75-e9b54fc8925b",
+          "testNumber": 38,
+          "testName": "Download a file with OneDrive Standalone Updater",
+          "fidelity": "proxy",
+          "note": "OneDrive Standalone Updater abuse telemetry"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "BackConnect stores its C2 IP list in HKLM\\SOFTWARE\\TitanPlus.",
+      "tools": [
+        "BackConnect"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "282f929a-6bc5-42b8-bd93-960c3ba35afe",
+          "testNumber": 2,
+          "testName": "Modify Registry of Local Machine - cmd",
+          "fidelity": "close",
+          "note": "Creates a value under HKLM\\SOFTWARE from the command line"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Qlik Sense Scheduler spawns PowerShell and BITS to download AnyDesk, renamed Plink and ManageEngine UEMS executables disguised as Qlik files.",
+      "tools": [
+        "PowerShell",
+        "BITSAdmin"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3c73d728-75fb-4180-a12f-6712864d7421",
+          "testNumber": 1,
+          "testName": "Bitsadmin Download (cmd)",
+          "fidelity": "exact",
+          "note": "bitsadmin download"
+        },
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "exact",
+          "note": "PowerShell download"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk, Splashtop and ManageEngine UEMS (Endpoint Central) for persistent access.",
+      "tools": [
+        "AnyDesk",
+        "Splashtop",
+        "ManageEngine UEMS"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk"
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task",
+      "procedure": "Creates scheduled tasks that maintain an SSH backdoor to C2; WinRM used to create tasks remotely.",
+      "tools": [
+        "schtasks",
+        "SSH"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "close",
+          "note": "Local scheduled task"
+        },
+        {
+          "testGuid": "2e5eac3e-327b-4a88-a0c0-c4057039a8dd",
+          "testNumber": 3,
+          "testName": "Scheduled task Remote",
+          "fidelity": "close",
+          "note": "Remote scheduled task"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Uses a renamed Plink to tunnel RDP and SSH tunnels/SOCKS proxies (SECURITY1 host) between networks.",
+      "tools": [
+        "Plink",
+        "SSH"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "Reverse tunnelling tool (ngrok) in place of Plink"
+        },
+        {
+          "testGuid": "b8223ea9-4be2-44a6-b50a-9657a3d4e72a",
+          "testNumber": 3,
+          "testName": "portproxy reg key",
+          "fidelity": "proxy",
+          "note": "Internal port-proxy relay"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "SoftPerfect Network Scanner and PowerShell ping sweeps; WizTree disk analysis.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "PowerShell",
+        "WizTree"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner"
+        },
+        {
+          "testGuid": "6db1f57f-d1d5-4223-8a66-55c9c65a9592",
+          "testNumber": 4,
+          "testName": "Remote System Discovery - ping sweep",
+          "fidelity": "close",
+          "note": "Ping sweep"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.004",
+      "techniqueName": "LSA Secrets",
+      "procedure": "Dumps LSA secrets and LSASS-held credentials to reach domain admin; SMB brute-force against hosts.",
+      "tools": [
+        "Mimikatz-class tools"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "55295ab0-a703-433b-9ca4-ae13807de12f",
+          "testNumber": 1,
+          "testName": "Dumping LSA Secrets",
+          "fidelity": "exact",
+          "note": "Dumping LSA Secrets"
+        },
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "proxy",
+          "note": "LSASS dump"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.006",
+      "techniqueName": "Windows Remote Management",
+      "procedure": "Moves via SMB shares and WinRM remote commands; WinSCP deployed across hosts; RDP also used.",
+      "tools": [
+        "WinRM",
+        "WinSCP"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5295bd61-bd7e-4744-9d52-85962a4cf2d6",
+          "testNumber": 2,
+          "testName": "Remote Code Execution with PS Credentials Using Invoke-Command",
+          "fidelity": "exact",
+          "note": "Invoke-Command over WinRM"
+        },
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "close",
+          "note": "Admin share mapping"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Uninstalls Sophos and other endpoint security, disables Restricted Admin and pushes defense-killing tasks by GPO.",
+      "tools": [
+        "batch scripts",
+        "GPO"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Stop and remove security service"
+        },
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "proxy",
+          "note": "Disable a security service"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "Exfiltrates with Rclone renamed svchost.exe.",
+      "tools": [
+        "Rclone"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Rclone to cloud storage; rename not reproduced"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.004",
+      "techniqueName": "SSH",
+      "procedure": "On ESXi enables root SSH, disables execInstalledOnly and the firewall, then runs socks.out (SystemBC) and a custom ESXi encryptor.",
+      "tools": [
+        "SSH",
+        "esxcli",
+        "SystemBC (socks.out)"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "280812c8-4dae-43e9-a74e-1d08ab997c0e",
+          "testNumber": 2,
+          "testName": "ESXi - Enable SSH via VIM-CMD",
+          "fidelity": "exact",
+          "note": "Enable SSH on ESXi via vim-cmd"
+        },
+        {
+          "testGuid": "bac8a340-be64-4491-a0cc-0985cb227f5a",
+          "testNumber": 23,
+          "testName": "ESXi - Disable Firewall via Esxcli",
+          "fidelity": "exact",
+          "note": "Disable ESXi firewall via esxcli"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1027",
+      "techniqueName": "Obfuscated Files or Information",
+      "procedure": "Encryptor binary is AES-encrypted and unpacked by a batch script with 7-Zip, requiring a run-time key to decrypt itself before execution.",
+      "tools": [
+        "7-Zip",
+        "batch"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f8c8a909-5f29-49ac-9244-413936ce6d1f",
+          "testNumber": 4,
+          "testName": "Execution from Compressed File",
+          "fidelity": "close",
+          "note": "Execution from a compressed/packed file"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Disables/deletes shadow copies via GPO-driven tasks before encryption.",
+      "tools": [
+        "GPO",
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts Windows, Hyper-V and ESXi hosts, appending .cts0/.cts1 and dropping cAcTuS.readme.txt; ransom note also emailed.",
+      "tools": [
+        "Cactus encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

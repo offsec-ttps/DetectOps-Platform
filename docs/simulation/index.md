@@ -12,6 +12,7 @@ The Simulation section runs adversary behavior against your environments and val
 | [Enterprise Environments](enterprise-environments.md) | `/detections/enterprise/environments` | Manage the targets scenarios run against. |
 | [Enterprise Use Cases](enterprise-use-cases.md) | `/detections/enterprise` | Repeatable, **scored** validation (simulate + validate coverage). |
 | [Custom Simulation Builder](custom-simulation-builder.md) | `/use-cases` | Build your own use cases (ART YAML / PurpleSharp / visual canvas). |
+| [Updating a Library](updating-libraries.md) | `/marketplace/build` | Add a newly discovered technique to an existing library as an atomic-style YAML entry. |
 | [Replay Catalog](replay-catalog.md) | `/replay-catalog` | Replay pre-recorded attack datasets into Splunk via HEC. |
 | [Build Forge](build-forge.md) | `/build-forge` | Discover, build, and collect attacker tooling. |
 | [Execution Logs](execution-logs.md) | `/execution-logs` | History of simulation runs. |

@@ -11,6 +11,7 @@ import { getC2CatalogEntry } from "@/config/c2-catalog";
 import { logEvent } from "@/lib/event-log";
 import { serializeC2, loadOwnedC2 } from "@/lib/c2/http";
 import { liveC2Status } from "@/lib/c2/liveness";
+import { decrypt } from "@/lib/crypto/credential-vault";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -28,8 +29,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     server: serializeC2(s),
     webUrl: s.url || "",
     adminUser: s.adminUser || "",
-    adminPassword: s.adminPassword || "",
+    adminPassword: revealAdminPassword(s.adminPassword),
   });
+}
+
+/** New rows store the managed-console password encrypted; legacy rows are plaintext. */
+function revealAdminPassword(stored: string | null | undefined): string {
+  if (!stored) return "";
+  try { return decrypt(stored); } catch { return stored; }
 }
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {

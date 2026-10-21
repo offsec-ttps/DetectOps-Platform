@@ -1,0 +1,484 @@
+{
+  "gang": "hive",
+  "displayName": "Hive",
+  "aliases": [
+    "Hive ransomware"
+  ],
+  "status": "disrupted",
+  "activeSince": "2021",
+  "lineage": "Infrastructure seized by FBI/international partners in January 2023; Hive's codebase is widely reported to have been acquired by Hunters International (active 2023-2025, later World Leaks)",
+  "summary": "Hive was a RaaS active from June 2021 that hit 1,500+ victims, notably hospitals, before an FBI infiltration and takedown in January 2023. Affiliates (including Microsoft-tracked DEV-0237/Pistachio Tempest) gained access via single-factor RDP/VPN, FortiOS MFA-bypass and Exchange ProxyShell, then used Cobalt Strike, Mimikatz and pass-the-hash to own the domain within ~72 hours. Hive exfiltrated with Rclone/MEGA and deployed Go- and later Rust-based encryptors for Windows, Linux and VMware ESXi.",
+  "uniqueTraits": [
+    "Exploited FortiOS CVE-2020-12812 to bypass FortiToken second-factor authentication",
+    "Exchange ProxyShell web shells running SYSTEM-level PowerShell that staged Cobalt Strike in memory",
+    "Batch scripts hive.bat / shadow.bat that delete shadow copies and then delete themselves",
+    "Dedicated Esxi_encrypt / Linux_encrypt variants; Rust rewrite (2022) storing keys in *.key files at drive root"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Hive Ransomware (AA22-321A)",
+      "publisher": "CISA / FBI / HHS",
+      "date": "2022-11-17",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-321a"
+    },
+    {
+      "id": "S2",
+      "title": "Hive Ransomware Analysis",
+      "publisher": "Varonis",
+      "date": "2022-04-19",
+      "url": "https://www.varonis.com/blog/hive-ransomware-analysis"
+    },
+    {
+      "id": "S3",
+      "title": "Hive ransomware gets upgrades in Rust",
+      "publisher": "Microsoft Threat Intelligence",
+      "date": "2022-07-05",
+      "url": "https://www.microsoft.com/en-us/security/blog/2022/07/05/hive-ransomware-gets-upgrades-in-rust/"
+    },
+    {
+      "id": "S4",
+      "title": "Ransomware as a service: Understanding the cybercrime gig economy and how to protect yourself",
+      "publisher": "Microsoft Threat Intelligence",
+      "date": "2022-05-09",
+      "url": "https://www.microsoft.com/en-us/security/blog/2022/05/09/ransomware-as-a-service-understanding-the-cybercrime-gig-economy-and-how-to-protect-yourself/"
+    },
+    {
+      "id": "S5",
+      "title": "U.S. Department of Justice Disrupts Hive Ransomware Variant",
+      "publisher": "U.S. Department of Justice",
+      "date": "2023-01-26",
+      "url": "https://www.justice.gov/opa/pr/us-department-justice-disrupts-hive-ransomware-variant"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Phishing emails with malicious attachments used by some affiliates for initial access.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Macro-enabled phishing attachment download (local ART T1566.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Single-factor RDP/VPN logons and FortiOS SSL-VPN CVE-2020-12812 to bypass FortiToken MFA.",
+      "tools": [
+        "FortiGate SSL-VPN",
+        "RDP"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test reproduces VPN MFA bypass or external VPN logon; validate with VPN/IdP log analytics."
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exchange ProxyShell chain (CVE-2021-34473, CVE-2021-34523, CVE-2021-31207) and CVE-2021-42321 against on-prem Exchange.",
+      "tools": [
+        "ProxyShell exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits Exchange; use vulnerability scanning/exploit range."
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "ProxyShell drops web shells on Exchange that run PowerShell as SYSTEM.",
+      "tools": [
+        "ASPX web shell"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "exact",
+          "note": "Web shell written to the IIS web root (local ART T1505.003 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "Web shell runs obfuscated PowerShell that downloads Cobalt Strike stagers and executes them in memory.",
+      "tools": [
+        "PowerShell",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle (local ART T1059.001 #9)"
+        },
+        {
+          "testGuid": "a50d5a97-2531-499e-a1de-5544c74432c6",
+          "testNumber": 2,
+          "testName": "Execute base64-encoded PowerShell",
+          "fidelity": "close",
+          "note": "Base64-encoded PowerShell execution as used by the stagers (local ART T1027 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz used to obtain the domain administrator NTLM hash.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "exact",
+          "note": "PowerShell Mimikatz credential dump (local ART T1003.001 #10)"
+        },
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "proxy",
+          "note": "ProcDump LSASS dump (local ART T1003.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1550.002",
+      "techniqueName": "Use Alternate Authentication Material: Pass the Hash",
+      "procedure": "Pass-the-hash with the stolen domain admin hash to take over the domain.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ec23cef9-27d9-46e4-a68d-6f75f7b86908",
+          "testNumber": 1,
+          "testName": "Mimikatz Pass the Hash",
+          "fidelity": "exact",
+          "note": "Mimikatz sekurlsa::pth (local ART T1550.002 #1)"
+        },
+        {
+          "testGuid": "f8757545-b00a-4e4e-8cfb-8cfb961ee713",
+          "testNumber": 3,
+          "testName": "Invoke-WMIExec Pass the Hash",
+          "fidelity": "close",
+          "note": "Invoke-WMIExec pass the hash (local ART T1550.002 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP with compromised credentials to reach servers and deploy the payload.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Disables Windows Defender and other AV through registry changes before encryption.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "exact",
+          "note": "Defender disable via registry (catalogued under T1685, formerly T1562.001)"
+        },
+        {
+          "testGuid": "1f6743da-6ecc-4a93-b03f-dc357e4b313f",
+          "testNumber": 51,
+          "testName": "Tamper with Windows Defender Registry - Reg.exe",
+          "fidelity": "exact",
+          "note": "Defender registry tampering with reg.exe (local ART T1685 #51)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Terminates services/processes tied to backups, AV and file copying so files are unlocked.",
+      "tools": [
+        "net.exe",
+        "taskkill"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "Stop service with net.exe (local ART T1489 #2)"
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "close",
+          "note": "Stop service by killing its process (local ART T1489 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "wevtutil clears the System, Security and Application logs.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl of Windows event logs (catalogued under T1685.005, formerly T1070.001)"
+        },
+        {
+          "testGuid": "b13e9306-3351-4b4b-a6e8-477358b0b498",
+          "testNumber": 2,
+          "testName": "Delete System Logs Using Clear-EventLog",
+          "fidelity": "close",
+          "note": "Clear-EventLog PowerShell variant (local ART T1685.005 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Rclone and MEGA used to exfiltrate data before encryption (CISA maps as T1537).",
+      "tools": [
+        "Rclone",
+        "MEGA"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Rclone exfiltration to MEGA (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "shadow.bat / hive.bat delete shadow copies (vssadmin, wmic) and disable recovery via bcdedit.",
+      "tools": [
+        "vssadmin",
+        "wmic",
+        "bcdedit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete (local ART T1490 #2)"
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recovery disable (local ART T1490 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "hive.bat and shadow.bat delete themselves and the encryptor after execution.",
+      "tools": [
+        "hive.bat"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Single file deletion from cmd, mirroring the self-deleting batch (local ART T1070.004 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Windows/Linux/ESXi encryptors (Go, later Rust) encrypt data and drop HOW_TO_DECRYPT.txt plus *.key files.",
+      "tools": [
+        "Windows_x64_encrypt.exe",
+        "Linux_encrypt",
+        "Esxi_encrypt"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop as a non-destructive encryption-impact proxy (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

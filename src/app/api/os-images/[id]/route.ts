@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { logEvent } from "@/lib/event-log";
 import { getDeployment, setStatus, removeDeployment } from "@/lib/os-images/registry";
 
@@ -15,9 +15,9 @@ async function loadOwned(id: string) {
   if (!auth.ok) return { ok: false as const, response: auth.response };
   const dep = await getDeployment(id);
   if (!dep) return { ok: false as const, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
-  if (auth.enforced && dep.ownerId && dep.ownerId !== auth.user.id) {
-    return { ok: false as const, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
-  }
+  // Unowned (legacy) rows are admin-only when enforcing.
+  const own = ownsOr404(auth, dep.ownerId || "");
+  if (!own.ok) return { ok: false as const, response: own.response };
   return { ok: true as const, dep, auth };
 }
 

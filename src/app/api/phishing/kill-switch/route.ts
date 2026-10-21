@@ -12,7 +12,11 @@ export async function POST() {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
   const res = await prisma.phishingCampaign.updateMany({
-    where: { status: { in: ["running", "approved", "pending_approval"] } },
+    // Admins (and dev mode) stop everything; other users only their own campaigns.
+    where: {
+      status: { in: ["running", "approved", "pending_approval"] },
+      ...(auth.enforced && auth.user.role !== "admin" ? { ownerId: auth.user.id } : {}),
+    },
     data: { status: "aborted", completedAt: new Date() },
   });
   void logEvent({ category: "phishing" as any, action: "phishing.kill-switch", actor: auth.user.email, status: "warn", message: `KILL-SWITCH: ${res.count} campaign(s) aborted` });

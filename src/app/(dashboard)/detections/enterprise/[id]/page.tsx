@@ -186,9 +186,9 @@ export default function EnterpriseUseCaseDetailPage({ params }: { params: Promis
           >
             <t.Icon className="h-3.5 w-3.5" />
             {t.label}
-            {"badge" in t && t.badge && (
-              <span className="ml-1 text-[9px] uppercase tracking-wider px-1 rounded bg-muted/15 text-muted-foreground">{t.badge}</span>
-            )}
+            {"badge" in t && t.badge ? (
+              <span className="ml-1 text-[9px] uppercase tracking-wider px-1 rounded bg-muted/15 text-muted-foreground">{String(t.badge)}</span>
+            ) : null}
           </button>
         ))}
       </div>

@@ -7,6 +7,9 @@
 
 import https from "https";
 import http from "http";
+import { safeLookup, syncUrlBlockReason, type OutboundPolicy } from "@/lib/net/ssrf";
+
+const FEED_POLICY: OutboundPolicy = { allowPrivate: false, allowLoopback: false };
 
 export interface FeedArticle {
   title: string;
@@ -24,8 +27,17 @@ export async function fetchRssFeed(feedUrl: string): Promise<FeedArticle[]> {
   return parseRssFeed(xml, feedUrl);
 }
 
-function fetchUrl(url: string): Promise<string> {
+const FEED_MAX_BYTES = 10 * 1024 * 1024;
+const FEED_MAX_REDIRECTS = 5;
+
+/**
+ * Feed URLs can be user-added, so this is SSRF surface: public internet only
+ * (no private/loopback/link-local/metadata), checked on every redirect hop and
+ * on the IP actually connected to (safeLookup). Bounded size + redirect count.
+ */
+function fetchUrl(url: string, hops = 0): Promise<string> {
   return new Promise((resolve) => {
+    if (hops > FEED_MAX_REDIRECTS || syncUrlBlockReason(url, FEED_POLICY)) { resolve(""); return; }
     const parsed = new URL(url);
     const transport = parsed.protocol === "https:" ? https : http;
     const req = transport.request(
@@ -40,15 +52,22 @@ function fetchUrl(url: string): Promise<string> {
         },
         rejectUnauthorized: false,
         timeout: 15000,
+        lookup: safeLookup(FEED_POLICY) as any,
       },
       (res) => {
-        // Follow redirects
+        // Follow redirects (bounded, each hop re-validated)
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          fetchUrl(res.headers.location).then(resolve).catch(() => resolve(""));
+          res.resume();
+          let next = "";
+          try { next = new URL(res.headers.location, url).toString(); } catch { resolve(""); return; }
+          fetchUrl(next, hops + 1).then(resolve).catch(() => resolve(""));
           return;
         }
         let data = "";
-        res.on("data", (chunk) => { data += chunk; });
+        res.on("data", (chunk) => {
+          data += chunk;
+          if (data.length > FEED_MAX_BYTES) { res.destroy(); resolve(data.slice(0, FEED_MAX_BYTES)); }
+        });
         res.on("end", () => resolve(data));
       }
     );

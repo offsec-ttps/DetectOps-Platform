@@ -34,7 +34,7 @@ import "@xyflow/react/dist/style.css";
 import {
   FlaskConical, FileCode2, Cloud, Search, Save, Loader2, Trash2,
   Wand2, Download, AlertTriangle, CheckCircle2, Workflow as WorkflowIcon,
-  GitBranch, FileQuestion, Terminal, Plus, Minus,
+  GitBranch, FileQuestion, Terminal, Plus, Minus, Maximize2, GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -175,8 +175,9 @@ function styleEdge(branch?: string): { stroke: string; strokeWidth: number; colo
 
 function CanvasInner({ initialName = "", initialDescription = "" }) {
   const router = useRouter();
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const addSeqRef = useRef(0);
 
   const [name, setName] = useState(initialName || "Untitled workflow");
   const [description, setDescription] = useState(initialDescription || "");
@@ -302,7 +303,7 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
         labelBgPadding: branch ? [4, 2] : undefined,
         labelBgStyle: branch ? { fill: "#0a0e1a", fillOpacity: 0.9 } : undefined,
         labelStyle: branch ? { fill: s.color, fontWeight: 600, fontSize: 10 } : undefined,
-      } as Edge, eds);
+      } as unknown as Edge, eds);
     });
   }, []);
 
@@ -414,6 +415,33 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
     setNodes((nds) => [...nds, newNode]);
   }, [screenToFlowPosition]);
 
+  // Click-to-add: drop a node near the canvas centre (cascading so repeated clicks
+  // don't stack on one spot). Drag still works; this makes the palette usable
+  // without the fiddly drag gesture — the single biggest build-speed win.
+  const addNodeFromPalette = useCallback((it: PaletteItem) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const seq = addSeqRef.current++;
+    const offset = (seq % 6) * 36;
+    const screen = rect
+      ? { x: rect.left + rect.width / 2 - 110 + offset, y: rect.top + 120 + offset }
+      : { x: 300 + offset, y: 160 + offset };
+    const position = screenToFlowPosition(screen);
+    const newNode: Node<NodeData> = {
+      id: newNodeId(),
+      type: it.kind === "condition" ? "condition" : "catalogue",
+      position,
+      data: initialDataForKind(it),
+    };
+    setNodes((nds) => [...nds, newNode]);
+    setSelectedNodeId(newNode.id);
+  }, [screenToFlowPosition]);
+
+  const clearCanvas = useCallback(() => {
+    if (nodes.length === 0) return;
+    if (!confirm("Clear the whole canvas? This removes all steps and connectors.")) return;
+    setNodes([]); setEdges([]); setSelectedNodeId(null); setSelectedEdgeId(null); setCompileResult(null);
+  }, [nodes.length]);
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId) || null;
 
@@ -522,31 +550,92 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
     } finally { setExporting(null); }
   };
 
+  const canExport = !!useCaseId && !!compileResult?.ok;
+  const EXPORT_LABELS: Record<string, string> = { "atomic-yaml": "Atomic YAML", "purplesharp-json": "PurpleSharp", "stratus-sh": "Stratus .sh" };
   return (
-    <div className="grid grid-cols-[280px_1fr_340px] gap-3 h-[calc(100vh-200px)]">
+    <div className="flex flex-col gap-3 h-[calc(100vh-170px)]">
+      {/* ── TOOLBAR ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap rounded-xl border border-border bg-card px-3 py-2">
+        <input
+          type="text" value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="px-2.5 py-1.5 text-sm font-medium rounded-md bg-input border border-border text-foreground focus:outline-none focus:border-accent min-w-[200px]"
+          placeholder="Untitled workflow"
+        />
+        <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground px-2 py-1 rounded-md bg-background/60 border border-border/60">
+          <span><span className="text-foreground font-semibold">{nodes.length}</span> step{nodes.length !== 1 ? "s" : ""}</span>
+          <span className="text-border">·</span>
+          <span><span className="text-foreground font-semibold">{edges.length}</span> link{edges.length !== 1 ? "s" : ""}</span>
+        </span>
+        {compileResult && (
+          <span className={cn(
+            "inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border",
+            compileResult.ok ? "bg-success/10 border-success/40 text-success" : "bg-danger/10 border-danger/40 text-danger",
+          )}>
+            {compileResult.ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+            {compileResult.ok
+              ? <>{compileResult.stepCount} compiled{compileResult.isolatedNodes?.length ? ` · ${compileResult.isolatedNodes.length} isolated` : ""}</>
+              : <>Compile failed</>}
+          </span>
+        )}
+        {useCaseId && <span className="text-[10px] text-muted-foreground font-mono">{useCaseId.slice(0, 8)}</span>}
+
+        <div className="flex-1" />
+
+        <button onClick={() => fitView({ duration: 300, padding: 0.2 })} disabled={nodes.length === 0}
+          title="Fit all steps in view"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-card-hover disabled:opacity-40">
+          <Maximize2 className="h-3.5 w-3.5" /> Fit
+        </button>
+        <button onClick={clearCanvas} disabled={nodes.length === 0}
+          title="Remove all steps and connectors"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-danger hover:bg-danger/5 disabled:opacity-40">
+          <Trash2 className="h-3.5 w-3.5" /> Clear
+        </button>
+        <button onClick={saveAndCompile} disabled={saving || nodes.length === 0}
+          title="Save the workflow and compile it to ordered steps"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+          Save &amp; Compile
+        </button>
+        <div className="inline-flex items-center rounded-md border border-border overflow-hidden" title={canExport ? "Export the compiled workflow" : "Save & Compile first to enable export"}>
+          <span className="px-2 py-1.5 text-[10px] text-muted-foreground bg-background/60 border-r border-border inline-flex items-center gap-1"><Download className="h-3 w-3" /> Export</span>
+          {(["atomic-yaml", "purplesharp-json", "stratus-sh"] as const).map((f) => (
+            <button key={f} onClick={() => exportFormat(f)} disabled={!canExport || exporting === f}
+              className="px-2 py-1.5 text-[11px] text-foreground hover:bg-card-hover disabled:opacity-40 disabled:hover:bg-transparent border-r border-border/60 last:border-r-0">
+              {exporting === f ? <Loader2 className="h-3 w-3 animate-spin inline" /> : EXPORT_LABELS[f]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── WORKSPACE ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-[280px_1fr_340px] gap-3 flex-1 min-h-0">
       {/* LEFT — palette */}
       <div className="rounded-xl border border-border bg-card flex flex-col overflow-hidden">
         <div className="px-3 py-2 border-b border-border">
           <div className="grid grid-cols-4 gap-1 mb-2">
             {[
-              { k: "atomic" as const,      Icon: FlaskConical, label: "ART" },
-              { k: "purplesharp" as const, Icon: FileCode2,    label: "PS" },
-              { k: "stratus" as const,     Icon: Cloud,        label: "Stratus" },
-              { k: "logic" as unknown as StepKind, Icon: GitBranch, label: "Logic" },
-            ].map(({ k, Icon, label }) => {
+              { k: "atomic" as const,      Icon: FlaskConical, label: "ART",     count: atomicItems.length },
+              { k: "purplesharp" as const, Icon: FileCode2,    label: "PS",      count: psItems.length },
+              { k: "stratus" as const,     Icon: Cloud,        label: "Stratus", count: stratusItems.length },
+              { k: "logic" as unknown as StepKind, Icon: GitBranch, label: "Logic", count: logicItems.length },
+            ].map(({ k, Icon, label, count }) => {
               const c = k === ("logic" as unknown as StepKind) ? KIND_COLORS.condition : KIND_COLORS[k as StepKind];
               return (
                 <button
                   key={String(k)}
                   onClick={() => setActiveTab(k as StepKind)}
+                  title={`${label} — ${count} item${count !== 1 ? "s" : ""}`}
                   className={cn(
                     "flex flex-col items-center justify-center gap-0.5 py-1.5 rounded text-[10px] font-medium transition-colors",
-                    activeTab === k ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                    activeTab === k ? "text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-card-hover",
                   )}
                   style={activeTab === k ? { background: c.bg, border: `1px solid ${c.text}55` } : {}}
                 >
                   <Icon className="h-3.5 w-3.5" />
-                  {label}
+                  <span>{label}</span>
+                  <span className="text-[8px] opacity-70">{count}</span>
                 </button>
               );
             })}
@@ -557,10 +646,13 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
               type="text"
               value={paletteSearch}
               onChange={(e) => setPaletteSearch(e.target.value)}
-              placeholder="Filter…"
-              className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-border bg-input text-foreground focus:outline-none focus:border-accent"
+              placeholder={showLogic ? "Search logic blocks…" : activeTab === "atomic" ? "Search ART tests / techniques…" : activeTab === "purplesharp" ? "Search PurpleSharp…" : "Search Stratus attacks…"}
+              className="w-full pl-6 pr-2 py-1.5 text-[11px] rounded border border-border bg-input text-foreground focus:outline-none focus:border-accent"
             />
           </div>
+          <p className="mt-1.5 text-[9px] text-muted-foreground/80 flex items-center gap-1">
+            <Plus className="h-2.5 w-2.5" /> Click to add to canvas, or drag onto it.
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {paletteLoading && !showLogic && (
@@ -569,8 +661,8 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
             </div>
           )}
           {!paletteLoading && filteredItems.length === 0 && (
-            <div className="text-[11px] text-muted-foreground px-2 py-1">
-              No items. {activeTab === "purplesharp" ? "Run PurpleSharp sync first." : activeTab === "stratus" ? "Run Stratus sync first." : ""}
+            <div className="text-[11px] text-muted-foreground px-2 py-3 text-center">
+              {paletteSearch ? "No matches — try a different search." : activeTab === "purplesharp" ? "No PurpleSharp items. Run a PurpleSharp sync first." : activeTab === "stratus" ? "No Stratus items. Run a Stratus sync first." : "No items."}
             </div>
           )}
           {filteredItems.map((it) => {
@@ -580,74 +672,48 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
                 key={`${it.kind}-${it.refId}`}
                 draggable
                 onDragStart={(e) => onDragStart(e, it)}
-                className="cursor-grab active:cursor-grabbing px-2 py-1.5 rounded text-[11px] hover:bg-card-hover transition-colors border"
+                onClick={() => addNodeFromPalette(it)}
+                title={`Click to add${it.techniqueId ? ` ${it.techniqueId}` : ""} · or drag onto the canvas`}
+                className="group cursor-pointer px-2 py-1.5 rounded text-[11px] hover:bg-card-hover transition-colors border flex items-start gap-1.5"
                 style={{ borderColor: `${c.text}25` }}
               >
-                <div className="flex items-center gap-1.5">
-                  {it.techniqueId && <span className="font-mono text-[10px]" style={{ color: c.text }}>{it.techniqueId}</span>}
-                  {!it.techniqueId && it.kind === "condition" && <GitBranch className="h-3 w-3" style={{ color: c.text }} />}
-                  {!it.techniqueId && it.kind === "manual" && <Terminal className="h-3 w-3" style={{ color: c.text }} />}
+                <GripVertical className="h-3 w-3 mt-0.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    {it.techniqueId && <span className="font-mono text-[10px]" style={{ color: c.text }}>{it.techniqueId}</span>}
+                    {!it.techniqueId && it.kind === "condition" && <GitBranch className="h-3 w-3" style={{ color: c.text }} />}
+                    {!it.techniqueId && it.kind === "manual" && <Terminal className="h-3 w-3" style={{ color: c.text }} />}
+                  </div>
+                  <div className="text-foreground truncate" title={it.displayName}>{it.displayName}</div>
                 </div>
-                <div className="text-foreground truncate" title={it.displayName}>{it.displayName}</div>
+                <Plus className="h-3 w-3 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: c.text }} />
               </div>
             );
           })}
+          {!paletteLoading && visiblePaletteItems.length > filteredItems.length && (
+            <div className="text-[10px] text-muted-foreground/70 px-2 py-1 text-center">
+              Showing {filteredItems.length} of {visiblePaletteItems.length} — refine the search to see more.
+            </div>
+          )}
         </div>
       </div>
 
       {/* CENTER — canvas */}
       <div className="rounded-xl border border-border overflow-hidden relative" ref={wrapperRef}>
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 max-w-[60%]">
-          <input
-            type="text" value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="px-2 py-1 text-xs rounded-md bg-card/90 border border-border text-foreground focus:outline-none focus:border-accent backdrop-blur-sm"
-            placeholder="Workflow name"
-          />
-          <button
-            onClick={saveAndCompile}
-            disabled={saving || nodes.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md bg-accent text-white hover:bg-[#60a5fa] disabled:opacity-50 backdrop-blur-sm"
-          >
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
-            Save & Compile
-          </button>
-          {useCaseId && (
-            <span className="text-[10px] text-muted-foreground bg-card/90 px-2 py-0.5 rounded backdrop-blur-sm font-mono">
-              {useCaseId.slice(0, 8)}
-            </span>
-          )}
-        </div>
-
-        {compileResult && (
+        {/* On-canvas: only the compile-error detail (success + export live in the toolbar) */}
+        {compileResult && !compileResult.ok && (
           <div className="absolute top-3 right-3 z-10 max-w-md">
-            <div className={cn(
-              "rounded-md px-3 py-2 text-[11px] flex items-start gap-1.5 backdrop-blur-sm",
-              compileResult.ok
-                ? "bg-success/15 border border-success/40 text-success"
-                : "bg-danger/15 border border-danger/40 text-danger",
-            )}>
-              {compileResult.ok ? <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />}
-              <div>
-                {compileResult.ok
-                  ? <>Compiled {compileResult.stepCount} step{compileResult.stepCount !== 1 ? "s" : ""}{compileResult.isolatedNodes?.length ? ` · ${compileResult.isolatedNodes.length} isolated` : ""}</>
-                  : <>Compile failed: {compileResult.error}</>}
-                {compileResult.ok && (
-                  <div className="mt-1 flex gap-1.5">
-                    {(["atomic-yaml", "purplesharp-json", "stratus-sh"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => exportFormat(f)}
-                        disabled={exporting === f}
-                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-success/20 hover:bg-success/30 text-success disabled:opacity-50"
-                      >
-                        {exporting === f ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Download className="h-2.5 w-2.5" />}
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="rounded-md px-3 py-2 text-[11px] flex items-start gap-1.5 backdrop-blur-sm bg-danger/15 border border-danger/40 text-danger">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <div>Compile failed: {compileResult.error}</div>
+            </div>
+          </div>
+        )}
+        {compileResult?.ok && (compileResult.isolatedNodes?.length ?? 0) > 0 && (
+          <div className="absolute top-3 right-3 z-10 max-w-md">
+            <div className="rounded-md px-3 py-2 text-[11px] flex items-start gap-1.5 backdrop-blur-sm bg-warning/15 border border-warning/40 text-warning">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <div>{compileResult.isolatedNodes!.length} step(s) aren't connected to the flow — link them or they won't run in order.</div>
             </div>
           </div>
         )}
@@ -685,10 +751,16 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
 
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center text-muted-foreground">
-              <WorkflowIcon className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Drag items from the palette to start composing</p>
-              <p className="text-[11px] mt-0.5">Hover a node's right edge to drag a connector to another node</p>
+            <div className="text-center text-muted-foreground max-w-sm px-6">
+              <WorkflowIcon className="h-12 w-12 mx-auto mb-3 opacity-40" />
+              <p className="text-sm font-medium text-foreground/80">Build a custom attack chain</p>
+              <p className="text-[11px] mt-1">Add steps from the palette, connect them into a flow, then <span className="text-accent">Save &amp; Compile</span> and export.</p>
+              <ol className="mt-3 text-[11px] text-left inline-block space-y-1 text-muted-foreground/90">
+                <li><span className="text-foreground font-mono mr-1.5">1.</span> Click a palette item (ART / PurpleSharp / Stratus / Logic) to drop it here.</li>
+                <li><span className="text-foreground font-mono mr-1.5">2.</span> Drag a node's right edge → the next node's left edge to link them.</li>
+                <li><span className="text-foreground font-mono mr-1.5">3.</span> Add If/Else logic for branching (true / false outputs).</li>
+                <li><span className="text-foreground font-mono mr-1.5">4.</span> Save &amp; Compile → export to Atomic YAML, PurpleSharp, or Stratus.</li>
+              </ol>
             </div>
           </div>
         )}
@@ -742,6 +814,7 @@ function CanvasInner({ initialName = "", initialDescription = "" }) {
             className="w-full px-2 py-1 text-[11px] rounded border border-border bg-input text-foreground focus:outline-none focus:border-accent"
           />
         </div>
+      </div>
       </div>
     </div>
   );

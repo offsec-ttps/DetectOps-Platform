@@ -1,0 +1,656 @@
+{
+  "gang": "LockBit",
+  "displayName": "LockBit 3.0 / 5.0",
+  "aliases": [
+    "LockBit Black",
+    "LockBit Green",
+    "LockBit 2.0",
+    "ABCD"
+  ],
+  "status": "active",
+  "activeSince": "2019",
+  "lineage": "ABCD (2019) -> LockBit 2.0 (2021) -> LockBit 3.0/Black (2022) -> LockBit 4.0 (2025) -> LockBit 5.0 (Sep 2025); disrupted by Operation Cronos Feb 2024 but relaunched",
+  "summary": "Most prolific RaaS of 2022-2023; affiliates buy access or exploit edge devices (Citrix Bleed, PaperCut, ScreenConnect), then use RMM tools, AdFind/network scanners, Mimikatz and PsExec/GPO for domain-wide deployment. Data is stolen with the bespoke StealBit tool or rclone/MEGA before encryption. LockBit 5.0 (Sep 2025) ships Windows, Linux and VMware ESXi lockers with stronger anti-analysis.",
+  "uniqueTraits": [
+    "StealBit custom exfiltration tool",
+    "Group Policy abuse to push the encryptor and disable Defender domain-wide",
+    "LockBit Black-specific registry tampering: Defender ETW provider disable, auto-logon, privacy-experience keys",
+    "Mass exploitation of Citrix Bleed (CVE-2023-4966) by affiliates",
+    "Cross-platform Windows/Linux/ESXi lockers (LockBit 5.0)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Understanding Ransomware Threat Actors: LockBit (AA23-165A)",
+      "publisher": "CISA",
+      "date": "2023-06-14",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-165a"
+    },
+    {
+      "id": "S2",
+      "title": "#StopRansomware: LockBit 3.0 (AA23-075A)",
+      "publisher": "CISA",
+      "date": "2023-03-16",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-075a"
+    },
+    {
+      "id": "S3",
+      "title": "#StopRansomware: LockBit 3.0 Ransomware Affiliates Exploit CVE 2023-4966 Citrix Bleed (AA23-325A)",
+      "publisher": "CISA",
+      "date": "2023-11-21",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-325a"
+    },
+    {
+      "id": "S4",
+      "title": "LockBit 3.0 (S1202)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2025-04-15",
+      "url": "https://attack.mitre.org/software/S1202/"
+    },
+    {
+      "id": "S5",
+      "title": "LockBit 5.0 ransomware surfaces with support for Windows, Linux and ESXi (summarising Trend Micro research)",
+      "publisher": "CyberInsider",
+      "date": "2025-09-25",
+      "url": "https://cyberinsider.com/lockbit-5-0-ransomware-surfaces-with-support-for-windows-linux-and-esxi/"
+    },
+    {
+      "id": "S6",
+      "title": "In-Depth Analysis Report on LockBit 5.0: Operation and Countermeasures",
+      "publisher": "AhnLab ASEC",
+      "date": "2025-12-01",
+      "url": "https://asec.ahnlab.com/en/91945/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Affiliates exploit internet-facing appliances and apps: Citrix Bleed CVE-2023-4966 (session hijack on NetScaler), PaperCut CVE-2023-27350, Fortra GoAnywhere CVE-2023-0669, Apache Log4j, F5 BIG-IP CVE-2021-22986, ConnectWise ScreenConnect CVE-2024-1709.",
+      "tools": [
+        "Citrix Bleed exploit"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1190 exploit atomic (and plans never add exploit code); validate with perimeter/WAF/appliance log detections instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "RDP and VPN access with valid credentials bought from initial-access brokers or obtained by brute force/phishing.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "proxy",
+          "note": "Interactive RDP logon with a valid account approximates broker-supplied RDP access."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.003",
+      "techniqueName": "Windows Command Shell",
+      "procedure": "Batch scripts and PowerShell used to stage tools, run discovery and launch the encryptor (LockBit 3.0 requires a per-affiliate password argument).",
+      "tools": [
+        "cmd",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9e8894c0-50bd-4525-a96c-d4ac78ece388",
+          "testNumber": 1,
+          "testName": "Create and Execute Batch Script",
+          "fidelity": "close",
+          "note": "Batch script creation/execution as used to stage LockBit tooling."
+        },
+        {
+          "testGuid": "a538de64-1c74-46ed-aa60-b995ed302598",
+          "testNumber": 17,
+          "testName": "PowerShell Command Execution",
+          "fidelity": "proxy",
+          "note": "Generic PowerShell execution telemetry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Legitimate RMM/remote-desktop tools for persistent access: AnyDesk, Atera, ScreenConnect, Splashtop, TeamViewer.",
+      "tools": [
+        "AnyDesk",
+        "ScreenConnect",
+        "Splashtop",
+        "Atera"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "AnyDesk listed by CISA in LockBit affiliate toolsets."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "close",
+          "note": "ScreenConnect install."
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "close",
+          "note": "Splashtop execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Advanced IP Scanner and SoftPerfect Network Scanner sweep internal ranges before lateral movement.",
+      "tools": [
+        "Advanced IP Scanner",
+        "SoftPerfect NetScan"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect netscan is named in LockBit affiliate tooling."
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "PowerShell /24 port sweep as a scanner stand-in."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AdFind and Bloodhound/SharpHound enumerate users, computers and trusts.",
+      "tools": [
+        "AdFind",
+        "Bloodhound"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user-object enumeration."
+        },
+        {
+          "testGuid": "a889f5be-2d54-4050-bd05-884578748bb4",
+          "testNumber": 10,
+          "testName": "Adfind - Enumerate Active Directory Computer Objects",
+          "fidelity": "exact",
+          "note": "AdFind computer-object enumeration."
+        },
+        {
+          "testGuid": "15fe436d-e771-4ff3-b655-2dca9ba52834",
+          "testNumber": 5,
+          "testName": "Adfind - Enumerate Active Directory Trusts",
+          "fidelity": "close",
+          "note": "AdFind trust enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz, ProcDump against LSASS and LaZagne for stored credentials.",
+      "tools": [
+        "Mimikatz",
+        "ProcDump",
+        "LaZagne"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "exact",
+          "note": "ProcDump LSASS dump."
+        },
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz credential theft."
+        },
+        {
+          "testGuid": "079ee2e9-6f16-47ca-a635-14efcd994118",
+          "testNumber": 6,
+          "testName": "WinPwn - Loot local Credentials - lazagne",
+          "fidelity": "close",
+          "note": "LaZagne local credential looting."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "LockBit 3.0 disables the Windows Defender ETW provider and Defender itself; affiliates use Backstab, PCHunter, Process Hacker and GMER to kill security tools (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "LockBit 3.0 payload",
+        "Backstab",
+        "PCHunter",
+        "Process Hacker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f6df0b8e-2c83-44c7-ba5e-0fa4386bec41",
+          "testNumber": 70,
+          "testName": "LockBit Black - Disable the ETW Provider of Windows Defender -cmd",
+          "fidelity": "exact",
+          "note": "ART test written from LockBit Black behaviour: disables the Defender ETW provider."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Backstab kills protected AV processes, named in CISA LockBit tooling."
+        },
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "proxy",
+          "note": "Generic Defender tamper via command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "LockBit 3.0 payload sets auto-logon with stolen credentials and disables privacy-settings experience so reboots return to an encryptable desktop.",
+      "tools": [
+        "LockBit 3.0 payload"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9719d0e1-4fe0-4b2e-9a72-7ad3ee8ddc70",
+          "testNumber": 36,
+          "testName": "LockBit Black - Use Registry Editor to turn on automatic logon -cmd",
+          "fidelity": "exact",
+          "note": "ART LockBit Black auto-logon registry test."
+        },
+        {
+          "testGuid": "d6d22332-d07d-498f-aea0-6139ecb7850e",
+          "testNumber": 35,
+          "testName": "LockBit Black - Disable Privacy Settings Experience Using Registry -cmd",
+          "fidelity": "exact",
+          "note": "ART LockBit Black privacy-settings registry test."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Domain or Tenant Policy Modification: Group Policy Modification",
+      "procedure": "LockBit 2.0/3.0 creates or edits GPOs to disable Defender, stop services and push the encryptor to every domain host.",
+      "tools": [
+        "Group Policy"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "exact",
+          "note": "ART LockBit Black GPO modification (cmd)."
+        },
+        {
+          "testGuid": "b51eae65-5441-4789-b8e8-64783c26c1d1",
+          "testNumber": 2,
+          "testName": "LockBit Black - Modify Group policy settings -Powershell",
+          "fidelity": "exact",
+          "note": "ART LockBit Black GPO modification (PowerShell)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "PsExec and admin shares to copy and execute tooling and the encryptor; LockBit 3.0 can self-propagate over SMB.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "PsExec copy-and-execute over admin share."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote service execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "rclone and MEGAsync used to push stolen data to MEGA; FreeFileSync also reported.",
+      "tools": [
+        "rclone",
+        "MEGA",
+        "FreeFileSync"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone to MEGA reproduces the reported procedure."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "StealBit, LockBit's bespoke multithreaded exfiltration tool, uploads files over HTTP to affiliate infrastructure.",
+      "tools": [
+        "StealBit"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6aa58451-1121-4490-a8e9-1dada3f1c68c",
+          "testNumber": 4,
+          "testName": "Exfiltration Over Alternative Protocol - HTTP",
+          "fidelity": "proxy",
+          "note": "HTTP exfiltration over an unencrypted channel; StealBit itself is not in the catalogue."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "LockBit 3.0 clears Windows event logs and deletes itself after execution.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "close",
+          "note": "wevtutil log clearing (catalogue files Clear Windows Event Logs under T1685.005)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies via vssadmin/WMI before encryption.",
+      "tools": [
+        "vssadmin",
+        "WMI"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "close",
+          "note": "WMI shadow-copy deletion."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops backup, database and security services listed in the payload config before encryption.",
+      "tools": [
+        "LockBit 3.0 payload"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "net stop of a service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts files with a random/16-char extension (5.0), drops ransom notes, replaces the desktop wallpaper and may print the note.",
+      "tools": [
+        "LockBit 3.0/5.0 encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "close",
+          "note": "Wallpaper replacement mirrors LockBit's post-encryption desktop change."
+        },
+        {
+          "testGuid": "0eeb68ce-e64c-4420-8d53-ad5bdc6f86d5",
+          "testNumber": 4,
+          "testName": "Windows - Display a simulated ransom note via Notepad (non-destructive)",
+          "fidelity": "proxy",
+          "note": "Non-destructive ransom-note display."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "LockBit Linux/ESXi locker (and 5.0 ESXi build) powers off virtual machines so VMDKs can be encrypted.",
+      "tools": [
+        "LockBit ESXi locker"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "vim-cmd VM power-off on ESXi."
+        },
+        {
+          "testGuid": "4a233a40-caf7-4cf1-890a-c6331bbc72cf",
+          "testNumber": 7,
+          "testName": "ESXi - Enumerate VMDKs available on an ESXi Host",
+          "fidelity": "proxy",
+          "note": "Enumerate VMDKs on ESXi before encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

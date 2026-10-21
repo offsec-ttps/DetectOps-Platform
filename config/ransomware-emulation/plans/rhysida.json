@@ -1,0 +1,515 @@
+{
+  "gang": "Rhysida",
+  "displayName": "Rhysida",
+  "aliases": [
+    "Vanilla Tempest (Microsoft, partial overlap)",
+    "Vice Society successor"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Overlaps with Vice Society (DEV-0832 / Vanilla Tempest)",
+  "summary": "Rhysida is a RaaS/double-extortion operation first seen in May 2023 that hits targets of opportunity in education, healthcare, manufacturing and government. Historically it entered through VPNs with stolen credentials (no MFA), Zerologon and phishing; since 2024-2025 it relies heavily on Bing/Google malvertising for fake Microsoft Teams, PuTTY and Zoom installers that deliver the code-signed OysterLoader/Broomstick backdoor. Post-compromise tradecraft is LOTL with heavy PsExec use, NTDS theft and staged batch-script deployment of a MinGW-compiled ChaCha20/RSA encryptor.",
+  "uniqueTraits": [
+    "Malvertising of fake MSTeamsSetup.exe / PuTTY / Zoom installers delivering OysterLoader (Broomstick/CleanUpLoader)",
+    "Abuse of dozens of fraudulently obtained code-signing certificates (47 tracked by Expel; Microsoft revoked 200+)",
+    "Staging directories C:\\in and C:\\out with S_0.bat/S_1.bat/S_2.bat and an encryptor named conhost.exe pushed by PsExec",
+    "PuTTY SSH lateral movement and PortStarter Go backdoor (Vice Society heritage)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Rhysida Ransomware (AA23-319A)",
+      "publisher": "CISA / FBI / MS-ISAC",
+      "date": "2023-11-15",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-319a"
+    },
+    {
+      "id": "S2",
+      "title": "Certified OysterLoader: Tracking Rhysida ransomware gang activity via code-signing certificates",
+      "publisher": "Expel",
+      "date": "2025-10-31",
+      "url": "https://expel.com/blog/certified-oysterloader-tracking-rhysida-ransomware-gang-activity-via-code-signing-certificates/"
+    },
+    {
+      "id": "S3",
+      "title": "Microsoft Revokes 200 Fraudulent Certificates Used in Rhysida Ransomware Campaign",
+      "publisher": "The Hacker News (Microsoft Threat Intelligence)",
+      "date": "2025-10-16",
+      "url": "https://thehackernews.com/2025/10/microsoft-revokes-200-fraudulent.html"
+    },
+    {
+      "id": "S4",
+      "title": "Malvertising Campaign Leads to Execution of Oyster Backdoor",
+      "publisher": "Rapid7",
+      "date": "2024-06-17",
+      "url": "https://www.rapid7.com/blog/post/2024/06/17/malvertising-campaign-leads-to-execution-of-oyster-backdoor/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "execution",
+      "techniqueId": "T1204.002",
+      "techniqueName": "User Execution: Malicious File",
+      "procedure": "Victims searching for Teams, PuTTY or Zoom click Bing/Google ads leading to look-alike download sites and run a fake installer (e.g. MSTeamsSetup.exe) that drops OysterLoader.",
+      "tools": [
+        "OysterLoader",
+        "Broomstick",
+        "fake MSTeamsSetup.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02f35d62-9fdc-4a97-b899-a5d9a876d295",
+          "testNumber": 8,
+          "testName": "Potentially Unwanted Applications (PUA)",
+          "fidelity": "proxy",
+          "note": "User runs an unwanted downloaded application - same user-launched-installer telemetry"
+        },
+        {
+          "testGuid": "581d7521-9c4b-420e-9695-2aec5241167f",
+          "testNumber": 10,
+          "testName": "LNK Payload Download",
+          "fidelity": "proxy",
+          "note": "LNK-triggered payload download from the user context"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1553.002",
+      "techniqueName": "Subvert Trust Controls: Code Signing",
+      "procedure": "Signs OysterLoader (and Latrodectus) with dozens of fraudulently obtained code-signing certificates, including Microsoft Trusted Signing certificates, to pass reputation checks.",
+      "tools": [
+        "Code-signing certificates"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic signs a binary with an attacker certificate; validate with certificate-reputation and revoked/short-lived signer analytics."
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task",
+      "procedure": "OysterLoader/Oyster backdoor persists with a scheduled task that repeatedly launches its DLL via rundll32.",
+      "tools": [
+        "Oyster backdoor",
+        "schtasks",
+        "rundll32"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "close",
+          "note": "schtasks /create local task"
+        },
+        {
+          "testGuid": "ae3a8605-b26e-457c-b6b3-2702fd335bac",
+          "testNumber": 10,
+          "testName": "Execution of non-dll using rundll32.exe",
+          "fidelity": "proxy",
+          "note": "rundll32 executing a non-standard DLL, as the task action does"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Historically authenticates to VPN concentrators with compromised valid credentials where MFA was not enforced.",
+      "tools": [
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no atomic that reproduces an external logon with stolen VPN/RDP credentials; validate with authentication-log analytics (impossible travel, no-MFA VPN logons)."
+    },
+    {
+      "order": 5,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1210",
+      "techniqueName": "Exploitation of Remote Services",
+      "procedure": "Exploits Zerologon (CVE-2020-1472) in Netlogon to take over the domain controller.",
+      "tools": [
+        "Zerologon exploit"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Zerologon/Netlogon exploitation atomic; validate with DC event 4742/5805 and Netlogon analytics."
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Domain Account",
+      "procedure": "Runs ipconfig, whoami and net commands inside PowerShell: net user <u> /domain, net group \"domain computers\"/\"domain admins\" /domain, net localgroup administrators; PowerView for further recon.",
+      "tools": [
+        "net",
+        "PowerView",
+        "whoami",
+        "ipconfig"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6fbc9e68-5ad7-444a-bd11-8bf3136c477e",
+          "testNumber": 1,
+          "testName": "Enumerate all accounts (Domain)",
+          "fidelity": "exact",
+          "note": "net user /domain enumeration"
+        },
+        {
+          "testGuid": "dd66d77d-8998-48c0-8024-df263dc2ce5d",
+          "testNumber": 1,
+          "testName": "Basic Permission Groups Discovery Windows (Domain)",
+          "fidelity": "exact",
+          "note": "net group domain admins /domain"
+        },
+        {
+          "testGuid": "93662494-5ed7-4454-a04c-8c8372808ac2",
+          "testNumber": 11,
+          "testName": "Get-DomainUser with PowerView",
+          "fidelity": "close",
+          "note": "PowerView Get-DomainUser"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1482",
+      "techniqueName": "Domain Trust Discovery",
+      "procedure": "Uses nltest to enumerate domain controllers and trusts.",
+      "tools": [
+        "nltest"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "nltest /domain_trusts"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "NTDS",
+      "procedure": "Dumps NTDS.dit from the domain controller with ntdsutil.exe and Impacket secretsdump.",
+      "tools": [
+        "ntdsutil",
+        "secretsdump"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "exact",
+          "note": "ntdsutil IFM dump of the AD database"
+        },
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "close",
+          "note": "Copy NTDS.dit from a volume shadow copy"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "Moves laterally with mstsc RDP sessions using the compromised accounts.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to a remote host"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.004",
+      "techniqueName": "SSH",
+      "procedure": "Uses PuTTY to open SSH sessions to other systems (seen in PowerShell console history).",
+      "tools": [
+        "PuTTY"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local SSH atomics only enable SSH on ESXi hosts; none reproduce a Windows PuTTY client session. Validate with putty.exe process/22-tcp outbound analytics."
+    },
+    {
+      "order": 11,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk for persistent remote access and file transfer.",
+      "tools": [
+        "AnyDesk"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk installation/execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Clear Windows Event Logs",
+      "procedure": "Clears large numbers of Windows event logs (System, Application, Security) with wevtutil.exe.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl of event logs"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "Service Execution",
+      "procedure": "Heavily uses PsExec: S_0.bat places 1.ps1 (extension list), S_1.bat copies the encryptor (named conhost.exe) to C:\\Windows\\Temp on hosts listed in C:\\in, S_2.bat runs it everywhere.",
+      "tools": [
+        "PsExec",
+        "S_0.bat",
+        "S_1.bat",
+        "S_2.bat"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote command execution"
+        },
+        {
+          "testGuid": "9e8894c0-50bd-4525-a96c-d4ac78ece388",
+          "testNumber": 1,
+          "testName": "Create and Execute Batch Script",
+          "fidelity": "close",
+          "note": "Batch script creation and execution"
+        },
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "close",
+          "note": "Payload masquerading as a built-in Windows executable name (conhost.exe)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1055.002",
+      "techniqueName": "Portable Executable Injection",
+      "procedure": "The MinGW-compiled encryptor injects its PE into running processes.",
+      "tools": [
+        "Rhysida encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "578025d5-faa9-4f6d-8390-aae739d503e1",
+          "testNumber": 1,
+          "testName": "Portable Executable Injection",
+          "fidelity": "exact",
+          "note": "Portable Executable injection"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Executes unobfuscated plain-text registry modification commands via cmd.exe as part of encryption.",
+      "tools": [
+        "reg.exe",
+        "cmd.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "282f929a-6bc5-42b8-bd93-960c3ba35afe",
+          "testNumber": 2,
+          "testName": "Modify Registry of Local Machine - cmd",
+          "fidelity": "proxy",
+          "note": "reg add under HKLM from cmd.exe"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts with ChaCha20 and RSA-4096, appends .rhysida and drops the CriticalBreachDetected.pdf ransom note.",
+      "tools": [
+        "Rhysida encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop telemetry"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "File Deletion",
+      "procedure": "After encryption, a hidden-window PowerShell command deletes the encryptor binary.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dee89bd-9a98-4c4f-9e2d-4256690b0e72",
+          "testNumber": 6,
+          "testName": "Delete a single file - Windows PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell Remove-Item of a file"
+        },
+        {
+          "testGuid": "f151ee37-9e2b-47e6-80e4-550b9f999b7a",
+          "testNumber": 1,
+          "testName": "Hidden Window",
+          "fidelity": "close",
+          "note": "Hidden-window PowerShell execution"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

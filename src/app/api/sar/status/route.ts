@@ -9,6 +9,7 @@
  *   5. Reads recent log entries from attack_range.log.
  */
 
+import { labFetch } from "@/lib/net/lab-https";
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { execFile } from "child_process";
@@ -102,38 +103,26 @@ async function probeSplunk(ip: string, password: string): Promise<SplunkInfo> {
   const auth = "Basic " + Buffer.from(`admin:${password}`).toString("base64");
   const headers = { Authorization: auth };
 
+  // Self-signed Splunk: TLS relaxation is scoped per request (labFetch), never
+  // via the process-wide NODE_TLS_REJECT_UNAUTHORIZED.
   try {
     // Server info
-    const infoRes = await fetch(`${base}/services/server/info?output_mode=json`, {
-      headers,
-      // @ts-expect-error Node fetch option
-      rejectUnauthorized: false,
-    });
-
-    // Node's native fetch doesn't support rejectUnauthorized, so use the agent approach
-    // We'll use a dynamic import for the https agent
-  } catch {
-    // ignore, we'll use the process env approach below
-  }
-
-  // Use NODE_TLS_REJECT_UNAUTHORIZED for self-signed certs
-  const origTLS = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-  try {
-    // Server info
-    const infoRes = await fetch(`${base}/services/server/info?output_mode=json`, {
+    const infoRes = await labFetch(`${base}/services/server/info?output_mode=json`, {
       headers,
     });
     if (!infoRes.ok) throw new Error(`Splunk returned ${infoRes.status}`);
     const infoData = await infoRes.json() as any;
     const content = infoData.entry?.[0]?.content || {};
 
-    // Indexes
-    const idxRes = await fetch(
-      `${base}/services/data/indexes?output_mode=json&count=50`,
-      { headers }
-    );
+    // Indexes, apps and status are independent of each other — fetch them in
+    // PARALLEL (was sequential: 3 round-trips back-to-back dominated the ~5s
+    // probe and made the Campaign Designer environment card slow to settle).
+    const [idxRes, appsRes, settingsRes] = await Promise.all([
+      labFetch(`${base}/services/data/indexes?output_mode=json&count=50`, { headers }),
+      labFetch(`${base}/services/apps/local?output_mode=json&count=100`, { headers }),
+      labFetch(`${base}/services/server/status?output_mode=json`, { headers }).catch(() => null),
+    ]);
+
     const idxData = await idxRes.json() as any;
     const indexes = (idxData.entry || [])
       .map((e: any) => ({
@@ -143,11 +132,6 @@ async function probeSplunk(ip: string, password: string): Promise<SplunkInfo> {
       }))
       .filter((i: any) => i.eventCount > 0 || ["main", "sysmon", "wineventlog", "win"].includes(i.name));
 
-    // Apps
-    const appsRes = await fetch(
-      `${base}/services/apps/local?output_mode=json&count=100`,
-      { headers }
-    );
     const appsData = await appsRes.json() as any;
     const apps = (appsData.entry || []).map((e: any) => ({
       name: e.name,
@@ -156,18 +140,7 @@ async function probeSplunk(ip: string, password: string): Promise<SplunkInfo> {
       enabled: !e.content?.disabled,
     }));
 
-    // Uptime
-    let uptime: string | undefined;
-    try {
-      const settingsRes = await fetch(
-        `${base}/services/server/status?output_mode=json`,
-        { headers }
-      );
-      if (settingsRes.ok) {
-        // just indicate reachable
-        uptime = "running";
-      }
-    } catch { /* ignore */ }
+    const uptime: string | undefined = settingsRes && settingsRes.ok ? "running" : undefined;
 
     return {
       reachable: true,
@@ -187,12 +160,6 @@ async function probeSplunk(ip: string, password: string): Promise<SplunkInfo> {
     };
   } catch (err: any) {
     return { reachable: false, error: err.message };
-  } finally {
-    if (origTLS === undefined) {
-      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    } else {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = origTLS;
-    }
   }
 }
 
@@ -221,7 +188,17 @@ async function readRecentLogs(logPath: string, count: number = 20): Promise<stri
 
 // ── Route handler ──
 
+// Short-lived cache of the last probe. The Campaign Designer (and other pages)
+// call this on every mount; without a cache a quick revisit or a React remount
+// re-runs the full SAR/Splunk probe, so the environment card kept "probing"
+// over and over. A few seconds of staleness is fine for a status card.
+const STATUS_TTL_MS = 8000;
+let statusCache: { at: number; body: any } | null = null;
+
 export async function GET() {
+  if (statusCache && Date.now() - statusCache.at < STATUS_TTL_MS) {
+    return NextResponse.json({ ...statusCache.body, cached: true });
+  }
   const startTime = Date.now();
   const paths = resolvePaths();
 
@@ -324,5 +301,6 @@ export async function GET() {
     recentLogs: logs,
   };
 
+  statusCache = { at: Date.now(), body: response };
   return NextResponse.json(response);
 }

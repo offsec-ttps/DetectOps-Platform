@@ -1,0 +1,636 @@
+{
+  "gang": "ransomhub",
+  "displayName": "RansomHub",
+  "aliases": [
+    "Cyclops / Knight successor (reported)"
+  ],
+  "status": "defunct",
+  "activeSince": "2024",
+  "lineage": "Emerged Feb 2024 as a RaaS absorbing ex-ALPHV/LockBit affiliates; infrastructure went dark ~1 April 2025 with affiliates reportedly moving to Qilin and DragonForce",
+  "summary": "RansomHub was the most prolific RaaS of 2024, with affiliates using phishing, password spraying and a broad set of edge-device CVEs for access, then Mimikatz, LOTL discovery, RMM tools and the custom EDRKillShifter BYOVD loader before deploying a Curve25519 intermittent encryptor that self-propagates over SMB. Its infrastructure went offline around 1 April 2025; the affiliate tradecraft (SocGholish Python backdoor, RDP password spray, Atera/Splashtop, Rclone SFTP) persists under successor brands.",
+  "uniqueTraits": [
+    "EDRKillShifter custom BYOVD loader (password-protected) to kill EDR",
+    "Wide CVE list: Citrix CVE-2023-3519, FortiOS CVE-2023-27997, ActiveMQ CVE-2023-46604, Confluence CVE-2023-22515, BIG-IP CVE-2023-46747, FortiClient EMS CVE-2023-48788, EternalBlue, Zerologon",
+    "SocGholish (FakeUpdate) hand-off to an obfuscated Python SOCKS5 backdoor",
+    "Encryptor run with -pass and -only-local, self-copies over SMB as randomly named services, stops Hyper-V VMs; intermittent 1MB/2MB encryption"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: RansomHub Ransomware (AA24-242A)",
+      "publisher": "CISA / FBI / MS-ISAC / HHS",
+      "date": "2024-08-29",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-242a"
+    },
+    {
+      "id": "S2",
+      "title": "How RansomHub Ransomware Uses EDRKillShifter to Disable EDR and Antivirus Protections",
+      "publisher": "Trend Micro",
+      "date": "2024-10-08",
+      "url": "https://www.trendmicro.com/en_us/research/24/i/how-ransomhub-ransomware-uses-edrkillshifter-to-disable-edr-and-.html"
+    },
+    {
+      "id": "S3",
+      "title": "Hide Your RDP: Password Spray Leads to RansomHub Deployment",
+      "publisher": "The DFIR Report",
+      "date": "2025-06-30",
+      "url": "https://thedfirreport.com/2025/06/30/hide-your-rdp-password-spray-leads-to-ransomhub-deployment/"
+    },
+    {
+      "id": "S4",
+      "title": "RansomHub Affiliate leverages Python-based backdoor",
+      "publisher": "GuidePoint Security",
+      "date": "2025-01-15",
+      "url": "https://www.guidepointsecurity.com/blog/ransomhub-affiliate-leverage-python-based-backdoor/"
+    },
+    {
+      "id": "S5",
+      "title": "RansomHub Went Dark April 1; Affiliates Fled to Qilin and DragonForce Claimed Control",
+      "publisher": "The Hacker News",
+      "date": "2025-04-30",
+      "url": "https://thehackernews.com/2025/04/ransomhub-went-dark-april-1-affiliates.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1110.003",
+      "techniqueName": "Password Spraying",
+      "procedure": "Password-sprays internet-facing RDP (and breached-credential accounts) for hours from known-bad IPs until several accounts, one privileged, succeed.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "90bc2e54-6c84-47a5-9439-0a2a92b4b175",
+          "testNumber": 1,
+          "testName": "Password Spray all Domain Users",
+          "fidelity": "close",
+          "note": "Domain-wide password spray"
+        },
+        {
+          "testGuid": "f14d956a-5b6e-4a93-847f-0c415142f07d",
+          "testNumber": 3,
+          "testName": "Password spray all Active Directory domain users with a single password via LDAP against domain controller (NTLM or Kerberos)",
+          "fidelity": "close",
+          "note": "Single-password spray against the DC via LDAP"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Uses public PoCs against CVE-2023-3519 (Citrix ADC), CVE-2023-27997 (FortiOS SSL-VPN), CVE-2023-46604 (ActiveMQ), CVE-2023-22515 (Confluence), CVE-2023-46747 (BIG-IP), CVE-2023-48788 (FortiClient EMS) and CVE-2017-0144 (EternalBlue).",
+      "tools": [
+        "Public PoC exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Windows atomic for exploiting this public-facing product/CVE; validate via perimeter/WAF and product logs instead."
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.007",
+      "techniqueName": "JavaScript",
+      "procedure": "SocGholish FakeUpdate JavaScript infection hands off within ~20 minutes to an obfuscated Python backdoor that builds a SOCKS5 reverse tunnel; re-deployed on hosts reached by RDP.",
+      "tools": [
+        "SocGholish",
+        "Python backdoor"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0709945e-4fec-4c49-9faf-c3c292a74484",
+          "testNumber": 2,
+          "testName": "JScript execution to gather local computer information via wscript",
+          "fidelity": "close",
+          "note": "wscript JScript execution like the SocGholish stage"
+        },
+        {
+          "testGuid": "3d257a03-eb80-41c5-b744-bb37ac7f65c7",
+          "testNumber": 6,
+          "testName": "System Discovery - SocGholish whoami",
+          "fidelity": "exact",
+          "note": "SocGholish-style whoami discovery"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Exploits Zerologon (CVE-2020-1472), potentially with CVE-2020-0787, and uses Mimikatz to reach SYSTEM/domain admin.",
+      "tools": [
+        "Zerologon exploit"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Catalogue has no Zerologon or CVE-2020-0787 exploitation atomic; T1068 tests are BYOVD only."
+    },
+    {
+      "order": 5,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "LSASS Memory",
+      "procedure": "Runs Mimikatz sekurlsa::logonpasswords against LSASS and NirSoft CredentialsFileView to decrypt saved credentials.",
+      "tools": [
+        "Mimikatz",
+        "CredentialsFileView"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation"
+        },
+        {
+          "testGuid": "c89becbe-1758-4e7d-a0f4-97d2188a23e3",
+          "testNumber": 2,
+          "testName": "Dump credentials from Windows Credential Manager With PowerShell [windows Credentials]",
+          "fidelity": "proxy",
+          "note": "Credential Manager dump, approximating CredentialsFileView"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.006",
+      "techniqueName": "DCSync",
+      "procedure": "Mimikatz DCSync per child domain writing CSV output.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "129efd28-8497-4c87-a1b0-73b9a870ca3e",
+          "testNumber": 1,
+          "testName": "DCSync (Active Directory)",
+          "fidelity": "exact",
+          "note": "DCSync with Mimikatz"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Scans with Angry IP Scanner, Nmap, Advanced IP Scanner, SoftPerfect NetScan and PowerShell LOTL scanning.",
+      "tools": [
+        "Angry IP Scanner",
+        "Nmap",
+        "Advanced IP Scanner",
+        "SoftPerfect NetScan"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "exact",
+          "note": "Nmap port scan"
+        },
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1482",
+      "techniqueName": "Domain Trust Discovery",
+      "procedure": "nslookup, net, nltest, ipconfig, route and ping on each new host; dsa.msc/dnsmgmt.msc on DCs.",
+      "tools": [
+        "nltest",
+        "net"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "nltest /domain_trusts"
+        },
+        {
+          "testGuid": "52ab5108-3f6f-42fb-8ba3-73bc054f22c8",
+          "testNumber": 3,
+          "testName": "Remote System Discovery - nltest",
+          "fidelity": "exact",
+          "note": "nltest DC discovery"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "persistence",
+      "techniqueId": "T1098",
+      "techniqueName": "Account Manipulation",
+      "procedure": "Creates accounts, re-enables disabled accounts and sets several users' passwords to the same value with net commands.",
+      "tools": [
+        "net"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5598f7cb-cf43-455e-883a-f6008c5d46af",
+          "testNumber": 1,
+          "testName": "Admin Account Manipulate",
+          "fidelity": "close",
+          "note": "Admin account password manipulation"
+        },
+        {
+          "testGuid": "6657864e-0323-4206-9344-ac9cd7265a4f",
+          "testNumber": 4,
+          "testName": "Create a new user in a command prompt",
+          "fidelity": "close",
+          "note": "Local account creation via cmd"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs Atera and Splashtop as services on backup servers (7045), and uses AnyDesk, ConnectWise and N-able; Splashtop later used to stage the encryptor.",
+      "tools": [
+        "Atera",
+        "Splashtop",
+        "AnyDesk",
+        "ConnectWise",
+        "N-able"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop execution"
+        },
+        {
+          "testGuid": "3e1858ee-3550-401c-86ec-5e70ed79295b",
+          "testNumber": 14,
+          "testName": "Splashtop Streamer Execution",
+          "fidelity": "exact",
+          "note": "Splashtop Streamer"
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "RDP (logon type 10) to domain controllers within hours, plus PsExec, Cobalt Strike, Metasploit.",
+      "tools": [
+        "RDP",
+        "PsExec",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Deploys EDRKillShifter, a password-protected loader that drops a vulnerable signed driver to terminate EDR/AV; WMI also used to disable antivirus.",
+      "tools": [
+        "EDRKillShifter",
+        "WMI"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "BYOVD vulnerable-driver load"
+        },
+        {
+          "testGuid": "59d386fc-3a4b-41b8-850d-9e3eee24dfe4",
+          "testNumber": 40,
+          "testName": "WMIC Tamper with Windows Defender Evade Scanning Folder",
+          "fidelity": "close",
+          "note": "WMIC tampering with Defender"
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "proxy",
+          "note": "Stop and remove a security service"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "nocmd.vbs launches rcl.bat running Rclone over SFTP (port 443) with an extension include-list; also PuTTY, WinSCP, AWS S3 and HTTP POST; Rclone removed afterwards.",
+      "tools": [
+        "Rclone",
+        "WinSCP",
+        "PuTTY",
+        "nocmd.vbs"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "Rclone over alternate protocol (FTP vs SFTP)"
+        },
+        {
+          "testGuid": "6aa58451-1121-4490-a8e9-1dada3f1c68c",
+          "testNumber": 4,
+          "testName": "Exfiltration Over Alternative Protocol - HTTP",
+          "fidelity": "close",
+          "note": "HTTP exfiltration"
+        },
+        {
+          "testGuid": "1620de42-160a-4fe5-bbaf-d3fef0181ce9",
+          "testNumber": 1,
+          "testName": "Visual Basic script execution to gather local computer information",
+          "fidelity": "proxy",
+          "note": "VBScript launcher stage"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Clear Windows Event Logs",
+      "procedure": "wevtutil cl Security, System and Application before/during deployment; Linux logs cleared too.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1570",
+      "techniqueName": "Lateral Tool Transfer",
+      "procedure": "Encryptor (amd64.exe, sometimes renamed Windows.exe on Desktop/Downloads) runs with -pass, enables R2L/R2R symlink evaluation via fsutil, copies itself over SMB with random names and executes via randomly named remote services (-only-local avoids re-propagation).",
+      "tools": [
+        "RansomHub encryptor",
+        "fsutil"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "Copy and execute file on a remote host over SMB admin share"
+        },
+        {
+          "testGuid": "2382dee2-a75f-49aa-9378-f52df6ed3fb1",
+          "testNumber": 1,
+          "testName": "Execute a Command as a Service",
+          "fidelity": "close",
+          "note": "Execute a command as a service"
+        },
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "proxy",
+          "note": "Masquerading binary name (Windows.exe)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops Hyper-V VMs and kills processes (vmms, vmwp, sql, oracle, outlook, TeamViewer etc.) so files can be encrypted.",
+      "tools": [
+        "RansomHub encryptor",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "exact",
+          "note": "Stop service by killing process"
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "sc stop"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "vssadmin Delete Shadows /all /quiet and PowerShell Remove-CimInstance of Win32_ShadowCopy.",
+      "tools": [
+        "vssadmin",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows"
+        },
+        {
+          "testGuid": "39a295ca-7059-4a88-86f6-09556c1211e7",
+          "testNumber": 5,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI with PowerShell",
+          "fidelity": "exact",
+          "note": "Shadow copy deletion via WMI in PowerShell"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Curve25519-based intermittent encryption (1MB encrypted / 2MB skipped) with a 58-byte footer and per-victim keys; ransom note left.",
+      "tools": [
+        "RansomHub encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop telemetry"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

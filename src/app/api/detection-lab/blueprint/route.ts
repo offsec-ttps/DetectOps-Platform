@@ -14,6 +14,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, mkdir, copyFile, readdir, stat } from "fs/promises";
 import { existsSync, mkdirSync, cpSync } from "fs";
 import path from "path";
+import { requireRole } from "@/lib/auth-guard";
+
+// Ids/names become path segments under labs/ — no separators or traversal.
+const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 const LABS_DIR = path.join(process.cwd(), "labs");
 const BLUEPRINTS_DIR = path.join(LABS_DIR, ".blueprints");
@@ -144,6 +148,9 @@ export async function GET() {
 // ── POST: Scan or Deploy ──
 
 export async function POST(req: NextRequest) {
+  // Copies host directories and writes into caller-chosen paths.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const { action } = body;
 
@@ -165,6 +172,10 @@ async function handleScan() {
   const results: { id: string; status: string; files: number; error?: string }[] = [];
 
   for (const src of registry.sources) {
+    if (typeof src.id !== "string" || !SAFE_NAME.test(src.id)) {
+      results.push({ id: String(src.id), status: "skipped", files: 0, error: "invalid source id" });
+      continue;
+    }
     const bpDir = path.join(BLUEPRINTS_DIR, src.id);
 
     if (!existsSync(src.path)) {
@@ -239,6 +250,12 @@ async function handleDeploy(body: any) {
   const { sourceId, templateId, targetPath, deployName } = body;
 
   if (!sourceId) return NextResponse.json({ error: "sourceId is required" }, { status: 400 });
+  if (typeof sourceId !== "string" || !SAFE_NAME.test(sourceId))
+    return NextResponse.json({ error: "invalid sourceId" }, { status: 400 });
+  if (deployName !== undefined && deployName !== "" && (typeof deployName !== "string" || !SAFE_NAME.test(deployName)))
+    return NextResponse.json({ error: "deployName may contain only letters, digits, . _ -" }, { status: 400 });
+  if (targetPath !== undefined && targetPath !== "" && (typeof targetPath !== "string" || !path.isAbsolute(targetPath) || targetPath.split(/[\\/]/).includes("..")))
+    return NextResponse.json({ error: "targetPath must be an absolute path without '..'" }, { status: 400 });
 
   const bpDir = path.join(BLUEPRINTS_DIR, sourceId);
   if (!existsSync(bpDir)) {

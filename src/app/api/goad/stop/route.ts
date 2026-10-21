@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { requireRole } from "@/lib/auth-guard";
 
 const exec = promisify(execFile);
 
@@ -38,6 +39,9 @@ async function stopVM(vmName: string): Promise<{ name: string; status: string; e
 }
 
 export async function POST(req: NextRequest) {
+  // Shuts down host VirtualBox VMs.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const lab = body.lab || "MINILAB";
 

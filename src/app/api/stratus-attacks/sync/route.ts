@@ -7,8 +7,12 @@ import { NextResponse } from "next/server";
 import { syncStratusAttacks } from "@/lib/use-cases/sync/stratus-attacks";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth-guard";
 
 export async function POST() {
+  // Rewrites the shared Stratus catalog from upstream — maintenance op, admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const t0 = Date.now();
   const sessionUser = await getSessionUser().catch(() => null);
   try {

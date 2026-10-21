@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, copyFile } from "fs/promises";
 import { existsSync } from "fs";
+import { requireRole } from "@/lib/auth-guard";
 
 const SAR_PATH = process.env.SAR_PATH || "/media/nested/SamsungEvo/Simulation/attack_range_local";
 const CONF_PATH = `${SAR_PATH}/attack_range_local.conf`;
@@ -100,11 +101,17 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  // The SAR conf drives what SAR/ansible later execute on the host.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const { raw } = body;
 
   if (!raw || typeof raw !== "string") {
     return NextResponse.json({ error: "raw config string is required" }, { status: 400 });
+  }
+  if (raw.length > 512 * 1024) {
+    return NextResponse.json({ error: "config too large" }, { status: 413 });
   }
 
   try {

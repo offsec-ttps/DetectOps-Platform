@@ -8,7 +8,12 @@
 
 import https from "node:https";
 import http from "node:http";
+import { safeLookup, labOutboundPolicy, syncUrlBlockReason } from "@/lib/net/ssrf";
 import type { SiemConfig, SplunkConfig, DetectionQuery, SiemDetectionResult, SiemTestResult, SiemProvider, DetectionStrategy } from "../types";
+
+/** Lab Splunk on private IPs is the normal case; never metadata/link-local; loopback only in dev / SIEM_ALLOW_LOOPBACK=1. */
+const siemPolicy = () => labOutboundPolicy("SIEM_ALLOW_LOOPBACK");
+const MAX_BODY = 32 * 1024 * 1024;
 
 function authHeaderOf(cfg: SplunkConfig): string {
   if (cfg.authMode === "token" && cfg.token) return `Bearer ${cfg.token}`;
@@ -18,6 +23,8 @@ function authHeaderOf(cfg: SplunkConfig): string {
 
 function splunkFetch(url: string, authHeader: string, method: "GET" | "POST" = "GET", body?: string):
   Promise<{ ok: boolean; status: number; json: () => Promise<any>; text: () => Promise<string> }> {
+  const blocked = syncUrlBlockReason(url, siemPolicy());
+  if (blocked) return Promise.resolve({ ok: false, status: 0, json: async () => ({}), text: async () => blocked });
   const parsed = new URL(url);
   const isHttps = parsed.protocol === "https:";
   return new Promise((resolve) => {
@@ -25,8 +32,8 @@ function splunkFetch(url: string, authHeader: string, method: "GET" | "POST" = "
     if (body) { headers["Content-Type"] = "application/x-www-form-urlencoded"; headers["Content-Length"] = String(Buffer.byteLength(body)); }
     const transport = isHttps ? https : http;
     const req = transport.request(
-      { hostname: parsed.hostname, port: parsed.port || (isHttps ? 443 : 80), path: parsed.pathname + parsed.search, method, headers, rejectUnauthorized: false },
-      (res) => { let raw = ""; res.on("data", (c) => (raw += c)); res.on("end", () => { const s = res.statusCode || 500; resolve({ ok: s < 400, status: s, json: async () => JSON.parse(raw), text: async () => raw }); }); },
+      { hostname: parsed.hostname, port: parsed.port || (isHttps ? 443 : 80), path: parsed.pathname + parsed.search, method, headers, rejectUnauthorized: false, lookup: safeLookup(siemPolicy()) as any },
+      (res) => { let raw = ""; res.on("data", (c) => { raw += c; if (raw.length > MAX_BODY) res.destroy(); }); res.on("end", () => { const s = res.statusCode || 500; resolve({ ok: s < 400, status: s, json: async () => JSON.parse(raw), text: async () => raw }); }); },
     );
     req.on("error", () => resolve({ ok: false, status: 0, json: async () => ({}), text: async () => "" }));
     req.setTimeout(30000, () => { req.destroy(); resolve({ ok: false, status: 0, json: async () => ({}), text: async () => "timeout" }); });
@@ -42,6 +49,8 @@ function splunkSearch(baseUrl: string, authHeader: string, spl: string, earliest
   if (earliest) params.earliest_time = earliest;
   if (latest) params.latest_time = latest;
   const body = new URLSearchParams(params).toString();
+  const blocked = syncUrlBlockReason(`${baseUrl}/services/search/jobs/export`, siemPolicy());
+  if (blocked) return Promise.resolve({ count: 0, results: [], error: blocked });
   const url = new URL(`${baseUrl}/services/search/jobs/export`);
   const isHttps = url.protocol === "https:";
   return new Promise((resolve) => {
@@ -49,9 +58,9 @@ function splunkSearch(baseUrl: string, authHeader: string, spl: string, earliest
     const req = transport.request(
       { hostname: url.hostname, port: url.port || (isHttps ? 443 : 80), path: url.pathname, method: "POST",
         headers: { Authorization: authHeader, "Content-Type": "application/x-www-form-urlencoded", "Content-Length": Buffer.byteLength(body) },
-        rejectUnauthorized: false },
+        rejectUnauthorized: false, lookup: safeLookup(siemPolicy()) as any },
       (res) => {
-        let raw = ""; res.on("data", (c) => (raw += c));
+        let raw = ""; res.on("data", (c) => { raw += c; if (raw.length > MAX_BODY) res.destroy(); });
         res.on("end", () => {
           if (res.statusCode && res.statusCode >= 400) { resolve({ count: 0, results: [], error: `Splunk API ${res.statusCode}: ${raw.slice(0, 300)}` }); return; }
           const out: any[] = [];

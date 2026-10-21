@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import { getActiveLab } from "@/lib/active-lab";
 import { existsSync } from "fs";
+import { requireRole } from "@/lib/auth-guard";
 
 const VALID_ACTIONS = ["build", "destroy", "simulate", "stop", "resume", "dump"] as const;
 type SARAction = typeof VALID_ACTIONS[number];
@@ -27,6 +28,9 @@ let bgOperation: {
 } | null = null;
 
 export async function POST(req: NextRequest) {
+  // build/destroy/stop/resume the lab's VMs on the host.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const action: string = body.action || "resume";
 

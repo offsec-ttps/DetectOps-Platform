@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTemplate } from "@/config/lab-templates";
+import { requireRole } from "@/lib/auth-guard";
 import { execFile, spawn as nodeSpawn } from "child_process";
 import { promisify } from "util";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
@@ -45,6 +46,47 @@ function expandHome(p: string | null | undefined): string {
   if (!path.isAbsolute(p)) return path.join(process.cwd(), p);
   return p;
 }
+
+/**
+ * SECURITY: `deployPath` comes from the request and is later `rm -rf`'d on
+ * prepare/destroy, used as a cwd for vagrant/SAR, and interpolated into build
+ * files — so it must be confined. Accepted locations:
+ *   - strictly inside <project>/labs, <project>/.detectops-labs, ~/.detectops-labs,
+ *     or any root listed in LAB_DEPLOY_ROOTS (colon-separated);
+ *   - strictly inside any directory named `detection-labs` / `.detectops-labs`
+ *     (the UI suggests `<mount>/detection-labs/<templateId>`);
+ *   - an exact path already recorded in the deployments registry.
+ * The charset is restricted so the path can never break out of a quoted
+ * string in any downstream file or command.
+ */
+const LAB_DIR_NAMES = new Set(["detection-labs", ".detectops-labs"]);
+function allowedDeployRoots(): string[] {
+  const roots = [
+    path.join(process.cwd(), "labs"),
+    path.join(process.cwd(), ".detectops-labs"),
+    path.join(os.homedir(), ".detectops-labs"),
+  ];
+  for (const r of (process.env.LAB_DEPLOY_ROOTS || "").split(":")) {
+    if (r.trim()) roots.push(path.resolve(expandHome(r.trim())));
+  }
+  return roots;
+}
+function safeDeployPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim() || raw.length > 512) return null;
+  const p = path.resolve(expandHome(raw.trim()));
+  if (!/^[A-Za-z0-9._\/ -]+$/.test(p)) return null;
+  if (loadRegistry().some((e) => typeof e.deployPath === "string" && path.resolve(e.deployPath) === p)) return p;
+  for (const root of allowedDeployRoots()) {
+    const rel = path.relative(root, p);
+    if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return p;
+  }
+  const segs = p.split(path.sep).filter(Boolean);
+  const idx = segs.findIndex((s) => LAB_DIR_NAMES.has(s));
+  if (idx >= 0 && idx < segs.length - 1) return p;
+  return null;
+}
+const BAD_DEPLOY_PATH =
+  "deployPath must be inside ./labs, ~/.detectops-labs, a '<mount>/detection-labs/' directory, or LAB_DEPLOY_ROOTS (letters, digits, . _ - / and spaces only)";
 const SAR_SOURCE = process.env.SAR_PATH || "/media/nested/SamsungEvo/Simulation/attack_range_local";
 const GOAD_SOURCE = process.env.GOAD_PATH || "/media/nested/SamsungEvo/Projects/GOAD/GOAD";
 
@@ -231,8 +273,10 @@ async function runPhase(state: DeploymentState, phase: PhaseName, fn: () => Prom
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const dp = expandHome(searchParams.get("deployPath"));
-  if (dp) {
+  const rawDp = searchParams.get("deployPath");
+  if (rawDp) {
+    const dp = safeDeployPath(rawDp);
+    if (!dp) return NextResponse.json({ error: BAD_DEPLOY_PATH }, { status: 400 });
     const persisted = loadState(dp);
     return NextResponse.json({ deployment: persisted, hasActive: false });
   }
@@ -243,16 +287,31 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Deploys/destroys VMs, rm -rf's directories and runs vagrant/ansible on the host.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
 
-  if (body.action) return handleLifecycle(body.action, expandHome(body.deployPath));
+  if (body.action) {
+    let dp: string | undefined;
+    if (body.deployPath) {
+      const safe = safeDeployPath(body.deployPath);
+      if (!safe) return NextResponse.json({ error: BAD_DEPLOY_PATH }, { status: 400 });
+      dp = safe;
+    }
+    return handleLifecycle(String(body.action), dp);
+  }
 
   const { templateId, phase } = body;
+  if (!templateId || typeof templateId !== "string") return NextResponse.json({ error: "templateId required" }, { status: 400 });
   // Deploy under the PROJECT path by default (so VM disks live in the repo tree),
   // unless the caller explicitly provides a path.
-  const deployPath = expandHome(body.deployPath) || (templateId ? path.join(process.cwd(), "labs", "deployments", String(templateId)) : "");
-  if (!templateId) return NextResponse.json({ error: "templateId required" }, { status: 400 });
-  if (!deployPath) return NextResponse.json({ error: "deployPath required" }, { status: 400 });
+  const deployPath = body.deployPath
+    ? safeDeployPath(body.deployPath)
+    : safeDeployPath(path.join(process.cwd(), "labs", "deployments", templateId));
+  if (!deployPath) return NextResponse.json({ error: BAD_DEPLOY_PATH }, { status: 400 });
+  if (body.config !== undefined && (typeof body.config !== "object" || body.config === null || Array.isArray(body.config)))
+    return NextResponse.json({ error: "config must be an object" }, { status: 400 });
   if (!phase) return NextResponse.json({ error: "phase required (prepare|sar|goad|tools)" }, { status: 400 });
   if (!["prepare", "sar", "goad", "tools"].includes(phase))
     return NextResponse.json({ error: "invalid phase" }, { status: 400 });
@@ -1167,6 +1226,8 @@ async function pingHost(ip: string): Promise<boolean> {
 }
 
 async function checkPort(ip: string, port: number): Promise<boolean> {
+  // Interpolated into `bash -c` — only ever accept a literal IPv4 + integer port.
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || !Number.isInteger(port)) return false;
   try { await exec("bash", ["-c", `echo >/dev/tcp/${ip}/${port}`], { timeout: 5000 }); return true; }
   catch { return false; }
 }
@@ -1322,9 +1383,15 @@ function patchSARConf(sarDest: string, state: DeploymentState, log: (m: string) 
   if (!existsSync(confPath)) { log("  attack_range_local.conf not found — skipping conf patch"); return; }
   const cfg = state.config || {};
   let conf = readFileSync(confPath, "utf-8");
+  // SECURITY: keys/values come from the request body. Keys are used in a RegExp
+  // and values are written into an INI file — restrict keys to identifiers and
+  // reject values containing line breaks (which would inject extra conf keys).
   const setKey = (key: string, value: string | number) => {
+    if (!/^[A-Za-z0-9_]{1,64}$/.test(key)) return false;
+    const v = String(value);
+    if (/[\r\n\0]/.test(v) || v.length > 256) return false;
     const re = new RegExp(`^(${key}\\s*=\\s*).*$`, "m");
-    if (re.test(conf)) { conf = conf.replace(re, `$1${value}`); return true; }
+    if (re.test(conf)) { conf = conf.replace(re, (_m, pre: string) => `${pre}${v}`); return true; }
     return false;
   };
 
@@ -1416,12 +1483,14 @@ async function prepareGOAD(
 
   const dest = path.join(goadDest, "provider");
   mkdirSync(dest, { recursive: true });
-  await exec("bash", ["-c", `cp -a "${instProvider}/"* "${dest}/" 2>/dev/null; rm -rf "${dest}/.vagrant"`], { timeout: 30000 });
+  // argv (no shell): `dest` derives from the request's deployPath.
+  await exec("cp", ["-a", `${instProvider}/.`, `${dest}/`], { timeout: 30000 }).catch(() => {});
+  await rm(path.join(dest, ".vagrant"), { recursive: true, force: true });
 
   // vagrant scripts (Install-WMF3Hotfix.ps1, ConfigureRemotingForAnsible.ps1, fix_ip.ps1)
   const vagrantScripts = path.join(GOAD_SOURCE, "vagrant");
   if (existsSync(vagrantScripts)) {
-    await exec("bash", ["-c", `cp -a "${vagrantScripts}" "${path.join(goadDest, "vagrant")}"`], { timeout: 30000 });
+    await exec("cp", ["-a", vagrantScripts, path.join(goadDest, "vagrant")], { timeout: 30000 });
   }
 
   // Splunk Forwarder extension
@@ -1429,7 +1498,7 @@ async function prepareGOAD(
   if (existsSync(extSrc)) {
     const extDest = path.join(goadDest, "extensions", "splunk_forwarder");
     mkdirSync(path.dirname(extDest), { recursive: true });
-    await exec("bash", ["-c", `cp -a "${extSrc}" "${extDest}"`], { timeout: 30000 });
+    await exec("cp", ["-a", extSrc, extDest], { timeout: 30000 });
   }
 
   // AD lab data (config.json, inventory template) — required by GOAD ansible playbooks
@@ -1437,7 +1506,7 @@ async function prepareGOAD(
   if (existsSync(adSrc)) {
     const adDest = path.join(goadDest, "ad", "MINILAB");
     mkdirSync(path.dirname(adDest), { recursive: true });
-    await exec("bash", ["-c", `cp -a "${adSrc}" "${adDest}"`], { timeout: 30000 });
+    await exec("cp", ["-a", adSrc, adDest], { timeout: 30000 });
     log("Copied ad/MINILAB lab definition");
   } else {
     throw new Error(`GOAD ad/MINILAB not found at ${adSrc}`);
@@ -1447,7 +1516,7 @@ async function prepareGOAD(
   const ansibleSrc = path.join(GOAD_SOURCE, "ansible");
   if (existsSync(ansibleSrc)) {
     const ansibleDest = path.join(goadDest, "ansible");
-    await exec("bash", ["-c", `cp -a "${ansibleSrc}" "${ansibleDest}"`], { timeout: 60000 });
+    await exec("cp", ["-a", ansibleSrc, ansibleDest], { timeout: 60000 });
     log("Copied GOAD ansible playbooks");
     // Note: common/main.yml and domain_controller/main.yml are patched later in
     // runGOADProvisioning() (Phase 2) so they always start from a clean source copy.
@@ -1458,7 +1527,7 @@ async function prepareGOAD(
   // playbooks.yml — has the playbook order config
   const playbooksYml = path.join(GOAD_SOURCE, "playbooks.yml");
   if (existsSync(playbooksYml)) {
-    await exec("bash", ["-c", `cp "${playbooksYml}" "${goadDest}/playbooks.yml"`], { timeout: 5000 });
+    await exec("cp", [playbooksYml, path.join(goadDest, "playbooks.yml")], { timeout: 5000 });
   }
 
   // globalsettings.ini — third inventory file that GOAD always loads. Provides
@@ -1466,7 +1535,7 @@ async function prepareGOAD(
   // ad_http_proxy, etc. Without this, build.yml fails on undefined vars.
   const globalSettings = path.join(GOAD_SOURCE, "globalsettings.ini");
   if (existsSync(globalSettings)) {
-    await exec("bash", ["-c", `cp "${globalSettings}" "${goadDest}/globalsettings.ini"`], { timeout: 5000 });
+    await exec("cp", [globalSettings, path.join(goadDest, "globalsettings.ini")], { timeout: 5000 });
     log("Copied globalsettings.ini (provides keyboard_layouts, add_route, etc.)");
   } else {
     log("WARNING: globalsettings.ini not found in GOAD source — playbooks may fail on undefined vars");

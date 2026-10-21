@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { existsSync, copyFileSync, mkdirSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
-
-const COLLECTION_DIR = resolve(process.cwd(), "..", "MCP-DetecOps", "tmp", "binary-collection");
+import { join, basename } from "node:path";
+import { confinedFile, BUILD_FORGE_BASE, BINARY_COLLECTION_DIR as COLLECTION_DIR } from "../../../../_shared/safe-file";
 
 /**
  * POST /api/build-forge/builds/[id]/save-to-collection
@@ -29,7 +28,8 @@ export async function POST(
   if (build.status !== "success" || !build.artifactPath) {
     return NextResponse.json({ error: "No successful artifact to save" }, { status: 400 });
   }
-  if (!existsSync(build.artifactPath)) {
+  const artifact = confinedFile(build.artifactPath, [BUILD_FORGE_BASE]);
+  if (!artifact || !existsSync(artifact)) {
     return NextResponse.json({ error: "Artifact file not found on disk" }, { status: 404 });
   }
 
@@ -43,12 +43,12 @@ export async function POST(
 
   // Copy artifact to collection directory
   mkdirSync(COLLECTION_DIR, { recursive: true });
-  const fileName = build.artifactName || basename(build.artifactPath);
+  const fileName = basename(build.artifactName || build.artifactPath).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 150) || "artifact";
   const destPath = join(COLLECTION_DIR, `${build.id}-${fileName}`);
-  copyFileSync(build.artifactPath, destPath);
+  copyFileSync(artifact, destPath);
 
   // Create collection entry
-  const displayName = body.name || `${build.repo?.repoName || "binary"}-${build.target}-${build.architecture}`;
+  const displayName = (typeof body.name === "string" && body.name.slice(0, 300)) || `${build.repo?.repoName || "binary"}-${build.target}-${build.architecture}`;
 
   const item = await prisma.binaryCollection.create({
     data: {
@@ -67,8 +67,8 @@ export async function POST(
       filePath: destPath,
       fileSize: build.artifactSize,
       sha256: build.artifactHash,
-      description: body.description || build.repo?.description || "",
-      tags: JSON.stringify(body.tags || []),
+      description: String(body.description || build.repo?.description || "").slice(0, 5000),
+      tags: JSON.stringify(Array.isArray(body.tags) ? body.tags.map(String).slice(0, 50) : []),
       buildRecordId: build.id,
     },
   });

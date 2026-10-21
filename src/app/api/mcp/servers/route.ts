@@ -17,6 +17,7 @@ import { encrypt, tailHint } from "@/lib/crypto/credential-vault";
 import { invalidateMcpServerCache } from "@/lib/llm/mcp/client";
 import { logEvent } from "@/lib/event-log";
 import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
 
 const TRANSPORTS = new Set(["stdio", "http"]);
 
@@ -56,6 +57,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `transport must be one of ${[...TRANSPORTS].join("|")}` }, { status: 400 });
   }
   if (!address) return NextResponse.json({ error: "address is required" }, { status: 400 });
+  if (transport === "http") {
+    const bad = invalidHttpUrl(address, "address");
+    if (bad) return NextResponse.json({ error: bad }, { status: 400 });
+  }
 
   let tokenEnc = "";
   if (typeof body.token === "string" && body.token.trim()) {

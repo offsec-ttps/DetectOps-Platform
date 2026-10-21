@@ -48,7 +48,7 @@ Stand up somewhere to attack, load the detection content, and connect a SIEM to 
 | **Atomic Test Library** | ~2,000 Atomic Red Team tests — view, edit, and *save-as-new* custom atomics | [Atomic Test Library](content/atomic-test-library.md) |
 | **Community Content** | Ingest 14,000+ community detection rules | [Community Content](content/community-content.md) |
 | **Threat Intel Ingestion** | ~185 feeds + a self-hosted ransomware-intel collector | [Threat Aggregator](content/threat-aggregator.md) |
-| **Module Marketplace** | Declarative simulation modules that compile to runnable scenarios | [Module Marketplace](system/module-marketplace.md) |
+| **Module Marketplace** | Declarative simulation modules that compile to runnable scenarios | [Module Marketplace](system/module-marketplace.md) · [Updating a Library](simulation/updating-libraries.md) |
 | **Integrations & keys** | SIEM connections, cloud credentials, GitHub token, LLM providers | [Integrations](system/integrations.md) · [LLM Providers](system/llm-providers.md) |
 
 ---

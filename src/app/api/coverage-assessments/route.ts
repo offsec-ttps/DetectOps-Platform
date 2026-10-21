@@ -4,6 +4,7 @@ import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { resolveScope, type ScopeSpec } from "@/lib/coverage-assessment/scope";
 import { ensureWorkerLoop } from "@/lib/coverage-assessment/worker";
 import { listInstalledAtomicTechniques } from "@/lib/enterprise-use-cases/runner";
+import { getActiveLab } from "@/lib/active-lab";
 
 // GET /api/coverage-assessments — list the caller's assessments (newest first).
 export async function GET() {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
-  const name = String(body.name || "").trim();
+  const name = String(body.name || "").trim().slice(0, 200);
   const environmentId = String(body.environmentId || "").trim();
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
   if (!environmentId) return NextResponse.json({ error: "environmentId is required" }, { status: 400 });
@@ -62,6 +63,21 @@ export async function POST(req: NextRequest) {
 
   const scope: ScopeSpec = normalizeScope(body.scope);
 
+  // Destructive opt-in gate: including impact/credential-dump/destructive atomics
+  // is only allowed when (a) the target is an isolated WinRM lab host and (b) a
+  // local VBox lab is running so a pre-sim snapshot can be taken and reverted
+  // afterwards. Without a rollback point, a destructive run is refused.
+  if (scope.includeDestructive) {
+    if (env.kind !== "our-template-deployed" || env.shellMode !== "winrm") {
+      return NextResponse.json({ error: "includeDestructive requires an isolated WinRM lab environment (our-template-deployed)" }, { status: 400 });
+    }
+    let hasLocalVms = false;
+    try { hasLocalVms = Object.values((getActiveLab() as any)?.vmNames || {}).filter(Boolean).length > 0; } catch { hasLocalVms = false; }
+    if (!hasLocalVms) {
+      return NextResponse.json({ error: "includeDestructive needs a running local lab to snapshot and revert; none is active" }, { status: 400 });
+    }
+  }
+
   // Best-effort: intersect with the technique folders actually installed on the
   // host so a "full" sweep doesn't spend round-trips on absent techniques.
   let installed: Set<string> | undefined;
@@ -76,11 +92,12 @@ export async function POST(req: NextRequest) {
   const user: any = (auth as any).user || {};
   const assessment = await prisma.coverageAssessment.create({
     data: {
-      name, assessor: String(body.assessor || ""), client: String(body.client || ""),
-      lab: String(body.lab || env.name || ""),
+      name, assessor: String(body.assessor || "").slice(0, 200), client: String(body.client || "").slice(0, 200),
+      lab: String(body.lab || env.name || "").slice(0, 200),
       environmentId, siemConnectionId,
-      scope: JSON.stringify(scope), detectionNote: String(body.detectionNote || ""),
-      snapshotRequested: body.snapshotBeforeRun === true || body.snapshotBeforeRun === "true",
+      scope: JSON.stringify(scope), detectionNote: String(body.detectionNote || "").slice(0, 20000),
+      // A destructive sweep always snapshots first (the worker reverts to it).
+      snapshotRequested: body.snapshotBeforeRun === true || body.snapshotBeforeRun === "true" || scope.includeDestructive === true,
       status: "queued", atomicsTotal: atomics.length,
       ownerId: user.id || "", actor: user.email || user.id || "",
     },
@@ -97,11 +114,13 @@ export async function POST(req: NextRequest) {
 }
 
 function normalizeScope(raw: any): ScopeSpec {
-  const mode = raw?.mode === "libraries" || raw?.mode === "techniques" ? raw.mode : "full";
+  const mode = raw?.mode === "libraries" || raw?.mode === "techniques" || raw?.mode === "ransomware" ? raw.mode : "full";
   return {
     mode,
-    libraries: Array.isArray(raw?.libraries) ? raw.libraries.map(String) : undefined,
-    techniques: Array.isArray(raw?.techniques) ? raw.techniques.map(String) : undefined,
+    gangs: Array.isArray(raw?.gangs) ? raw.gangs.slice(0, 100).map((g: unknown) => String(g).slice(0, 100)) : undefined,
+    includeDestructive: raw?.includeDestructive === true || raw?.includeDestructive === "true",
+    libraries: Array.isArray(raw?.libraries) ? raw.libraries.slice(0, 200).map(String) : undefined,
+    techniques: Array.isArray(raw?.techniques) ? raw.techniques.slice(0, 2000).map(String) : undefined,
   };
 }
 function safe(s: string) { try { return JSON.parse(s); } catch { return {}; } }

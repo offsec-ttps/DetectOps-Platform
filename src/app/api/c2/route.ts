@@ -19,6 +19,7 @@ import { localDeployAvailable } from "@/lib/deploy/mode";
 import { logEvent } from "@/lib/event-log";
 import { serializeC2 } from "@/lib/c2/http";
 import { liveC2Status } from "@/lib/c2/liveness";
+import { checkC2Url, isSafeGroup, isSafeHost } from "@/lib/c2/url-guard";
 
 export async function GET() {
   const auth = await requireUser();
@@ -76,13 +77,22 @@ export async function POST(req: NextRequest) {
   if (dupe) return NextResponse.json({ error: `a C2 server named "${name}" already exists` }, { status: 409 });
 
   const group = String(body.group || "red").slice(0, 120) || "red";
+  // group is embedded in the beacon one-liner; keep it to a safe token.
+  if (!isSafeGroup(group)) return NextResponse.json({ error: "group may contain only letters, digits, . _ -" }, { status: 400 });
   const agentPlatform = String(body.agentPlatform || "").slice(0, 24);
+  if (agentPlatform && !["windows", "linux", "darwin"].includes(agentPlatform)) {
+    return NextResponse.json({ error: 'agentPlatform must be "windows", "linux" or "darwin"' }, { status: 400 });
+  }
 
   // ── Connect (bring-your-own) ──
   if (mode === "connect") {
-    const url = String(body.url || "").trim().replace(/\/+$/, "");
+    const rawUrl = String(body.url || "").trim().replace(/\/+$/, "");
     const apiKey = String(body.apiKey || "").trim();
-    if (!url) return NextResponse.json({ error: "url is required for connect mode" }, { status: 400 });
+    if (!rawUrl) return NextResponse.json({ error: "url is required for connect mode" }, { status: 400 });
+    // SSRF guard: http(s) only, no embedded creds, no cloud-metadata hosts.
+    const checked = checkC2Url(rawUrl);
+    if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+    const url = checked.url;
     if (!apiKey) return NextResponse.json({ error: "apiKey is required for connect mode" }, { status: 400 });
 
     let apiKeyEnc: string;
@@ -129,6 +139,9 @@ export async function POST(req: NextRequest) {
   }
 
   const advertiseHost = String(body.advertiseHost || "").trim().slice(0, 120);
+  if (advertiseHost && !isSafeHost(advertiseHost)) {
+    return NextResponse.json({ error: "advertiseHost must be a hostname or IP address" }, { status: 400 });
+  }
   const server = await prisma.c2Server.create({
     data: { name, provider, mode, group, agentPlatform, advertiseHost, ownerId: auth.user.id, status: "installing" },
   });
@@ -150,7 +163,7 @@ export async function POST(req: NextRequest) {
         where: { id: server.id },
         data: {
           url: res.url, apiKeyEnc, group: res.group || group, advertiseHost: res.advertiseHost,
-          deploymentId: res.deploymentId, adminUser: res.adminUser || "", adminPassword: res.adminPassword || "",
+          deploymentId: res.deploymentId, adminUser: res.adminUser || "", adminPassword: res.adminPassword ? encrypt(res.adminPassword) : "",   // encrypted at rest
           status: "installed", lastError: "",
         },
       });

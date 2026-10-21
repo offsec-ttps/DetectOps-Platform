@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Shield,
   FileCode2,
   Library,
   GitBranch,
@@ -178,10 +177,16 @@ export function Sidebar({
     >
       {/* Logo */}
       <div className="flex h-14 items-center border-b border-border px-4">
-        <Shield className="h-7 w-7 shrink-0 text-accent" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/rusecure-mark.png" width={32} height={32} alt="RuSecure" title="DetectOps · powered by RuSecure" className="h-8 w-8 shrink-0 rounded-full select-none" draggable={false} />
         {!collapsed && (
-          <span className="ml-2.5 text-lg font-bold tracking-tight text-foreground">
-            Detect<span className="text-accent">Ops</span>
+          <span className="ml-2.5 flex flex-col leading-none">
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              Detect<span className="text-accent">Ops</span>
+            </span>
+            <span className="mt-1 text-[8px] uppercase tracking-[0.14em] text-muted">
+              powered by <span className="font-semibold text-[#c084fc]">RuSecure</span>
+            </span>
           </span>
         )}
       </div>

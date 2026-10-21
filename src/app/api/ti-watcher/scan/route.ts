@@ -11,6 +11,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser, requireRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { runWatcherScan } from "@/lib/ti-watcher/scan";
+import { createHash, timingSafeEqual } from "node:crypto";
+
+const digest = (s: string) => createHash("sha256").update(s).digest();
 
 export const maxDuration = 300;
 
@@ -18,7 +21,8 @@ async function authorize(req: NextRequest): Promise<{ ok: true } | { ok: false; 
   const token = process.env.WATCHER_TOKEN;
   if (token) {
     const hdr = req.headers.get("authorization") || "";
-    if (hdr === `Bearer ${token}`) return { ok: true };
+    // Constant-time compare (hash both sides so lengths always match).
+    if (timingSafeEqual(digest(hdr), digest(`Bearer ${token}`))) return { ok: true };
   }
   const auth = await requireRole("admin");
   if (auth.ok) return { ok: true };
@@ -30,7 +34,8 @@ export async function POST(req: NextRequest) {
   if (!authed.ok) return authed.response;
   const body = await req.json().catch(() => ({} as any));
   const since = body?.since ? new Date(body.since) : undefined;
-  const cap = typeof body?.cap === "number" ? body.cap : undefined;
+  // Bound LLM spend per scan regardless of what the caller asks for.
+  const cap = typeof body?.cap === "number" && Number.isFinite(body.cap) ? Math.max(1, Math.min(200, Math.floor(body.cap))) : undefined;
   try {
     const result = await runWatcherScan({ since, cap });
     return NextResponse.json({ ok: true, result });

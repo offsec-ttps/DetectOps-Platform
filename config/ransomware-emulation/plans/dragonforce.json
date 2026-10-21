@@ -1,0 +1,563 @@
+{
+  "gang": "dragonforce",
+  "displayName": "DragonForce",
+  "aliases": [
+    "DragonForce Ransomware Cartel"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Encryptors built from leaked LockBit 3.0 and Conti v3 code; operates a white-label 'cartel' model and has been used by Scattered Spider-linked affiliates",
+  "summary": "DragonForce launched in 2023 with a LockBit 3.0-based locker and later a Conti v3-derived build, rebranding in 2025 as a 'cartel' that lets affiliates white-label its ransomware. Intrusions range from valid-credential access to web servers with Cobalt Strike, SystemBC, Mimikatz and AdFind, to 2025 Scattered Spider-style help-desk social engineering against UK retailers and an MSP compromise via chained SimpleHelp RMM vulnerabilities used to push ransomware to downstream customers. The Conti-based locker supports BYOVD EDR killing (truesight.sys, rentdrv2.sys), ESXi/Linux targeting and clears event logs after encryption.",
+  "uniqueTraits": [
+    "Supply-chain style MSP attack: SimpleHelp CVE-2024-57727/57726/57728 chain, then the MSP's RMM pushes ransomware to customers",
+    "Scattered Spider-affiliated help-desk social engineering (vishing, MFA fatigue, SIM swap) in 2025 retail attacks",
+    "BYOVD via truesight.sys and rentdrv2.sys built into the locker (use_sys option)",
+    "White-label cartel model with LockBit 3.0 and Conti v3 derived lockers"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "DragonForce ransomware (DFIR analysis of LockBit 3.0 and Conti-based variants)",
+      "publisher": "Group-IB",
+      "date": "2024-09",
+      "url": "https://www.group-ib.com/blog/dragonforce-ransomware/"
+    },
+    {
+      "id": "S2",
+      "title": "Attackers hit MSP, use its RMM software to deliver ransomware to clients (reporting Sophos MDR)",
+      "publisher": "Help Net Security",
+      "date": "2025-05-28",
+      "url": "https://www.helpnetsecurity.com/2025/05/28/attackers-hit-msp-use-its-rmm-software-to-deliver-ransomware-to-clients/"
+    },
+    {
+      "id": "S3",
+      "title": "The DragonForce cartel: Scattered Spider at the gate",
+      "publisher": "Acronis TRU",
+      "date": "2025-11-04",
+      "url": "https://www.acronis.com/en/tru/posts/the-dragonforce-cartel-scattered-spider-at-the-gate/"
+    },
+    {
+      "id": "S4",
+      "title": "#StopRansomware/Scattered Spider (AA23-320A, updated July 2025)",
+      "publisher": "CISA/FBI",
+      "date": "2025-07-29",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-320a"
+    },
+    {
+      "id": "S5",
+      "title": "DragonForce Ransomware threat actor profile",
+      "publisher": "FortiGuard Labs",
+      "date": "2025",
+      "url": "https://www.fortiguard.com/threat-actor/6251/dragonforce-ransomware"
+    },
+    {
+      "id": "S6",
+      "title": "Emulating the Blazing DragonForce Ransomware",
+      "publisher": "AttackIQ",
+      "date": "2025-05-23",
+      "url": "https://www.attackiq.com/2025/05/23/emulating-dragonforce-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1656",
+      "techniqueName": "Impersonation",
+      "procedure": "Scattered Spider-linked affiliates research staff via OSINT, then vish the IT help desk / use MFA fatigue and SIM swaps to reset credentials and enrol their own MFA device.",
+      "tools": [
+        "help-desk vishing",
+        "MFA fatigue"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Help-desk social engineering and MFA reset abuse occur outside the endpoint; validate with IdP (MFA registration/reset) and service-desk telemetry."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Chains SimpleHelp RMM flaws against an MSP: CVE-2024-57727 path traversal (config/credential theft), CVE-2024-57726 privilege escalation, CVE-2024-57728 arbitrary upload/RCE.",
+      "tools": [
+        "SimpleHelp RMM"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Exploitation of an internet-facing service is not reproducible with a local Windows atomic; validate with perimeter/WAF and application logs instead."
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1072",
+      "techniqueName": "Software Deployment Tools",
+      "procedure": "Uses the MSP's legitimate SimpleHelp instance to deploy installers, gather data on customer estates and push the encryptor downstream.",
+      "tools": [
+        "SimpleHelp"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e447b83b-a698-4feb-bed1-a7aaf45c3443",
+          "testNumber": 2,
+          "testName": "PDQ Deploy RAT",
+          "fidelity": "proxy",
+          "note": "PDQ Deploy pushing a payload; same 'deployment tool distributes malware' pattern."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "proxy",
+          "note": "ScreenConnect RMM install, exercising RMM-agent detections."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Valid domain credentials used to access a public-facing web server (2023 Group-IB case).",
+      "tools": [
+        "valid credentials"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logon with legitimately obtained credentials has no discrete atomic; validate with authentication anomaly analytics."
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell downloads and launches a Cobalt Strike beacon.",
+      "tools": [
+        "PowerShell",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle."
+        },
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell file download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "SystemBC proxy/backdoor persisted through a Run registry key.",
+      "tools": [
+        "SystemBC"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dc7767b-30c1-4cc4-b999-50cab5e27891",
+          "testNumber": 9,
+          "testName": "SystemBC Malware-as-a-Service Registry",
+          "fidelity": "exact",
+          "note": "SystemBC MaaS Run-key persistence."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task/Job: Scheduled Task",
+      "procedure": "schtasks.exe used to persist tooling.",
+      "tools": [
+        "schtasks"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "exact",
+          "note": "Local scheduled task via schtasks."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "persistence",
+      "techniqueId": "T1543.003",
+      "techniqueName": "Create or Modify System Process: Windows Service",
+      "procedure": "Creates Windows services for persistence of implants.",
+      "tools": [
+        "sc.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "981e2942-e433-44e9-afc1-8c957a1496b6",
+          "testNumber": 2,
+          "testName": "Service Installation CMD",
+          "fidelity": "exact",
+          "note": "Service installation via cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs ScreenConnect, AnyDesk, TeamViewer and Splashtop for persistent access.",
+      "tools": [
+        "ScreenConnect",
+        "AnyDesk",
+        "TeamViewer",
+        "Splashtop"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "exact",
+          "note": "ScreenConnect install."
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk artefacts."
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz credential theft.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AdFind (and PingCastle) enumerate Active Directory users, groups and trusts.",
+      "tools": [
+        "AdFind",
+        "PingCastle"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user object enumeration."
+        },
+        {
+          "testGuid": "15fe436d-e771-4ff3-b655-2dca9ba52834",
+          "testNumber": 5,
+          "testName": "Adfind - Enumerate Active Directory Trusts",
+          "fidelity": "exact",
+          "note": "AdFind trust enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Network scanner / Advanced IP Scanner and SMB scanning for reachable hosts and shares.",
+      "tools": [
+        "Advanced IP Scanner"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "close",
+          "note": "Netscan host enumeration."
+        },
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "Network share discovery via cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP used to move laterally.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.001",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Locker's use_sys option abuses vulnerable drivers truesight.sys and rentdrv2.sys via DeviceIoControl to kill EDR/AV, plus a configurable process kill list (e.g. MsMpEng.exe).",
+      "tools": [
+        "truesight.sys",
+        "rentdrv2.sys"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Backstab kills protected AV processes through a signed driver (catalogue ID T1685)."
+        },
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "Vulnerable signed driver load (CVE-2015-2291), exercising BYOVD driver-load detections."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Aggregates data and uploads it to attacker-controlled MEGA or Amazon S3 storage before encryption.",
+      "tools": [
+        "MEGA",
+        "Amazon S3"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone upload to MEGA."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "wmic.exe used to delete volume shadow copies.",
+      "tools": [
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "WMI shadow copy deletion."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "The Conti-derived locker clears Windows event logs after encryption.",
+      "tools": [
+        "DragonForce locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl (catalogue ID T1685.005)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "LockBit 3.0- and Conti v3-based lockers (ChaCha20+RSA, partial encryption) hit Windows, Linux and ESXi.",
+      "tools": [
+        "DragonForce locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "ESXi vim-cmd VM power-off preceding ESXi encryption."
+        },
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

@@ -28,6 +28,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAllAdapters } from "@/lib/community-sources/registry";
 import { invalidateCache } from "@/lib/community-sources/cache";
 import { logWorkspaceAudit } from "@/lib/rule-workspace/audit";
+import { requireRole } from "@/lib/auth-guard";
 
 export const maxDuration = 600;
 
@@ -63,6 +64,9 @@ async function runWithConcurrency<T, R>(
 }
 
 export async function POST(req: NextRequest) {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const sp = new URL(req.url).searchParams;
   const includeLegacy = sp.get("includeLegacy") === "true";
 

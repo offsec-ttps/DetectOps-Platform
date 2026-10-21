@@ -141,10 +141,10 @@ export default function ModulePage() {
                 <Play className="h-3 w-3" /> Run
               </button>
             </div>
-            {run?.scenario === sc.name && (
+            {run && run.scenario === sc.name && (
               <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                 <Server className="h-3.5 w-3.5 text-muted-foreground" />
-                <select value={run.envId} onChange={(e) => setRun({ ...run, envId: e.target.value })} className="flex-1 h-8 px-2 text-xs rounded border border-border bg-input text-foreground">
+                <select value={run.envId} onChange={(e) => setRun({ ...run, scenario: run.scenario, envId: e.target.value })} className="flex-1 h-8 px-2 text-xs rounded border border-border bg-input text-foreground">
                   <option value="">Select environment…</option>
                   {envs.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.kind})</option>)}
                 </select>

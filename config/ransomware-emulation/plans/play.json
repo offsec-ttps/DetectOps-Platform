@@ -1,0 +1,559 @@
+{
+  "gang": "Play",
+  "displayName": "Play",
+  "aliases": [
+    "PlayCrypt",
+    "Balloonfly"
+  ],
+  "status": "active",
+  "activeSince": "2022",
+  "lineage": "Claims to be a closed group (not RaaS); collaboration with North Korean Jumpy Pisces/Andariel reported (2024)",
+  "summary": "Play has hit ~900 organisations since mid-2022. Entry is via edge exploits (FortiOS, Exchange ProxyNotShell/OWASSRF, Cisco ASA, SimpleHelp CVE-2024-57727) or valid VPN/RDP accounts. Operators use the custom Grixba scanner/infostealer, AdFind, SystemBC/Cobalt Strike, GMER/IOBit/PowerTool to kill AV, WinRAR+WinSCP for chunked exfiltration, and an intermittent encryptor for Windows and ESXi; ransom notes carry no demand and point to unique gmx.de/web.de mailboxes, with phone-call pressure.",
+  "uniqueTraits": [
+    "Grixba custom .NET network scanner / infostealer and AlphaVSS-based VSS Copying Tool",
+    "Exchange ProxyNotShell/OWASSRF and SimpleHelp RMM CVE-2024-57727 exploitation",
+    "Windows CLFS zero-day CVE-2025-29824 used for privilege escalation",
+    "Intermittent encryption; demand-less ransom notes with per-victim @gmx.de/@web.de addresses",
+    "ESXi Linux locker using vim-cmd/esxcli to power off VMs"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Play Ransomware (AA23-352A, updated 2025-06-04)",
+      "publisher": "CISA",
+      "date": "2025-06-04",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-352a"
+    },
+    {
+      "id": "S2",
+      "title": "Play (S1162)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-10-01",
+      "url": "https://attack.mitre.org/software/S1162/"
+    },
+    {
+      "id": "S3",
+      "title": "Play Ransomware Group Using New Custom Data-Gathering Tools",
+      "publisher": "Symantec",
+      "date": "2023-04-19",
+      "url": "https://symantec-enterprise-blogs.security.com/threat-intelligence/play-ransomware-volume-shadow-copy"
+    },
+    {
+      "id": "S4",
+      "title": "New Play Ransomware Linux Variant Targets ESXi, Shows Ties With Prolific Puma",
+      "publisher": "Trend Micro",
+      "date": "2024-07-19",
+      "url": "https://www.trendmicro.com/en_us/research/24/g/new-play-ransomware-linux-variant-targets-esxi-shows-ties-with-p.html"
+    },
+    {
+      "id": "S5",
+      "title": "Play Ransomware Exploited Windows CVE-2025-29824 as Zero-Day (reporting Symantec research)",
+      "publisher": "The Hacker News",
+      "date": "2025-05-07",
+      "url": "https://thehackernews.com/2025/05/play-ransomware-exploited-windows-cve.html"
+    },
+    {
+      "id": "S6",
+      "title": "Play ransomware crims exploit SimpleHelp flaw in double-extortion schemes",
+      "publisher": "The Register",
+      "date": "2025-06-04",
+      "url": "https://www.theregister.com/2025/06/04/play_ransomware_infects_900_victims/"
+    },
+    {
+      "id": "S7",
+      "title": "Jumpy Pisces Engages in Play Ransomware",
+      "publisher": "Unit 42",
+      "date": "2024-10-30",
+      "url": "https://unit42.paloaltonetworks.com/north-korean-threat-group-play-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits FortiOS CVE-2018-13379/CVE-2020-12812, Exchange ProxyNotShell (CVE-2022-41040/41082) and OWASSRF (CVE-2022-41080), likely Cisco ASA, and since 2025 SimpleHelp RMM CVE-2024-57727.",
+      "tools": [
+        "edge-device exploits"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1190 exploit atomic (and plans never add exploit code); validate with perimeter/WAF/appliance log detections instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Abuses valid/purchased accounts on VPN and RDP (incl. accounts compromised by Jumpy Pisces in 2024).",
+      "tools": [
+        "VPN",
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S7"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "proxy",
+          "note": "RDP logon with a valid account."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Remote-access tools such as AnyDesk and abused SimpleHelp instances for hands-on access.",
+      "tools": [
+        "AnyDesk",
+        "SimpleHelp"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "AnyDesk; no SimpleHelp-specific atomic in catalogue."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart: Registry Run Keys",
+      "procedure": "SystemBC proxy/backdoor and Cobalt Strike for C2 and persistence.",
+      "tools": [
+        "SystemBC",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dc7767b-30c1-4cc4-b999-50cab5e27891",
+          "testNumber": 9,
+          "testName": "SystemBC Malware-as-a-Service Registry",
+          "fidelity": "exact",
+          "note": "ART SystemBC Run-key persistence."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1518.001",
+      "techniqueName": "Software Discovery: Security Software Discovery",
+      "procedure": "Grixba (.NET) enumerates hosts and installed security, backup and remote-admin software via WMI/WinRM/remote registry, writes CSV and zips it.",
+      "tools": [
+        "Grixba"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1553252f-14ea-4d3b-8a08-d7a4211aa945",
+          "testNumber": 7,
+          "testName": "Security Software Discovery - AV Discovery via WMI",
+          "fidelity": "close",
+          "note": "AV discovery via WMI, the mechanism Grixba uses."
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "Subnet port sweep as Grixba network-scan proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AdFind and Bloodhound for AD enumeration; collects all AD machines to CSV.",
+      "tools": [
+        "AdFind",
+        "Bloodhound"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user enumeration."
+        },
+        {
+          "testGuid": "7486cd67-88b7-4695-9aa5-c4429fb4e00a",
+          "testNumber": 16,
+          "testName": "SharpHound detonation (T1069.002)",
+          "fidelity": "close",
+          "note": "SharpHound collection."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Windows CLFS driver zero-day CVE-2025-29824; exploit DLL injected into winlogon drops batch files to escalate and clean up.",
+      "tools": [
+        "CLFS exploit"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No CLFS/CVE-2025-29824 atomic in the catalogue (plans do not add exploit code); validate with kernel-exploit and winlogon-injection detections."
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz for domain admin credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "GMER, IOBit and PowerTool used to disable AV and remove log files (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "GMER",
+        "IOBit",
+        "PowerTool"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disable an arbitrary security service."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "proxy",
+          "note": "Driver-assisted AV process kill (Backstab) as PowerTool/GMER proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "Event logs and artefacts removed after tooling runs.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "close",
+          "note": "wevtutil clear logs."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1570",
+      "techniqueName": "Lateral Tool Transfer",
+      "procedure": "PsExec and Cobalt Strike to move tooling and execute the encryptor across the domain.",
+      "tools": [
+        "PsExec",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "PsExec copy-and-execute."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "collection",
+      "techniqueId": "T1006",
+      "techniqueName": "Direct Volume Access",
+      "procedure": "Custom VSS Copying Tool (AlphaVSS) copies locked files (e.g. NTDS, data) from volume shadow copies.",
+      "tools": [
+        "VSS Copying Tool"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "dcebead7-6c28-4b4b-bf3c-79deb1b1fc7f",
+          "testNumber": 1,
+          "testName": "Create Volume Shadow Copy with vssadmin",
+          "fidelity": "proxy",
+          "note": "Shadow copy creation with vssadmin, prerequisite of the VSS copying tool."
+        },
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "close",
+          "note": "Copy locked files from a volume shadow copy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "WinRAR splits stolen data into .rar segments.",
+      "tools": [
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "exact",
+          "note": "Rar compression."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1030",
+      "techniqueName": "Data Transfer Size Limits",
+      "procedure": "WinSCP uploads the chunked archives to actor infrastructure.",
+      "tools": [
+        "WinSCP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f0287b58-f4bc-40f6-87eb-692e126e7f8f",
+          "testNumber": 2,
+          "testName": "Network-Based Data Transfer in Small Chunks",
+          "fidelity": "exact",
+          "note": "Chunked network transfer."
+        },
+        {
+          "testGuid": "205e676e-0401-4bae-83a5-94b8c5daeb22",
+          "testNumber": 36,
+          "testName": "Windows push file using sftp.exe",
+          "fidelity": "proxy",
+          "note": "sftp push (WinSCP uses SFTP)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies prior to encryption.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Intermittent AES encryption appending .PLAY; ReadMe.txt notes contain no demand, only a per-victim @gmx.de/@web.de address; victims also phoned.",
+      "tools": [
+        "Play encryptor"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "File encryption telemetry proxy."
+        },
+        {
+          "testGuid": "0eeb68ce-e64c-4420-8d53-ad5bdc6f86d5",
+          "testNumber": 4,
+          "testName": "Windows - Display a simulated ransom note via Notepad (non-destructive)",
+          "fidelity": "proxy",
+          "note": "Non-destructive ransom-note display."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Linux/ESXi variant checks for ESXi, powers off VMs with vim-cmd/esxcli and sets a custom DCUI welcome message.",
+      "tools": [
+        "Play ESXi locker"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "exact",
+          "note": "vim-cmd VM power-off."
+        },
+        {
+          "testGuid": "30905f21-34f3-4504-8b4c-f7a5e314b810",
+          "testNumber": 3,
+          "testName": "ESXi - Change Welcome Message on Direct Console User Interface (DCUI)",
+          "fidelity": "exact",
+          "note": "ESXi DCUI welcome-message change, as observed in the Play Linux variant."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

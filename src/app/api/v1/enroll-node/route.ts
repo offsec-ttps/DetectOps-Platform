@@ -54,29 +54,51 @@ export async function POST(req: NextRequest) {
   const fleet = await prisma.fleet.findUnique({ where: { id: tokenRow.fleetId } });
   if (!fleet) return NextResponse.json({ error: "fleet missing for token" }, { status: 409 });
 
+  // Re-enroll must never resurrect a node an operator revoked (status
+  // "revoked" → "offline" would silently undo the revocation), and only
+  // addresses nodes inside the token's own fleet.
+  const existing = body.node_id
+    ? await prisma.fleetNode.findUnique({ where: { id: String(body.node_id) } })
+    : null;
+  if (existing && existing.fleetId === fleet.id && existing.status === "revoked") {
+    return NextResponse.json({ error: "node is revoked — enroll as a new node" }, { status: 403 });
+  }
+
+  // Atomically CLAIM one use of the token before doing anything with it. The
+  // previous read-check-then-increment let N concurrent requests all pass the
+  // maxUses / revoked / expiry check and mint N nodes from a single-use token.
+  const now = new Date();
+  const claim = await prisma.enrollmentToken.updateMany({
+    where: {
+      id: tokenRow.id,
+      revoked: false,
+      expiresAt: { gt: now },
+      ...(tokenRow.maxUses > 0 ? { usedCount: { lt: tokenRow.maxUses } } : {}),
+    },
+    data: { usedCount: { increment: 1 } },
+  });
+  if (claim.count !== 1) return NextResponse.json({ error: "enrollment token exhausted, revoked or expired" }, { status: 401 });
+
   const apiKey = generateNodeApiKey();
   const apiKeyEnc = encrypt(apiKey);
   const enrolledScope = JSON.stringify(safeArr(tokenRow.allowedScope));
 
   // Idempotent re-enroll: when a known node_id is supplied, re-key it in place.
   let node;
-  if (body.node_id) {
-    const existing = await prisma.fleetNode.findUnique({ where: { id: String(body.node_id) } });
-    if (existing && existing.fleetId === fleet.id) {
-      node = await prisma.fleetNode.update({
-        where: { id: existing.id },
-        data: {
-          apiKeyEnc,
-          status: "offline",
-          hostname: String(facts.hostname || existing.hostname || ""),
-          os: String(facts.os || existing.os || ""),
-          osVersion: String(facts.os_version || existing.osVersion || ""),
-          arch: String(facts.arch || existing.arch || ""),
-          agentVersion: String(body.agent_version || existing.agentVersion || ""),
-          enrolledScope,
-        },
-      });
-    }
+  if (existing && existing.fleetId === fleet.id) {
+    node = await prisma.fleetNode.update({
+      where: { id: existing.id },
+      data: {
+        apiKeyEnc,
+        status: "offline",
+        hostname: String(facts.hostname || existing.hostname || "").slice(0, 240),
+        os: String(facts.os || existing.os || "").slice(0, 40),
+        osVersion: String(facts.os_version || existing.osVersion || "").slice(0, 120),
+        arch: String(facts.arch || existing.arch || "").slice(0, 40),
+        agentVersion: String(body.agent_version || existing.agentVersion || "").slice(0, 60),
+        enrolledScope,
+      },
+    });
   }
   if (!node) {
     node = await prisma.fleetNode.create({
@@ -95,13 +117,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Count the token use for BOTH create and re-key. Re-keying overwrites a
-  // node's apiKey, so it is just as sensitive as a fresh enrollment — counting
-  // it ensures a single-use (maxUses=1) token cannot re-key nodes repeatedly.
-  await prisma.enrollmentToken.update({
-    where: { id: tokenRow.id },
-    data: { usedCount: { increment: 1 } },
-  });
+  // The token use was already claimed atomically above, for BOTH create and
+  // re-key (re-keying overwrites a node's apiKey, so it is just as sensitive).
 
   void logEvent({
     category: "bas", action: "bas.node.enroll",

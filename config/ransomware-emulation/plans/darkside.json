@@ -1,0 +1,449 @@
+{
+  "gang": "darkside",
+  "displayName": "DarkSide",
+  "aliases": [
+    "Carbon Spider (affiliate)",
+    "UNC2465",
+    "UNC2628",
+    "UNC2659"
+  ],
+  "status": "rebranded",
+  "activeSince": "2020",
+  "lineage": "Shut down May 2021 after Colonial Pipeline; rebranded as BlackMatter (Jul 2021), whose operators are linked to ALPHV/BlackCat",
+  "summary": "DarkSide was a RaaS active from August 2020 that became infamous for the May 2021 Colonial Pipeline attack. Mandiant tracked several affiliate clusters: UNC2465 (phishing with the SMOKEDHAM backdoor and NGROK), UNC2628 (VPN password spraying, Cobalt Strike), and UNC2659 (SonicWall SMA100 CVE-2021-20016, TeamViewer). Operators used RDP, Tor and Cobalt Strike, exfiltrated with Rclone/MEGA, and shipped both Windows and Linux/ESXi encryptors.",
+  "uniqueTraits": [
+    "UNC2659 exploited SonicWall SMA100 SSL-VPN CVE-2021-20016",
+    "UNC2465 used SMOKEDHAM .NET backdoor and NGROK tunnels to expose RDP",
+    "Linux/ESXi encryptor that enumerates and targets VMware virtual machines",
+    "Tor multi-hop proxying for C2 and leak site"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "DarkSide Ransomware: Best Practices for Preventing Business Disruption from Ransomware Attacks (AA21-131A)",
+      "publisher": "CISA / FBI",
+      "date": "2021-05-11",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa21-131a"
+    },
+    {
+      "id": "S2",
+      "title": "Shining a Light on DARKSIDE Ransomware Operations",
+      "publisher": "Mandiant",
+      "date": "2021-05-11",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/shining-a-light-on-darkside-ransomware-operations"
+    },
+    {
+      "id": "S3",
+      "title": "DarkSide on Linux: Virtual Machines Targeted",
+      "publisher": "Trend Micro",
+      "date": "2021-05-28",
+      "url": "https://www.trendmicro.com/en_us/research/21/e/darkside-linux-vms-targeted.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.002",
+      "techniqueName": "Phishing: Spearphishing Link",
+      "procedure": "UNC2465 phishing links to archives containing LNK files that launch PowerShell and install SMOKEDHAM.",
+      "tools": [
+        "SMOKEDHAM"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "581d7521-9c4b-420e-9695-2aec5241167f",
+          "testNumber": 10,
+          "testName": "LNK Payload Download",
+          "fidelity": "close",
+          "note": "LNK file executes a PowerShell payload download - the SMOKEDHAM delivery pattern (local ART T1204.002 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1110.003",
+      "techniqueName": "Brute Force: Password Spraying",
+      "procedure": "UNC2628 password-sprayed VPN/remote access to obtain valid accounts.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "263ae743-515f-4786-ac7d-41ef3a0d4b2b",
+          "testNumber": 2,
+          "testName": "Password Spray (DomainPasswordSpray)",
+          "fidelity": "proxy",
+          "note": "DomainPasswordSpray against AD - same spraying pattern, internal target (local ART T1110.003 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "UNC2659 exploited SonicWall SMA100 SSL-VPN SQL injection CVE-2021-20016.",
+      "tools": [
+        "SonicWall SMA100 exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits SonicWall SMA; validate via vulnerability scanning and VPN log review."
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell used to download and run tooling and Cobalt Strike BEACON.",
+      "tools": [
+        "PowerShell",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle (local ART T1059.001 #9)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "TeamViewer installed for persistent remote access (UNC2659/UNC2465).",
+      "tools": [
+        "TeamViewer"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8ca3b96d-8983-4a7f-b125-fc98cc0a2aa0",
+          "testNumber": 1,
+          "testName": "TeamViewer Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "TeamViewer files/execution on Windows (local ART T1219 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "NGROK tunnels expose internal RDP to the operator (UNC2465).",
+      "tools": [
+        "NGROK"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "Runs ngrok (local ART T1572 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "command-and-control",
+      "techniqueId": "T1090.003",
+      "techniqueName": "Proxy: Multi-hop Proxy",
+      "procedure": "Tor used for multi-hop C2 and RDP access to victims.",
+      "tools": [
+        "Tor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "7b9d85e5-c4ce-4434-8060-d3de83595e69",
+          "testNumber": 2,
+          "testName": "Tor Proxy Usage - Windows",
+          "fidelity": "exact",
+          "note": "Tor proxy usage on Windows (local ART T1090.003 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz and LSASS dumping to obtain privileged credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "PowerShell Mimikatz (local ART T1003.001 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AD enumeration with AdFind / BloodHound to identify admins and targets.",
+      "tools": [
+        "AdFind",
+        "BloodHound"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "close",
+          "note": "AdFind user enumeration (local ART T1087.002 #7)"
+        },
+        {
+          "testGuid": "a21bb23e-e677-4ee7-af90-6931b57b6350",
+          "testNumber": 2,
+          "testName": "Run BloodHound from local disk",
+          "fidelity": "close",
+          "note": "BloodHound collection from disk (local ART T1059.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP used for lateral movement and persistence (CISA maps RDP to persistence).",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "PsExec/service execution to push the encryptor across hosts.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote execution (local ART T1569.002 #2)"
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "PsExec copy-and-execute over admin share (local ART T1021.002 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Rclone copies data to MEGA before encryption.",
+      "tools": [
+        "Rclone",
+        "MEGA"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Rclone to MEGA (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "Linux/ESXi encryptor enumerates ESXi host/VM information (esxcli) before targeting VM files.",
+      "tools": [
+        "DarkSide Linux encryptor",
+        "esxcli"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f89812e5-67d1-4f49-86fa-cbc6609ea86a",
+          "testNumber": 32,
+          "testName": "ESXi - Darkside system information discovery",
+          "fidelity": "exact",
+          "note": "ESXi - DarkSide system information discovery (local ART T1082 #32)"
+        },
+        {
+          "testGuid": "2040405c-eea6-4c1c-aef3-c2acc430fac9",
+          "testNumber": 31,
+          "testName": "ESXi - VM Discovery using ESXCLI",
+          "fidelity": "close",
+          "note": "ESXi VM discovery via esxcli (local ART T1082 #31)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies via PowerShell/WMI before encryption.",
+      "tools": [
+        "PowerShell",
+        "WMI"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "39a295ca-7059-4a88-86f6-09556c1211e7",
+          "testNumber": 5,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI with PowerShell",
+          "fidelity": "exact",
+          "note": "Shadow copy deletion via WMI with PowerShell (local ART T1490 #5)"
+        },
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "close",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Salsa20 + RSA-1024 encryption of Windows hosts and ESXi VM files; ransom note per directory.",
+      "tools": [
+        "DarkSide encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop as a non-destructive encryption-impact proxy (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import https from "https";
 import http from "http";
+import { assertSafeOutboundUrl, safeLookup, labOutboundPolicy, type OutboundPolicy } from "@/lib/net/ssrf";
 
 // Integration-specific test configs
 const TEST_CONFIGS: Record<string, { testPath: string; authStyle: string }> = {
@@ -73,8 +74,18 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       break;
   }
 
+  // SSRF guard: lab tools (Splunk on 10.x) are legitimate, cloud metadata /
+  // link-local never are; loopback only in dev or INTEGRATIONS_ALLOW_LOOPBACK=1.
+  const policy = labOutboundPolicy("INTEGRATIONS_ALLOW_LOOPBACK");
+  const chk = await assertSafeOutboundUrl(testUrl, policy);
+  if (!chk.ok) {
+    const msg = `Blocked outbound request: ${chk.error}`;
+    await prisma.integration.update({ where: { id }, data: { connected: false, lastTestedAt: new Date(), lastError: msg } });
+    return NextResponse.json({ success: false, message: msg, response: { status: 0, body: null, headers: {} } }, { status: 400 });
+  }
+
   try {
-    const result = await makeRequest(testUrl, method, headers);
+    const result = await makeRequest(testUrl, method, headers, policy);
 
     let success = result.status >= 200 && result.status < 400;
     let errorDetail = "";
@@ -177,10 +188,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
+const MAX_BODY = 256 * 1024;
+
 function makeRequest(
   url: string,
   method: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  policy: OutboundPolicy,
 ): Promise<{ status: number; statusText: string; body: string; responseHeaders: Record<string, string> }> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -195,10 +209,15 @@ function makeRequest(
         method,
         headers,
         rejectUnauthorized: false, // Accept self-signed certs
+        lookup: safeLookup(policy) as any, // re-check the IP actually connected to (DNS rebinding)
       },
       (res) => {
         let body = "";
-        res.on("data", (chunk) => { body += chunk; });
+        res.on("data", (chunk) => {
+          body += chunk;
+          if (body.length > MAX_BODY) { body = body.slice(0, MAX_BODY); res.destroy(); }
+        });
+        res.on("close", () => resolve({ status: res.statusCode || 0, statusText: res.statusMessage || "", body, responseHeaders: {} }));
         res.on("end", () => {
           const responseHeaders: Record<string, string> = {};
           for (const [k, v] of Object.entries(res.headers)) {

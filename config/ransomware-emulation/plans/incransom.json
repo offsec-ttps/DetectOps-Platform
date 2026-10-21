@@ -1,0 +1,537 @@
+{
+  "gang": "incransom",
+  "displayName": "INC Ransom",
+  "aliases": [
+    "INC",
+    "Gold IONIC",
+    "Vanilla Tempest (affiliate)",
+    "Punchbowl"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Code reportedly sold/rebranded as Lynx in 2024; INC brand continues in parallel",
+  "summary": "INC Ransom is a double-extortion operation active since mid-2023 that has hit healthcare, education and government heavily. Access comes from Citrix NetScaler CVE-2023-3519, FortiClient EMS CVE-2023-48788, phishing, IAB-purchased credentials, and (via the Vanilla Tempest affiliate) Gootloader infections. Operators use RDP with valid accounts, AdFind/NetScan discovery, 7-Zip/WinRAR + MEGAsync exfiltration, Defender disablement via SystemSettingsAdminFlows.exe, and deploy the encryptor with WMIC and PsExec renamed winupd.",
+  "uniqueTraits": [
+    "Citrix NetScaler CVE-2023-3519 and FortiClient EMS CVE-2023-48788 exploitation",
+    "Gootloader (Storm-0494) hand-off to Vanilla Tempest, Supper backdoor, AnyDesk and MEGA",
+    "SystemSettingsAdminFlows.exe used to disable Windows Defender",
+    "PsExec renamed winupd and encryptor run as 'winupd' service (7045); WMIC mass deployment",
+    "VeeamCreds credential theft and ProcTerminator process killing"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "INC Ransom (G1032)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2026-07-31",
+      "url": "https://attack.mitre.org/groups/G1032/"
+    },
+    {
+      "id": "S2",
+      "title": "Investigating New INC Ransom Group Activity",
+      "publisher": "Huntress",
+      "date": "2023-11-09",
+      "url": "https://www.huntress.com/blog/investigating-new-inc-ransom-group-activity"
+    },
+    {
+      "id": "S3",
+      "title": "Ransomware Spotlight: INC",
+      "publisher": "Trend Micro",
+      "date": "2024-07-11",
+      "url": "https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-inc"
+    },
+    {
+      "id": "S4",
+      "title": "Microsoft Warns of New INC Ransomware Targeting U.S. Healthcare Sector (Vanilla Tempest)",
+      "publisher": "The Hacker News (Microsoft Threat Intelligence)",
+      "date": "2024-09-19",
+      "url": "https://thehackernews.com/2024/09/microsoft-warns-of-new-inc-ransomware.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits Citrix NetScaler ADC/Gateway CVE-2023-3519 and FortiClient EMS CVE-2023-48788.",
+      "tools": [
+        "Citrix exploit",
+        "FortiClient EMS exploit"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Windows atomic for exploiting this public-facing product/CVE; validate via perimeter/WAF and product logs instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1566",
+      "techniqueName": "Phishing",
+      "procedure": "Spearphishing, and Gootloader (SEO-poisoned JavaScript in ZIP) infections by Storm-0494 handed off to the Vanilla Tempest affiliate.",
+      "tools": [
+        "Gootloader"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0709945e-4fec-4c49-9faf-c3c292a74484",
+          "testNumber": 2,
+          "testName": "JScript execution to gather local computer information via wscript",
+          "fidelity": "close",
+          "note": "wscript JScript execution, the Gootloader execution stage"
+        },
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "proxy",
+          "note": "Phishing attachment download"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Logs in over RDP with valid credentials bought from IABs or previously observed.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no atomic that reproduces an external logon with stolen VPN/RDP credentials; validate with authentication-log analytics (impossible travel, no-MFA VPN logons)."
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk, TightVNC/PuTTY and the Supper backdoor for access.",
+      "tools": [
+        "AnyDesk",
+        "TightVNC",
+        "Supper"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Downloads and runs NETSCAN.EXE and Advanced IP Scanner.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "Advanced IP Scanner"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Domain Account",
+      "procedure": "AdFind, net and nltest to enumerate domain admins, groups and DCs.",
+      "tools": [
+        "AdFind",
+        "net",
+        "nltest"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b95fd967-4e62-4109-b48d-265edfd28c3a",
+          "testNumber": 6,
+          "testName": "Adfind - Enumerate Active Directory Admins",
+          "fidelity": "exact",
+          "note": "AdFind admin enumeration"
+        },
+        {
+          "testGuid": "48ddc687-82af-40b7-8472-ff1e742e8274",
+          "testNumber": 8,
+          "testName": "Adfind - Query Active Directory Groups",
+          "fidelity": "exact",
+          "note": "AdFind group query"
+        },
+        {
+          "testGuid": "52ab5108-3f6f-42fb-8ba3-73bc054f22c8",
+          "testNumber": 3,
+          "testName": "Remote System Discovery - nltest",
+          "fidelity": "exact",
+          "note": "nltest DC list"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "NTDS",
+      "procedure": "Uses esentutl for NTDS/hive copies and lsassy for LSASS credential extraction.",
+      "tools": [
+        "esentutl",
+        "lsassy"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a90c2f4d-6726-444e-99d2-a00cd7c20480",
+          "testNumber": 3,
+          "testName": "esentutl.exe SAM copy",
+          "fidelity": "close",
+          "note": "esentutl.exe copy of a locked credential database"
+        },
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "close",
+          "note": "NTDS.dit copy"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "VeeamCreds dumps credentials stored in the Veeam Backup database.",
+      "tools": [
+        "VeeamCreds"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic extracts Veeam-stored credentials; validate with SQL/Veeam DB access analytics."
+    },
+    {
+      "order": 9,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "Moves laterally over RDP with valid accounts.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Disables Windows Defender with SystemSettingsAdminFlows.exe and kills security processes with ProcTerminator.",
+      "tools": [
+        "SystemSettingsAdminFlows.exe",
+        "ProcTerminator"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Tamper with Defender from the command line"
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "proxy",
+          "note": "Stop and remove security service"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive via Utility",
+      "procedure": "Stages data with 7-Zip and WinRAR.",
+      "tools": [
+        "7-Zip",
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "exact",
+          "note": "7-Zip archive"
+        },
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "exact",
+          "note": "RAR archive"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "Exfiltrates with MEGAsync (and Rclone) to cloud storage.",
+      "tools": [
+        "MEGAsync",
+        "Rclone"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Rclone to Mega; MEGAsync client not reproduced"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1036.005",
+      "techniqueName": "Match Legitimate Resource Name or Location",
+      "procedure": "Renames PsExec 'winupd' to mimic a Windows update file.",
+      "tools": [
+        "PsExec (winupd)"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c3d24a39-2bfe-4c6a-b064-90cd73896cb0",
+          "testNumber": 7,
+          "testName": "Masquerading - windows exe running as different windows exe",
+          "fidelity": "close",
+          "note": "Windows/Sysinternals binary renamed and executed"
+        },
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "close",
+          "note": "Masquerade as a system executable"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "Service Execution",
+      "procedure": "Runs the encryptor as a service named winupd via the Service Control Manager (event 7045) and PsExec.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2382dee2-a75f-49aa-9378-f52df6ed3fb1",
+          "testNumber": 1,
+          "testName": "Execute a Command as a Service",
+          "fidelity": "close",
+          "note": "Command executed as a service"
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "execution",
+      "techniqueId": "T1047",
+      "techniqueName": "Windows Management Instrumentation",
+      "procedure": "Mass-deploys the encryptor with WMIC / WMI Provider Host.",
+      "tools": [
+        "WMIC"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9c8ef159-c666-472f-9874-90c8d60d136b",
+          "testNumber": 6,
+          "testName": "WMI Execute Remote Process",
+          "fidelity": "exact",
+          "note": "WMI remote process creation"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "File Deletion",
+      "procedure": "Uninstalls/deletes tools from endpoints after use.",
+      "tools": [],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "proxy",
+          "note": "File deletion via cmd"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "AES encryption with fast/medium modes, .INC extension and INC-README.txt/.html notes.",
+      "tools": [
+        "INC encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

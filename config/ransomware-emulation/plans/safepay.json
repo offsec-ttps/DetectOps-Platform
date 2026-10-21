@@ -1,0 +1,530 @@
+{
+  "gang": "safepay",
+  "displayName": "SafePay",
+  "aliases": [
+    "SafePay"
+  ],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Huntress found the 2024 locker derived from leaked LockBit (late-2022) code; other researchers describe a post-Conti, centralised (non-RaaS) operation with a newer custom locker",
+  "summary": "SafePay emerged in late 2024 and grew rapidly in 2025 as a centrally run (non-affiliate) extortion crew attributed to former Conti-ecosystem members. Access comes through RDP/VPN with valid or weak credentials (including firewall misconfigurations that bypassed VPN MFA) and, in 2025, email bombing followed by Microsoft Teams calls from a fake IT department to obtain Quick Assist sessions. Operators disable Defender, map shares with PowerView ShareFinder, archive data with WinRAR and exfiltrate via FileZilla or rclone, then launch a DLL locker with regsvr32 after a likely CMSTPLUA UAC bypass, encrypting network shares over UNC paths within roughly a day.",
+  "uniqueTraits": [
+    "Locker shipped as a DLL executed via regsvr32 with a -pass argument, targeting UNC paths",
+    "Likely CMSTPLUA COM UAC bypass (DllHost.exe parent) before encryption",
+    "Install-run-uninstall FileZilla cycle after WinRAR staging",
+    "Email bombing + Microsoft Teams 'IT support' vishing to obtain Quick Assist sessions (2025)",
+    "Cyrillic UI-language kill switch"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "It's Not Safe to Pay SafePay",
+      "publisher": "Huntress",
+      "date": "2024-11",
+      "url": "https://www.huntress.com/blog/its-not-safe-to-pay-safepay"
+    },
+    {
+      "id": "S2",
+      "title": "Weak passwords led to SafePay ransomware yet again",
+      "publisher": "NCC Group",
+      "date": "2025",
+      "url": "https://nccgroup.com/au/research-blog/weak-passwords-led-to-safepay-ransomware-yet-again"
+    },
+    {
+      "id": "S3",
+      "title": "Unmasking the SafePay Ransomware Group",
+      "publisher": "Infosecurity Magazine",
+      "date": "2025-07-10",
+      "url": "https://www.infosecurity-magazine.com/news-features/unmasking-safepay-ransomware-group"
+    },
+    {
+      "id": "S4",
+      "title": "SafePay ransomware: obscure group uses LockBit builder",
+      "publisher": "SC Media",
+      "date": "2024-11",
+      "url": "https://www.scworld.com/news/safepay-ransomware-obscure-group-uses-lockbit-builder-claims-22-victims"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "RDP/VPN logons with valid or weak credentials; NCC observed a misconfigured firewall letting local accounts authenticate and bypass VPN MFA, plus a weakly-passworded domain admin.",
+      "tools": [
+        "RDP",
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logon with stolen VPN/remote-access credentials has no local atomic; validate with VPN/IdP authentication telemetry (no MFA, unusual geo/ASN)."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.004",
+      "techniqueName": "Phishing: Spearphishing Voice",
+      "procedure": "Email bombing followed by Microsoft Teams calls from a fake 'IT department' persuade victims to grant remote access, after which a PowerShell script is dropped.",
+      "tools": [
+        "Microsoft Teams",
+        "Quick Assist",
+        "PowerShell"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1aea6d15-70f1-4b4e-8b02-397b5d5ffe75",
+          "testNumber": 15,
+          "testName": "Microsoft App Quick Assist Execution",
+          "fidelity": "exact",
+          "note": "Microsoft Quick Assist execution, the remote-control tool reported."
+        },
+        {
+          "testGuid": "a538de64-1c74-46ed-aa60-b995ed302598",
+          "testNumber": 17,
+          "testName": "PowerShell Command Execution",
+          "fidelity": "proxy",
+          "note": "PowerShell script execution after access."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "ScreenConnect installed, likely for persistence.",
+      "tools": [
+        "ScreenConnect"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "exact",
+          "note": "ScreenConnect install and execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1090",
+      "techniqueName": "Proxy",
+      "procedure": "QDoor backdoor deployed to maintain proxied access into the network.",
+      "tools": [
+        "QDoor"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic emulates the QDoor backdoor; detect via unexpected outbound tunnelling from servers."
+    },
+    {
+      "order": 5,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.001",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Disables Windows Defender with a LOLBin command sequence and interactively via the Settings GUI (systemsettingsadminflows.exe).",
+      "tools": [
+        "Defender tampering"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Tamper with Windows Defender from cmd (catalogue ID T1685)."
+        },
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "close",
+          "note": "Tamper with Windows Defender via registry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Runs PowerView's ShareFinder.ps1 to enumerate network shares (after Defender initially blocked it).",
+      "tools": [
+        "ShareFinder.ps1 (PowerView)"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d07e4cc1-98ae-447e-9d31-36cb430d28c4",
+          "testNumber": 8,
+          "testName": "PowerView ShareFinder",
+          "fidelity": "exact",
+          "note": "PowerView ShareFinder."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "collection",
+      "techniqueId": "T1039",
+      "techniqueName": "Data from Network Shared Drive",
+      "procedure": "Remotely collects user directories on multiple hosts over administrative UNC shares.",
+      "tools": [
+        "UNC admin shares"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6ed67921-1774-44ba-bac6-adb51ed60660",
+          "testNumber": 1,
+          "testName": "Copy a sensitive File over Administrative share with copy",
+          "fidelity": "exact",
+          "note": "Copy a sensitive file over an administrative share."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "WinRAR archives with recursive and volume-size options.",
+      "tools": [
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "exact",
+          "note": "RAR compression."
+        },
+        {
+          "testGuid": "8dd61a55-44c6-43cc-af0c-8bdda276860c",
+          "testNumber": 2,
+          "testName": "Compress Data and lock with password for Exfiltration with winrar",
+          "fidelity": "close",
+          "note": "Password-protected WinRAR archive."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048.003",
+      "techniqueName": "Exfiltration Over Unencrypted Non-C2 Protocol",
+      "procedure": "FileZilla is installed, run and uninstalled (repeated next day), suspected FTP exfiltration; rclone to cloud storage also reported in 2025.",
+      "tools": [
+        "FileZilla",
+        "rclone"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "57799bc2-ad1e-4130-a793-fb0c385130ba",
+          "testNumber": 6,
+          "testName": "MAZE FTP Upload",
+          "fidelity": "close",
+          "note": "FTP upload of staged data."
+        },
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "rclone over FTP."
+        },
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "rclone to cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Deletes archives and downloaded zip files after exfiltration.",
+      "tools": [
+        "cmd",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "exact",
+          "note": "Delete a single file from cmd."
+        },
+        {
+          "testGuid": "9dee89bd-9a98-4c4f-9e2d-4256690b0e72",
+          "testNumber": 6,
+          "testName": "Delete a single file - Windows PowerShell",
+          "fidelity": "exact",
+          "note": "Delete a single file from PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1548.002",
+      "techniqueName": "Abuse Elevation Control Mechanism: Bypass User Account Control",
+      "procedure": "Likely UAC bypass through the CMSTPLUA COM interface (DllHost.exe parent) before launching the locker.",
+      "tools": [
+        "CMSTPLUA COM"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f3c145f9-3c8d-422c-bd99-296a17a8f567",
+          "testNumber": 19,
+          "testName": "WinPwn - UAC Bypass ccmstp technique",
+          "fidelity": "close",
+          "note": "CMSTP-based UAC bypass; same cmstp/CMSTPLUA elevation family, not the identical COM call."
+        },
+        {
+          "testGuid": "58f641ea-12e3-499a-b684-44dee46bd182",
+          "testNumber": 3,
+          "testName": "Bypass UAC using Fodhelper",
+          "fidelity": "proxy",
+          "note": "Fodhelper UAC bypass."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "discovery",
+      "techniqueId": "T1614.001",
+      "techniqueName": "System Location Discovery: System Language Discovery",
+      "procedure": "The locker checks the UI language against a Cyrillic-language kill switch before running.",
+      "tools": [
+        "SafePay locker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1f23bfe8-36d4-49ce-903a-19a1e8c6631b",
+          "testNumber": 10,
+          "testName": "Discover System Language with Powershell",
+          "fidelity": "close",
+          "note": "System language discovery via PowerShell."
+        },
+        {
+          "testGuid": "631d4cf1-42c9-4209-8fe9-6bd4de9421be",
+          "testNumber": 1,
+          "testName": "Discover System Language by Registry Query",
+          "fidelity": "close",
+          "note": "System language discovery via registry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "execution",
+      "techniqueId": "T1218.010",
+      "techniqueName": "System Binary Proxy Execution: Regsvr32",
+      "procedure": "regsvr32.exe loads locker.dll with encryption flags (-pass) to encrypt local and UNC targets.",
+      "tools": [
+        "regsvr32",
+        "locker.dll"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "08ffca73-9a3d-471a-aeb0-68b4aa3ab37b",
+          "testNumber": 3,
+          "testName": "Regsvr32 local DLL execution",
+          "fidelity": "exact",
+          "note": "regsvr32 local DLL execution."
+        },
+        {
+          "testGuid": "9d71c492-ea2e-4c08-af16-c6994cdf029f",
+          "testNumber": 5,
+          "testName": "Regsvr32 Silent DLL Install Call DllRegisterServer",
+          "fidelity": "close",
+          "note": "regsvr32 silent DllRegisterServer call."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops vss, Veeam and Sophos services and kills database/office/backup processes.",
+      "tools": [
+        "SafePay locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "net stop of services."
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "exact",
+          "note": "sc stop of services."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "bcdedit disables Windows recovery and wmic shadowcopy delete removes VSS copies.",
+      "tools": [
+        "bcdedit",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recovery disable."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts network shares via UNC paths; .safepay extension and readme_safepay.txt note; ESXi targeting also reported.",
+      "tools": [
+        "SafePay locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "proxy",
+          "note": "ESXi VM power-off, pre-encryption step for ESXi targeting."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

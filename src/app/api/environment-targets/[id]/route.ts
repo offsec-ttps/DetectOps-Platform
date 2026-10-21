@@ -10,6 +10,7 @@ import { encrypt } from "@/lib/crypto/credential-vault";
 import { logEvent } from "@/lib/event-log";
 import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { payloadMeta } from "@/lib/enterprise-use-cases/payload-store";
+import { isSafeHost, isSafeSshUser } from "@/lib/c2/url-guard";
 
 const PATCHABLE = new Set([
   "name", "description", "templateRef", "cloudProvider", "shellMode",
@@ -79,7 +80,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const data: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {
     if (!PATCHABLE.has(k)) continue;
-    if (k === "agentEnrollmentToken" && typeof v === "string") {
+    if (k === "agentEnrollmentToken") {
+      if (typeof v !== "string") continue;   // never persist a non-string token unencrypted
       if (v.length === 0) { data[k] = ""; continue; }   // explicit clear
       try { data[k] = encrypt(v); } catch (err: any) {
         return NextResponse.json({ error: `agent token encryption failed: ${err?.message || err}` }, { status: 500 });
@@ -92,11 +94,24 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       continue;
     }
     if (k === "enabled") { data[k] = v === true; continue; }
+    if (k === "credentialId" && v) {
+      // Only attach a cloud credential the caller owns (no borrowing another tenant's keys).
+      const cred = await prisma.cloudCredential.findUnique({ where: { id: String(v) }, select: { ownerId: true } });
+      if (!cred || !ownsOr404({ user: auth.user, enforced: auth.enforced }, cred.ownerId).ok) {
+        return NextResponse.json({ error: "credentialId points at a missing CloudCredential" }, { status: 400 });
+      }
+    }
     if (k === "credentialId" || k === "goadInstanceId" || k === "splunkAttackRangeRef") {
       data[k] = v ? String(v) : null;
       continue;
     }
-    data[k] = v;
+    // Everything else is a string column — never let a non-string (object →
+    // Prisma operator / relation payload) through.
+    const s = typeof v === "string" ? v : v == null ? "" : String(v);
+    if (k === "hostname" && s && !isSafeHost(s)) return NextResponse.json({ error: "hostname must be a plain hostname or IP address" }, { status: 400 });
+    if (k === "sshUser" && s && !isSafeSshUser(s)) return NextResponse.json({ error: "sshUser contains disallowed characters" }, { status: 400 });
+    if (k === "sshKeyRef" && s.startsWith("-")) return NextResponse.json({ error: "sshKeyRef must be a file path" }, { status: 400 });
+    data[k] = s.slice(0, k === "description" ? 1000 : k === "sshKeyRef" ? 1024 : 240);
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no patchable fields supplied" }, { status: 400 });

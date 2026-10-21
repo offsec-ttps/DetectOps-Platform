@@ -52,7 +52,8 @@ const mythic: DockerAdapter = {
   install: (c) => [
     // Build the mythic-cli, seed .env with our admin creds + bind address.
     { cmd: "make", args: [], cwd: c.repoDir, timeoutMs: min(20) },
-    { cmd: "bash", args: ["-c", `printf 'MYTHIC_ADMIN_USER=%s\\nMYTHIC_ADMIN_PASSWORD=%s\\nMYTHIC_SERVER_BIND_LOCALHOST_ONLY=false\\nNGINX_PORT=7443\\n' ${c.adminUser} ${c.adminPassword} >> .env`], cwd: c.repoDir, timeoutMs: min(1) },
+    // Values are passed as positional args ($1/$2), never spliced into the script text.
+    { cmd: "bash", args: ["-c", `printf 'MYTHIC_ADMIN_USER=%s\\nMYTHIC_ADMIN_PASSWORD=%s\\nMYTHIC_SERVER_BIND_LOCALHOST_ONLY=false\\nNGINX_PORT=7443\\n' "$1" "$2" >> .env`, "bash", c.adminUser, c.adminPassword], cwd: c.repoDir, timeoutMs: min(1) },
   ],
   start: (c) => [{ cmd: "./mythic-cli", args: ["start"], cwd: c.repoDir, timeoutMs: min(15) }],
   stop: (c) => [{ cmd: "./mythic-cli", args: ["stop"], cwd: c.repoDir, timeoutMs: min(5) }],

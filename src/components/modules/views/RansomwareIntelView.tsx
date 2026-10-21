@@ -61,6 +61,14 @@ function Directory({ moduleId }: { moduleId: string }) {
   const [collecting, setCollecting] = useState(false);
   const [status, setStatus] = useState<any>(null);
 
+  // Curated emulation plans keyed by gang name (source-cited chains → atomics).
+  const [plans, setPlans] = useState<Record<string, any>>({});
+  useEffect(() => {
+    fetch("/api/ransomware-intel/emulation").then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setPlans(Object.fromEntries((d.items || []).map((p: any) => [p.gang, p])))).catch(() => {});
+  }, []);
+  const [onlyPlans, setOnlyPlans] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     const d = await fetch("/api/ransomware-intel/gangs").then((r) => r.json()).catch(() => ({ items: [] }));
@@ -71,7 +79,7 @@ function Directory({ moduleId }: { moduleId: string }) {
 
   const collect = async () => { setCollecting(true); try { await fetch("/api/ransomware-intel/collect", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await load(); } finally { setCollecting(false); } };
 
-  const shown = items.filter((g) => !q || g.name.toLowerCase().includes(q.toLowerCase()) || (g.aliases || []).some((a: string) => a.toLowerCase().includes(q.toLowerCase())));
+  const shown = items.filter((g) => !onlyPlans || plans[g.name]).filter((g) => !q || g.name.toLowerCase().includes(q.toLowerCase()) || (g.aliases || []).some((a: string) => a.toLowerCase().includes(q.toLowerCase())));
 
   return (
     <div className="space-y-5">
@@ -89,11 +97,12 @@ function Directory({ moduleId }: { moduleId: string }) {
       </div>
 
       {/* stats + collector status */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { l: "Gangs tracked", v: items.length },
           { l: "Active", v: items.filter((g) => g.status === "active").length },
           { l: "With TTPs", v: items.filter((g) => g.hasTTPs).length },
+          { l: "Emulation plans", v: Object.keys(plans).length },
           { l: "Total victims", v: items.reduce((n, g) => n + (g.victimCount || 0), 0) },
         ].map((s) => (
           <div key={s.l} className="rounded-xl border border-border bg-card p-4"><div className="text-2xl font-bold text-foreground">{s.v}</div><div className="text-[11px] text-muted-foreground">{s.l}</div></div>
@@ -113,6 +122,10 @@ function Directory({ moduleId }: { moduleId: string }) {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search gangs…" className="w-full h-9 pl-8 pr-2 text-xs rounded-md border border-border bg-input text-foreground focus:outline-none focus:border-accent" />
       </div>
+      <label className="inline-flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+        <input type="checkbox" checked={onlyPlans} onChange={(e) => setOnlyPlans(e.target.checked)} className="h-3 w-3" />
+        Only gangs with a validated emulation plan
+      </label>
 
       {loading ? <div className="py-10 flex justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -128,6 +141,7 @@ function Directory({ moduleId }: { moduleId: string }) {
               <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1"><Crosshair className="h-3 w-3" /> {(g.knownTTPs || []).length} TTPs</span>
                 <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" /> {g.victimCount} victims</span>
+                {plans[g.name] && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-success/30 bg-success/10 text-success" title={`${plans[g.name].steps} chain steps · ${plans[g.name].runnableAtomics} runnable atomics`}><ShieldCheck className="h-3 w-3" /> Plan</span>}
                 <span className="ml-auto inline-flex items-center gap-1 text-accent group-hover:gap-1.5 transition-all">Open <ChevronRight className="h-3 w-3" /></span>
               </div>
             </Link>
@@ -195,7 +209,7 @@ function GangDetail({ moduleId, name }: { moduleId: string; name: string }) {
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
   const TABS = [
-    { k: "overview", label: "Overview" }, { k: "ttps", label: `TTPs (${(g.knownTTPs || []).length})` },
+    { k: "overview", label: "Overview" }, { k: "emulation", label: "Emulation plan" }, { k: "ttps", label: `TTPs (${(g.knownTTPs || []).length})` },
     { k: "iocs", label: "IOCs" }, { k: "signatures", label: "Signatures" }, { k: "victims", label: `Victims (${(g.victims || []).length})` },
   ];
 
@@ -234,6 +248,7 @@ function GangDetail({ moduleId, name }: { moduleId: string; name: string }) {
           </Card>
         </div>
       )}
+      {tab === "emulation" && <EmulationTab gangName={g.name} />}
       {tab === "ttps" && (
         (g.knownTTPs || []).length ? (
           <div className="space-y-4">
@@ -321,6 +336,98 @@ function IocTab({ iocs }: { iocs: any }) {
       {(iocs?.[gr.k] || []).length ? <ul className="space-y-1 text-[11px] font-mono text-muted-foreground break-all">{iocs[gr.k].map((v: string, i: number) => <li key={i}>{v}</li>)}</ul> : <Empty>—</Empty>}
     </Card>
   ))}</div>;
+}
+
+/* ───────────── Emulation plan ───────────── */
+// The gang's curated, source-cited attack chain (config/ransomware-emulation)
+// with every step's Atomic Red Team mapping resolved against the local library.
+const STEP_STATE: Record<string, { label: string; cls: string }> = {
+  runnable: { label: "Runnable", cls: "border-success/30 bg-success/10 text-success" },
+  "mapped-excluded": { label: "Mapped · not detonated", cls: "border-warning/30 bg-warning/10 text-warning" },
+  gap: { label: "Gap · no atomic", cls: "border-danger/30 bg-danger/10 text-danger" },
+};
+function EmulationTab({ gangName }: { gangName: string }) {
+  const [d, setD] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/ransomware-intel/gangs/${encodeURIComponent(gangName)}/emulation`).then((r) => (r.ok ? r.json() : null))
+      .then(setD).catch(() => setD(null)).finally(() => setLoading(false));
+  }, [gangName]);
+  if (loading) return <div className="p-2 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>;
+  if (!d) return <Empty>No curated emulation plan for this gang yet. The simulator falls back to inferring atomics from its known TTPs.</Empty>;
+  const src = Object.fromEntries((d.sources || []).map((x: any) => [x.id, x]));
+  const s = d.summary || {};
+  return (
+    <div className="space-y-4 min-w-0">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { l: "Chain steps", v: s.steps }, { l: "Group-specific", v: s.signatureSteps },
+          { l: "Runnable steps", v: s.runnableSteps }, { l: "Not detonated", v: s.excludedSteps }, { l: "Coverage gaps", v: s.gapSteps },
+        ].map((x) => <div key={x.l} className="rounded-xl border border-border bg-card p-3"><div className="text-xl font-bold text-foreground">{x.v ?? 0}</div><div className="text-[11px] text-muted-foreground">{x.l}</div></div>)}
+      </div>
+      {(d.summary?.insufficientReporting || d.insufficientReporting) && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-[11px] text-warning flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Public TTP reporting on this group is thin — the chain only contains sourced steps.</div>
+      )}
+      {(d.summaryText || (d.uniqueTraits || []).length > 0) && (
+        <Card title={d.displayName || gangName} icon={<Skull className="h-4 w-4" />}>
+          <div className="space-y-2 text-[11px] text-muted-foreground">
+            {d.lineage && <div><span className="text-foreground font-medium">Lineage:</span> {d.lineage}</div>}
+            {d.summaryText && <p>{d.summaryText}</p>}
+            {(d.uniqueTraits || []).length > 0 && <ul className="list-disc pl-4 space-y-0.5">{d.uniqueTraits.map((t: string) => <li key={t}>{t}</li>)}</ul>}
+          </div>
+        </Card>
+      )}
+      <ol className="space-y-2">
+        {(d.steps || []).map((st: any) => {
+          const meta = tacticMeta(st.tactic);
+          const state = STEP_STATE[st.status] || STEP_STATE.gap;
+          return (
+            <li key={st.order} className="rounded-xl border border-border bg-card p-3 min-w-0">
+              <div className="flex items-start gap-2 flex-wrap">
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted/15 text-[11px] font-semibold text-foreground">{st.order}</span>
+                <meta.icon className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground break-words">{st.techniqueName} <span className="text-[10px] font-mono text-muted-foreground">{st.techniqueId}</span></div>
+                  <div className="text-[10px] text-muted-foreground">{meta.label}{st.observed ? ` · ${st.observed}` : ""}</div>
+                </div>
+                {st.signature && <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-accent/30 bg-accent/10 text-accent shrink-0">Group-specific</span>}
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border shrink-0", state.cls)}>{state.label}</span>
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground break-words">{st.procedure}</p>
+              {(st.tools || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{st.tools.map((t: string) => <span key={t} className="px-1.5 py-0.5 rounded border border-border text-[10px] text-muted-foreground">{t}</span>)}</div>}
+              <div className="mt-2 space-y-1">
+                {(st.resolved || []).map((a: any) => (
+                  <div key={a.testGuid} className="flex items-start gap-2 text-[11px] min-w-0">
+                    {a.state === "runnable" ? <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-success shrink-0" /> : a.state === "excluded" ? <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-warning shrink-0" /> : <XCircle className="h-3.5 w-3.5 mt-0.5 text-danger shrink-0" />}
+                    <span className="min-w-0 break-words">
+                      <span className="font-mono text-[10px] text-muted-foreground">{a.techniqueId || st.techniqueId}#{a.testNumber}</span>{" "}
+                      <span className="text-foreground">{a.testName}</span>
+                      {a.fidelity && <span className="ml-1 text-[10px] text-muted-foreground">({a.fidelity})</span>}
+                      {a.reason && <span className="block text-[10px] text-muted-foreground">{a.reason}</span>}
+                    </span>
+                  </div>
+                ))}
+                {(st.resolved || []).length === 0 && <div className="text-[11px] text-danger/90 break-words">No local atomic: {st.noAtomicReason || "—"}</div>}
+              </div>
+              {(st.sourceRefs || []).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
+                  {st.sourceRefs.map((r: string) => src[r]?.url
+                    ? <a key={r} href={src[r].url} target="_blank" rel="noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">{src[r].publisher || r} <ExternalLink className="h-2.5 w-2.5" /></a>
+                    : <span key={r} className="text-muted-foreground">{r}</span>)}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {(d.sources || []).length > 0 && (
+        <Card title="Sources" icon={<ScrollText className="h-4 w-4" />}>
+          <ul className="space-y-1 text-[11px]">{d.sources.map((x: any) => <li key={x.id} className="break-words"><span className="text-muted-foreground">[{x.id}]</span> {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">{x.title}</a> : x.title} <span className="text-muted-foreground">— {x.publisher}{x.date ? `, ${x.date}` : ""}</span></li>)}</ul>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 /* ───────────── Simulate panel ───────────── */

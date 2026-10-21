@@ -7,13 +7,17 @@
  */
 
 import { NextRequest } from "next/server";
-import { getSession, subscribe, unsubscribe } from "@/lib/terminal-sessions";
+import { getSession, subscribe, unsubscribe, canAccessSession } from "@/lib/terminal-sessions";
+import { requireUser } from "@/lib/auth-guard";
 import { randomBytes } from "crypto";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  if (!canAccessSession(id, auth.user)) return new Response("session not found", { status: 404 });
   const session = getSession(id);
   if (!session) {
     return new Response("session not found", { status: 404 });

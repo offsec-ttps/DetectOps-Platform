@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 interface Step {
   id: string;
   kind: string;
-  refId: string;
+  refId?: string;
   techniqueId: string;
   displayName: string;
 }

@@ -3,7 +3,8 @@ import https from "https";
 import crypto from "crypto";
 
 const API_BASE = "https://intel.threadlinqs.com/api/v1";
-const API_KEY = "<REDACTED-ROTATE>";
+// Never hardcode the key: it is read from the environment (THREADLINQS_API_KEY).
+const API_KEY = process.env.THREADLINQS_API_KEY || "";
 
 // ── API request helper ──
 

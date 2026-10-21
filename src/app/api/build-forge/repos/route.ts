@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/prisma";
+import { requireRole, requireUser } from "@/lib/auth-guard";
+import { isSafeBranch, isSafeSegment, isSafeGitUrl } from "@/lib/build-forge/validate";
 
 /**
  * GET    /api/build-forge/repos — list all registered build repos
@@ -10,6 +12,8 @@ import { prisma } from "@/lib/prisma";
  */
 
 export async function GET(req: NextRequest) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const framework = req.nextUrl.searchParams.get("framework");
   const language = req.nextUrl.searchParams.get("language");
   const enabled = req.nextUrl.searchParams.get("enabled");
@@ -41,12 +45,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
+  const body = await req.json().catch(() => ({}));
   const { owner, repoName, gitUrl, description, language, defaultBranch, visibility, avatarUrl, stars } = body;
 
   if (!owner || !repoName) {
     return NextResponse.json({ error: "owner and repoName are required" }, { status: 400 });
   }
+  // owner/repoName become filesystem path segments and build-command text; branch and
+  // url reach git — restrict them to safe forms.
+  if (!isSafeSegment(owner) || !isSafeSegment(repoName)) return NextResponse.json({ error: "owner/repoName may contain only letters, digits, . _ -" }, { status: 400 });
+  if (defaultBranch && !isSafeBranch(defaultBranch)) return NextResponse.json({ error: "invalid defaultBranch" }, { status: 400 });
+  const effectiveUrl = gitUrl || `https://github.com/${owner}/${repoName}.git`;
+  if (!isSafeGitUrl(effectiveUrl)) return NextResponse.json({ error: "gitUrl must be an https URL of the form https://host/owner/repo(.git)" }, { status: 400 });
 
   const name = `${owner}/${repoName}`;
 
@@ -63,7 +75,7 @@ export async function POST(req: NextRequest) {
       name,
       owner: owner || "",
       repoName: repoName || "",
-      gitUrl: gitUrl || `https://github.com/${owner}/${repoName}.git`,
+      gitUrl: effectiveUrl,
       description: description || "",
       language: (language || "").toLowerCase(),
       buildSystem: inferBuildSystem(language || ""),
@@ -72,7 +84,7 @@ export async function POST(req: NextRequest) {
       visibility: visibility || "public",
       framework: "custom",
       avatarUrl: avatarUrl || "",
-      stars: stars || 0,
+      stars: Number.isFinite(Number(stars)) ? Number(stars) : 0,
       targets: JSON.stringify(targets),
     },
   });
@@ -85,6 +97,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
@@ -95,6 +109,9 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  // targets carry build commands that run on this host — admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const id = req.nextUrl.searchParams.get("id");
   const regenerate = req.nextUrl.searchParams.get("regenerate") === "true";
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -121,8 +138,16 @@ export async function PATCH(req: NextRequest) {
   // Generic patch from body
   const body = await req.json().catch(() => ({}));
   const data: any = {};
-  if (body.targets) data.targets = JSON.stringify(body.targets);
-  if (body.defaultBranch) data.defaultBranch = body.defaultBranch;
+  if (body.targets) {
+    if (!Array.isArray(body.targets) || body.targets.some((t: any) => typeof t?.name !== "string" || typeof t?.build_command !== "string")) {
+      return NextResponse.json({ error: "targets must be an array of {name, build_command, …}" }, { status: 400 });
+    }
+    data.targets = JSON.stringify(body.targets);
+  }
+  if (body.defaultBranch) {
+    if (!isSafeBranch(body.defaultBranch)) return NextResponse.json({ error: "invalid defaultBranch" }, { status: 400 });
+    data.defaultBranch = body.defaultBranch;
+  }
   if (body.framework) data.framework = body.framework;
 
   const updated = await prisma.buildRepo.update({ where: { id }, data });

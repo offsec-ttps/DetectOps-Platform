@@ -14,6 +14,7 @@ import { encrypt } from "@/lib/crypto/credential-vault";
 import { getSiemProvider, listSiemProviders } from "@/lib/siem/registry";
 import { serializeSiem } from "@/lib/siem/http";
 import { logEvent } from "@/lib/event-log";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
 
 export async function GET(req: NextRequest) {
   const auth = await requireUser();
@@ -45,6 +46,8 @@ export async function POST(req: NextRequest) {
   if (kind === "splunk") {
     url = String(body.url || "").trim().replace(/\/+$/, "");
     if (!url) return NextResponse.json({ error: "url is required for Splunk" }, { status: 400 });
+    const badUrl = invalidHttpUrl(url, "url");
+    if (badUrl) return NextResponse.json({ error: badUrl }, { status: 400 });
     authMode = body.authMode === "basic" ? "basic" : "token";
     if (authMode === "token") {
       if (!body.token) return NextResponse.json({ error: "token is required for Splunk token auth" }, { status: 400 });

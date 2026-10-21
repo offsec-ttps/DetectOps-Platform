@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { detonateAtomicTest } from "@/lib/enterprise-use-cases/runner";
-import { snapshotActiveLab } from "./snapshot";
+import { snapshotActiveLab, restoreAndDeleteSnapshot } from "./snapshot";
 import { observeAtomic } from "./observe";
 import { aggregate, type ItemLite } from "./aggregate";
-import { renderReport, renderBrandedReport, type RenderItem } from "./render";
+import { renderReport, renderBrandedReport, renderRansomwareReport, type RenderItem } from "./render";
 
 // Tick-driven worker for long-running coverage sweeps (a full sweep is ~hours,
 // so it cannot be a synchronous request). Mirrors the detection-packs worker and
@@ -263,6 +263,37 @@ async function finalize(id: string): Promise<void> {
       await prisma.coverageAssessment.update({ where: { id }, data: { reportPaths: JSON.stringify(reportPaths) } });
     }
   } catch { /* branded report is best-effort */ }
+
+  // Ransomware-groups sweeps also get a per-group coverage report.
+  try {
+    const sc = JSON.parse(a.scope || "{}");
+    if (sc?.mode === "ransomware") {
+      const rw = await renderRansomwareReport(id, siem?.kind || "splunk");
+      if (Object.keys(rw.set).length) {
+        reportPaths.ransomware = rw.set;
+        await prisma.coverageAssessment.update({ where: { id }, data: { reportPaths: JSON.stringify(reportPaths) } });
+      }
+    }
+  } catch { /* per-group report is best-effort */ }
+
+  // Destructive sweep teardown: a run that detonated the normally-excluded
+  // atomics (includeDestructive) reverts the DC to its pre-sim snapshot and
+  // deletes it, so the impact/encryption/credential-dump activity is undone and
+  // no snapshot is left behind. Runs LAST — after telemetry is observed and every
+  // report is written — because it reboots the host. The Splunk VM is preserved
+  // by restoreAndDeleteSnapshot so the measured telemetry survives.
+  try {
+    const sc = JSON.parse(a.scope || "{}");
+    const row = await prisma.coverageAssessment.findUnique({ where: { id }, select: { snapshotName: true } });
+    if (sc?.includeDestructive === true && row?.snapshotName) {
+      const res = await restoreAndDeleteSnapshot(row.snapshotName);
+      reportPaths.revert = { snapshot: row.snapshotName, reverted: res.reverted, deleted: res.deleted, error: res.error, at: new Date().toISOString() } as any;
+      await prisma.coverageAssessment.update({
+        where: { id },
+        data: { reportPaths: JSON.stringify(reportPaths), snapshotName: res.reverted.length ? "" : row.snapshotName },
+      });
+    }
+  } catch { /* teardown is best-effort; the snapshot remains for a manual restore */ }
 }
 
 function safeArr(s: string): string[] { try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; } }

@@ -1,0 +1,482 @@
+{
+  "gang": "cuba",
+  "displayName": "Cuba",
+  "aliases": [
+    "Tropical Scorpius",
+    "UNC2596",
+    "GOLD FLAMINGO",
+    "COLDDRAW",
+    "Fidel"
+  ],
+  "status": "defunct",
+  "activeSince": "2019",
+  "lineage": "Linked to the RomCom RAT ecosystem; possible overlap with Industrial Spy",
+  "summary": "Cuba (Tropical Scorpius / UNC2596) was a double-extortion operation that hit more than 100 organisations, including US critical infrastructure. Its last leak-site post was in February 2024, and Sophos now classes it as inactive. Access came through Hancitor-delivered loaders, ProxyShell/ProxyLogon Exchange exploitation with web shells, and compromised RDP admin credentials. The crew escalated with CVE-2022-24521 (CLFS) and Zerologon, harvested credentials from Veeam via CVE-2023-27532, and blinded EDR with the ApcHelper.sys driver (signed with a leaked NVIDIA certificate) and the BURNTCIGAR process killer before deploying the COLDDRAW/Cuba locker.",
+  "uniqueTraits": [
+    "Kernel driver ApcHelper.sys signed with a certificate from the LAPSUS NVIDIA leak, plus BURNTCIGAR, to terminate security products",
+    "Exploited the Veeam Backup & Replication credential-exposure flaw CVE-2023-27532 (2023), CLFS CVE-2022-24521 and Zerologon CVE-2020-1472",
+    "Custom tooling: TERMITE in-memory dropper, BUGHATCH downloader, ROMCOM RAT (ICMP-based C2), KerberCache",
+    "Spoofed download sites serving trojanised SolarWinds NPM, KeePass, PDF Reader Pro and Advanced IP Scanner (RomCom link)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Cuba Ransomware (AA22-335A)",
+      "publisher": "CISA / FBI",
+      "date": "2022-12-01",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-335a"
+    },
+    {
+      "id": "S2",
+      "title": "Tropical Scorpius: Cuba ransomware threat actor",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2022-08-09",
+      "url": "https://unit42.paloaltonetworks.com/cuba-ransomware-tropical-scorpius/"
+    },
+    {
+      "id": "S3",
+      "title": "UNC2596: Cuba Ransomware (COLDDRAW), ProxyShell/ProxyLogon exploitation",
+      "publisher": "Mandiant (Google Cloud)",
+      "date": "2022-02-23",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/unc2596-cuba-ransomware"
+    },
+    {
+      "id": "S4",
+      "title": "Cuba Ransomware Deploys New Tools: Targets Critical Infrastructure Sector in the USA and IT Integrator in Latin America",
+      "publisher": "BlackBerry Threat Research",
+      "date": "2023-08-17",
+      "url": "https://blogs.blackberry.com/en/2023/08/cuba-ransomware-deploys-new-tools-targets-critical-infrastructure-sector-in-the-usa-and-it-integrator-in-latin-america"
+    },
+    {
+      "id": "S5",
+      "title": "GOLD FLAMINGO threat profile",
+      "publisher": "Sophos CTU",
+      "date": "2024",
+      "url": "https://www.sophos.com/en-us/threat-profiles/gold-flamingo"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits ProxyShell and ProxyLogon on Microsoft Exchange (from about August 2021) and other known flaws in commercial software.",
+      "tools": [
+        "ProxyShell/ProxyLogon exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic exploits Exchange ProxyShell or ProxyLogon. Validate with Exchange/IIS log analytics and with the follow-on web-shell step."
+    },
+    {
+      "order": 2,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "Plants web shells on compromised Exchange servers and uses them to load the TERMITE in-memory dropper and backdoors.",
+      "tools": [
+        "Web shell",
+        "TERMITE"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "close",
+          "note": "Writes a web shell into a web-server directory."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "2023 campaign: signs in over RDP with compromised admin credentials, with no brute forcing involved.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "proxy",
+          "note": "An RDP logon with valid credentials generates the logon telemetry. The credential theft that comes before it is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Brings in payloads with the Hancitor loader (earlier campaigns) and the custom BUGHATCH downloader (2022–2023), which fetch RATs, Cobalt Strike and the ransomware.",
+      "tools": [
+        "Hancitor",
+        "BUGHATCH"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "proxy",
+          "note": "Downloads a file with PowerShell, standing in for the BUGHATCH fetch."
+        },
+        {
+          "testGuid": "dd3b61dd-7bbc-48cd-ab51-49ad1a776df0",
+          "testNumber": 7,
+          "testName": "certutil download (urlcache)",
+          "fidelity": "proxy",
+          "note": "Downloads a file with certutil."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1095",
+      "techniqueName": "Non-Application Layer Protocol",
+      "procedure": "The ROMCOM RAT backdoor talks to its C2 over ICMP requests and offers reverse shell and file deletion.",
+      "tools": [
+        "ROMCOM RAT"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0268e63c-e244-42db-bef7-72a9e59fc1fc",
+          "testNumber": 1,
+          "testName": "ICMP C2",
+          "fidelity": "close",
+          "note": "ICMP-based C2 traffic."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Exploits the Windows CLFS driver flaw CVE-2022-24521 to steal SYSTEM tokens, and Zerologon (CVE-2020-1472) to get Domain Admin.",
+      "tools": [
+        "CLFS exploit",
+        "Zerologon exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The local catalogue has no CLFS or Zerologon exploit test, and exploit code is out of scope. Use Netlogon event 5829 analytics, SYSTEM-token theft telemetry and patch validation instead."
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "2023: exploits the Veeam Backup & Replication flaw CVE-2023-27532 to pull credentials stored in the Veeam configuration database.",
+      "tools": [
+        "Veeam CVE-2023-27532 exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic targets Veeam's credential store or CVE-2023-27532. Cover it with Veeam service and SQL access monitoring."
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1558.003",
+      "techniqueName": "Steal or Forge Kerberos Tickets: Kerberoasting",
+      "procedure": "Kerberoasts with a PowerShell script and cracks the tickets offline.",
+      "tools": [
+        "PowerShell Kerberoast script"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "902f4ed2-1aba-4133-90f2-cff6d299d6da",
+          "testNumber": 5,
+          "testName": "Request All Tickets via PowerShell",
+          "fidelity": "close",
+          "note": "Requests all SPN tickets from PowerShell."
+        },
+        {
+          "testGuid": "3f987809-3681-43c8-bcd8-b3ff3a28533a",
+          "testNumber": 1,
+          "testName": "Request for service tickets",
+          "fidelity": "close",
+          "note": "Kerberoasting with Invoke-Kerberoast."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Uses KerberCache to pull cached Kerberos tickets out of LSASS memory.",
+      "tools": [
+        "KerberCache"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2dfa3bff-9a27-46db-ab75-7faefdaca732",
+          "testNumber": 2,
+          "testName": "Dump Kerberos Tickets from LSA using dumper.ps1",
+          "fidelity": "close",
+          "note": "Dumps Kerberos tickets from LSA with dumper.ps1. The ticket-extraction goal is the same; KerberCache itself is not used."
+        },
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "proxy",
+          "note": "Dumps LSASS memory with ProcDump."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "After running the CLFS exploit, uses ADFind and NetScan to discover AD objects and hosts for lateral movement.",
+      "tools": [
+        "AdFind",
+        "NetScan"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "Enumerates AD users with AdFind."
+        },
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "Discovers remote hosts with NetScan."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "A dropper writes the kernel driver ApcHelper.sys (signed with a leaked NVIDIA certificate) to find and terminate security products. BURNTCIGAR kills security processes, and aswArPot.sys also appears in the IOCs.",
+      "tools": [
+        "ApcHelper.sys",
+        "BURNTCIGAR",
+        "aswArPot.sys"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Kills protected security processes through a signed kernel driver (Backstab), the same driver-assisted kill pattern."
+        },
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "Loads a known-vulnerable signed driver as a kernel service, BYOVD-style."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Moves laterally with RDP sessions and Impacket.",
+      "tools": [
+        "RDP",
+        "Impacket"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "close",
+          "note": "Opens an RDP session to a remote host."
+        },
+        {
+          "testGuid": "a3ddaf15-d1a1-4bc3-8683-84c7c67120fe",
+          "testNumber": 11,
+          "testName": "Impacket wmiexec.py",
+          "fidelity": "close",
+          "note": "Impacket wmiexec remote execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Uses Cobalt Strike and Metasploit/Meterpreter, with HTTP/HTTPS proxying through the C2 server.",
+      "tools": [
+        "Cobalt Strike",
+        "Metasploit"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "7a48f482-246f-4aeb-9837-21c271ebf244",
+          "testNumber": 4,
+          "testName": "Cobalt Strike post-exploitation pipe (4.2 and later)",
+          "fidelity": "close",
+          "note": "Creates Cobalt Strike post-exploitation named pipes."
+        },
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "HTTP C2 with suspicious user agents."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "Steals data before encryption and leaks it on the group's shaming site (double extortion). No specific exfiltration tool is named.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "proxy",
+          "note": "Exfiltrates data over a C2-style HTTP channel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Deploys the Cuba/COLDDRAW encryptor (.cuba extension) for double extortion. The last victim post was in February 2024.",
+      "tools": [
+        "COLDDRAW / Cuba ransomware"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact. The encryptor itself is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

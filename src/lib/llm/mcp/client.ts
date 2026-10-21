@@ -26,6 +26,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto/credential-vault";
+import { assertSafeOutboundUrl } from "@/lib/net/ssrf";
 
 export type McpTransport = "stdio" | "http";
 
@@ -128,6 +129,10 @@ export async function connectClient(config: McpServerConfig): Promise<Client> {
     const transport = new StdioClientTransport({ command, args });
     await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
   } else {
+    // Admin-configured, so LAN / localhost MCP servers are allowed — but never
+    // cloud metadata / link-local (would hand the bearer token + IAM creds over).
+    const chk = await assertSafeOutboundUrl(config.address, { allowPrivate: true, allowLoopback: true });
+    if (!chk.ok) throw new Error(`MCP server address rejected: ${chk.error}`);
     const headers: Record<string, string> = {};
     if (config.options.token) headers.Authorization = `Bearer ${config.options.token}`;
     const transport = new StreamableHTTPClientTransport(new URL(config.address), { requestInit: { headers } });

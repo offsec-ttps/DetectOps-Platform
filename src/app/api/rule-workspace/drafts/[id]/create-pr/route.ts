@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getGitHubCredentials, pushFileToBranchAndCreatePR } from "@/lib/github";
 import { logWorkspaceAudit } from "@/lib/rule-workspace/audit";
+import { isSafeSegment, isSafeBranch } from "@/lib/build-forge/validate";
 
 function extensionFor(language: string): string {
   switch ((language || "").toLowerCase()) {
@@ -62,6 +63,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   };
   if (!owner || !repo) {
     return NextResponse.json({ error: "owner and repo are required" }, { status: 400 });
+  }
+  // These are interpolated into GitHub API paths with the server token.
+  if (!isSafeSegment(owner) || !isSafeSegment(repo) || (baseBranch && !isSafeBranch(baseBranch))) {
+    return NextResponse.json({ error: "invalid owner / repo / baseBranch" }, { status: 400 });
+  }
+  if (filePathOverride !== undefined && (typeof filePathOverride !== "string" || !/^[A-Za-z0-9._\/-]{1,200}$/.test(filePathOverride) || filePathOverride.split("/").some((seg) => seg === "" || seg === "." || seg === ".."))) {
+    return NextResponse.json({ error: "invalid filePath" }, { status: 400 });
   }
 
   const creds = await getGitHubCredentials();

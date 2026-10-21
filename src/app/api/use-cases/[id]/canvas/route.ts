@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 
 function safeJson<T>(s: string | null | undefined, fb: T): T {
   if (!s) return fb;
@@ -26,13 +27,20 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const useCase = await prisma.useCase.findUnique({ where: { id } });
   if (!useCase) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const owns = ownsOr404(auth, useCase.authorId);
+  if (!owns.ok) return owns.response;
 
   const body = await req.json().catch(() => ({}));
   const nodes = Array.isArray(body.nodes) ? body.nodes : [];
   const edges = Array.isArray(body.edges) ? body.edges : [];
+  if (nodes.length > 2000 || edges.length > 5000 || JSON.stringify(nodes).length + JSON.stringify(edges).length > 2_000_000) {
+    return NextResponse.json({ error: "canvas too large" }, { status: 413 });
+  }
 
   await prisma.useCaseCanvas.upsert({
     where: { useCaseId: id },

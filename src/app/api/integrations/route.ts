@@ -1,66 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
+import { publicIntegration, incomingSecret, incomingString, exfilGuard } from "./_secrets";
 
 export async function GET() {
   const items = await prisma.integration.findMany({ orderBy: { name: "asc" } });
-  const parsed = items.map((i) => ({ ...i, extraConfig: JSON.parse(i.extraConfig) }));
+  // Secrets are never returned — masked + has* flags only.
+  const parsed = items.map((i) => publicIntegration(i));
   return NextResponse.json({ items: parsed, total: parsed.length });
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { name, type, authMethod, apiUrl, apiKey, clientId, clientSecret, mcpServerUrl, username, password, ssoProvider, ssoIdpUrl, ssoEntityId, ssoAcsUrl, ssoCertificate, ssoScopes, extraConfig, enabled } = body;
+  // Integrations are global (shared credentials used by fleets / deploy / SIEM
+  // validation) → only admins may create or re-point them.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
+  const body = await req.json().catch(() => ({}));
+  const { name, type, authMethod, extraConfig, enabled } = body;
 
-  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (!name || typeof name !== "string") return NextResponse.json({ error: "name is required" }, { status: 400 });
+  for (const k of ["apiUrl", "mcpServerUrl", "ssoIdpUrl"]) {
+    const bad = invalidHttpUrl(body[k], k);
+    if (bad) return NextResponse.json({ error: bad }, { status: 400 });
+  }
 
   const existing = await prisma.integration.findUnique({ where: { name } });
   if (existing) {
-    const updated = await prisma.integration.update({
-      where: { name },
-      data: {
-        type: type || existing.type,
-        authMethod: authMethod || existing.authMethod,
-        apiUrl: apiUrl ?? existing.apiUrl,
-        apiKey: apiKey ?? existing.apiKey,
-        clientId: clientId ?? existing.clientId,
-        clientSecret: clientSecret ?? existing.clientSecret,
-        mcpServerUrl: mcpServerUrl ?? existing.mcpServerUrl,
-        username: username ?? existing.username,
-        password: password ?? existing.password,
-        ssoProvider: ssoProvider ?? existing.ssoProvider,
-        ssoIdpUrl: ssoIdpUrl ?? existing.ssoIdpUrl,
-        ssoEntityId: ssoEntityId ?? existing.ssoEntityId,
-        ssoAcsUrl: ssoAcsUrl ?? existing.ssoAcsUrl,
-        ssoCertificate: ssoCertificate ?? existing.ssoCertificate,
-        ssoScopes: ssoScopes ?? existing.ssoScopes,
-        extraConfig: extraConfig ? JSON.stringify(extraConfig) : existing.extraConfig,
-        enabled: enabled ?? existing.enabled,
-      },
-    });
-    return NextResponse.json(updated);
+    const guard = exfilGuard(existing, body);
+    if (guard.error) return NextResponse.json({ error: guard.error }, { status: 400 });
+    const data: Record<string, unknown> = {
+      type: typeof type === "string" && type ? type : existing.type,
+      authMethod: typeof authMethod === "string" && authMethod ? authMethod : existing.authMethod,
+      apiUrl: incomingString(body.apiUrl, existing.apiUrl),
+      apiKey: incomingSecret(body.apiKey, existing.apiKey),
+      clientId: incomingString(body.clientId, existing.clientId),
+      clientSecret: incomingSecret(body.clientSecret, existing.clientSecret),
+      mcpServerUrl: incomingString(body.mcpServerUrl, existing.mcpServerUrl),
+      username: incomingString(body.username, existing.username),
+      password: incomingSecret(body.password, existing.password),
+      ssoProvider: incomingString(body.ssoProvider, existing.ssoProvider),
+      ssoIdpUrl: incomingString(body.ssoIdpUrl, existing.ssoIdpUrl),
+      ssoEntityId: incomingString(body.ssoEntityId, existing.ssoEntityId),
+      ssoAcsUrl: incomingString(body.ssoAcsUrl, existing.ssoAcsUrl),
+      ssoCertificate: incomingSecret(body.ssoCertificate, existing.ssoCertificate),
+      ssoScopes: incomingString(body.ssoScopes, existing.ssoScopes),
+      extraConfig: extraConfig && typeof extraConfig === "object" ? JSON.stringify(extraConfig) : existing.extraConfig,
+      enabled: typeof enabled === "boolean" ? enabled : existing.enabled,
+    };
+    for (const f of guard.clear) data[f] = "";
+    const updated = await prisma.integration.update({ where: { name }, data: data as any });
+    return NextResponse.json(publicIntegration(updated));
   }
 
+  const str = (v: unknown) => (typeof v === "string" ? v.slice(0, 2048) : "");
   const integration = await prisma.integration.create({
     data: {
-      name,
-      type: type || "",
-      authMethod: authMethod || "api_key",
-      apiUrl: apiUrl || "",
-      apiKey: apiKey || "",
-      clientId: clientId || "",
-      clientSecret: clientSecret || "",
-      mcpServerUrl: mcpServerUrl || "",
-      username: username || "",
-      password: password || "",
-      ssoProvider: ssoProvider || "",
-      ssoIdpUrl: ssoIdpUrl || "",
-      ssoEntityId: ssoEntityId || "",
-      ssoAcsUrl: ssoAcsUrl || "",
-      ssoCertificate: ssoCertificate || "",
-      ssoScopes: ssoScopes || "",
-      extraConfig: JSON.stringify(extraConfig || {}),
-      enabled: enabled || false,
+      name: name.slice(0, 240),
+      type: str(type),
+      authMethod: str(authMethod) || "api_key",
+      apiUrl: str(body.apiUrl),
+      apiKey: str(body.apiKey),
+      clientId: str(body.clientId),
+      clientSecret: str(body.clientSecret),
+      mcpServerUrl: str(body.mcpServerUrl),
+      username: str(body.username),
+      password: str(body.password),
+      ssoProvider: str(body.ssoProvider),
+      ssoIdpUrl: str(body.ssoIdpUrl),
+      ssoEntityId: str(body.ssoEntityId),
+      ssoAcsUrl: str(body.ssoAcsUrl),
+      ssoCertificate: typeof body.ssoCertificate === "string" ? body.ssoCertificate.slice(0, 16384) : "",
+      ssoScopes: str(body.ssoScopes),
+      extraConfig: JSON.stringify(extraConfig && typeof extraConfig === "object" ? extraConfig : {}),
+      enabled: enabled === true,
     },
   });
-  return NextResponse.json(integration, { status: 201 });
+  return NextResponse.json(publicIntegration(integration), { status: 201 });
 }

@@ -1,0 +1,583 @@
+{
+  "gang": "avoslocker",
+  "displayName": "AvosLocker",
+  "aliases": [
+    "Avos"
+  ],
+  "status": "defunct",
+  "activeSince": "2021",
+  "lineage": "",
+  "summary": "AvosLocker was a RaaS that appeared in mid-2021 and hit US critical infrastructure. Its leak site went offline in July 2023 and no activity has been seen since May 2023. Affiliates got in through exploited internet-facing apps such as Zoho ManageEngine ADSelfService Plus and Atlassian Confluence, and through abused remote-administration tools. They then used a heavy legitimate toolkit (AnyDesk, Splashtop, Atera, Tactical RMM, PDQ Deploy, Chisel/Ligolo, Cobalt Strike, Sliver, Mimikatz, LaZagne, Rclone, FileZilla). Distinctive moves were rebooting into Safe Mode with AnyDesk set to start there, killing AV through Avast's anti-rootkit driver (aswArPot.sys), Nmap-based Log4Shell scanning, and a Linux variant that kills ESXi VMs before encrypting them.",
+  "uniqueTraits": [
+    "Configures AnyDesk to run in Safe Mode (with networking), reboots into Safe Mode and launches the ransomware there",
+    "BYOVD: Avast anti-rootkit driver aswArPot.sys driven by a PowerShell script to kill security processes",
+    "Scans for Log4Shell across endpoints with an Nmap NSE script",
+    "Custom NetMonitor.exe masquerading as a network tool, acting as a reverse proxy over 443",
+    "Linux/ESXi variant that enumerates and force-kills running VMs before encryption"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: AvosLocker Ransomware (Update) (AA23-284A)",
+      "publisher": "CISA / FBI",
+      "date": "2023-10-11",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-284a"
+    },
+    {
+      "id": "S2",
+      "title": "AvosLocker Ransomware Uses AnyDesk in Safe Mode to Launch Attacks",
+      "publisher": "Sophos",
+      "date": "2021-12-22",
+      "url": "https://www.sophos.com/en-us/press/press-releases/2021/12/avoslocker-ransomware-uses-anydesk-in-safe-mode-to-launch-attacks"
+    },
+    {
+      "id": "S3",
+      "title": "AvosLocker Ransomware Variant Abuses Driver File to Disable Anti-Virus, Scans for Log4shell",
+      "publisher": "Trend Micro",
+      "date": "2022-05-02",
+      "url": "https://www.trendmicro.com/en_us/research/22/e/avoslocker-ransomware-variant-abuses-driver-file-to-disable-anti-Virus-scans-log4shell.html"
+    },
+    {
+      "id": "S4",
+      "title": "AvosLocker Ransomware Linux Version Targets VMware ESXi Servers",
+      "publisher": "Cyble",
+      "date": "2022-01-17",
+      "url": "https://cyble.com/blog/avoslocker-ransomware-linux-version-targets-vmware-esxi-servers/"
+    },
+    {
+      "id": "S5",
+      "title": "Confluence servers hacked to deploy AvosLocker, Cerber2021 ransomware",
+      "publisher": "BleepingComputer",
+      "date": "2022-06-10",
+      "url": "https://www.bleepingcomputer.com/news/security/confluence-servers-hacked-to-deploy-avoslocker-cerber2021-ransomware/"
+    },
+    {
+      "id": "S6",
+      "title": "Retrospective: AvosLocker",
+      "publisher": "Zscaler ThreatLabz",
+      "date": "2023-10",
+      "url": "https://www.zscaler.com/blogs/security-research/retrospective-avoslocker"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits Zoho ManageEngine ADSelfService Plus (suspected CVE-2021-40539) and Atlassian Confluence servers to gain an initial foothold.",
+      "tools": [
+        "ManageEngine ADSelfService Plus exploit",
+        "Confluence exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic exploits ManageEngine or Confluence. Validate with web-app process-ancestry analytics (java/tomcat spawning cmd/powershell) and the follow-on web-shell step."
+    },
+    {
+      "order": 2,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "Deploys custom web shells to keep network access.",
+      "tools": [
+        "custom web shells"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "close",
+          "note": "Writes a web shell into a web-server directory."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Abuses legitimate RMM and remote-access tools as access vectors and for persistence: Splashtop Streamer, Tactical RMM, AnyDesk, Atera Agent, PuTTY.",
+      "tools": [
+        "Splashtop Streamer",
+        "Tactical RMM",
+        "AnyDesk",
+        "Atera Agent",
+        "PuTTY"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3e1858ee-3550-401c-86ec-5e70ed79295b",
+          "testNumber": 14,
+          "testName": "Splashtop Streamer Execution",
+          "fidelity": "exact",
+          "note": "Runs Splashtop Streamer."
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "Runs AnyDesk."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "Runs custom PowerShell and .bat scripts for execution, lateral movement and turning off antivirus.",
+      "tools": [
+        "PowerShell",
+        "batch scripts"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a538de64-1c74-46ed-aa60-b995ed302598",
+          "testNumber": 17,
+          "testName": "PowerShell Command Execution",
+          "fidelity": "close",
+          "note": "Runs a PowerShell command."
+        },
+        {
+          "testGuid": "9e8894c0-50bd-4525-a96c-d4ac78ece388",
+          "testNumber": 1,
+          "testName": "Create and Execute Batch Script",
+          "fidelity": "close",
+          "note": "Creates and runs a batch script."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Runs Nmap with an NSE script to scan endpoints for Log4Shell, and uses an RDP scanner.",
+      "tools": [
+        "Nmap",
+        "RDP Scanner"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "close",
+          "note": "An Nmap port scan from Windows, the same tool used for the Log4Shell NSE sweep."
+        },
+        {
+          "testGuid": "9e55750e-4cbf-4013-9627-e9a045b541bf",
+          "testNumber": 11,
+          "testName": "Remote Desktop Services Discovery via PowerShell",
+          "fidelity": "close",
+          "note": "Discovers Remote Desktop Services, like the RDP scanner."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "Runs Nltest through scripts to enumerate domain controllers and trusts.",
+      "tools": [
+        "nltest"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "52ab5108-3f6f-42fb-8ba3-73bc054f22c8",
+          "testNumber": 3,
+          "testName": "Remote System Discovery - nltest",
+          "fidelity": "exact",
+          "note": "Discovers domain controllers with nltest."
+        },
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "Discovers domain trusts with nltest."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "A PowerShell script uses Avast's legitimate anti-rootkit driver aswArPot.sys (BYOVD) to terminate a list of security processes.",
+      "tools": [
+        "aswArPot.sys",
+        "PowerShell"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Kills protected security processes through a signed kernel driver (Backstab), the same BYOVD process-kill pattern."
+        },
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "Loads a known-vulnerable signed driver as a kernel service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Dumps credentials with Mimikatz.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Runs Mimikatz against LSASS."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "Runs LaZagne to recover stored browser and application passwords.",
+      "tools": [
+        "LaZagne"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9a2915b3-3954-4cce-8c76-00fbf4dbd014",
+          "testNumber": 3,
+          "testName": "LaZagne - Credentials from Browser",
+          "fidelity": "exact",
+          "note": "Recovers browser credentials with LaZagne."
+        },
+        {
+          "testGuid": "079ee2e9-6f16-47ca-a635-14efcd994118",
+          "testNumber": 6,
+          "testName": "WinPwn - Loot local Credentials - lazagne",
+          "fidelity": "exact",
+          "note": "Loots local credentials with LaZagne through WinPwn."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Tunnels C2 with Ligolo and Chisel, alongside Cobalt Strike and Sliver.",
+      "tools": [
+        "Ligolo",
+        "Chisel",
+        "Cobalt Strike",
+        "Sliver"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "Opens a reverse tunnel with ngrok, a tunneling tool in the same class as Chisel and Ligolo."
+        },
+        {
+          "testGuid": "7a48f482-246f-4aeb-9837-21c271ebf244",
+          "testNumber": 4,
+          "testName": "Cobalt Strike post-exploitation pipe (4.2 and later)",
+          "fidelity": "close",
+          "note": "Creates Cobalt Strike post-exploitation named pipes."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "command-and-control",
+      "techniqueId": "T1036.005",
+      "techniqueName": "Masquerading: Match Legitimate Resource Name or Location",
+      "procedure": "Runs NetMonitor.exe, a custom tool that poses as a legitimate network-monitoring process, pings every five minutes and acts as a reverse proxy over port 443.",
+      "tools": [
+        "NetMonitor.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "proxy",
+          "note": "Runs a binary masquerading as a legitimate system executable."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "Moves laterally and pushes payloads with PsExec, Impacket and PDQ Deploy mass deployment.",
+      "tools": [
+        "PsExec",
+        "Impacket",
+        "PDQ Deploy"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "Runs a remote command with PsExec."
+        },
+        {
+          "testGuid": "e447b83b-a698-4feb-bed1-a7aaf45c3443",
+          "testNumber": 2,
+          "testName": "PDQ Deploy RAT",
+          "fidelity": "exact",
+          "note": "Deploys a payload with PDQ Deploy."
+        },
+        {
+          "testGuid": "a3ddaf15-d1a1-4bc3-8683-84c7c67120fe",
+          "testNumber": 11,
+          "testName": "Impacket wmiexec.py",
+          "fidelity": "close",
+          "note": "Impacket wmiexec remote execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Compresses collected data with 7-Zip before exfiltration.",
+      "tools": [
+        "7-Zip"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "exact",
+          "note": "Builds a password-protected 7-Zip archive."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048.003",
+      "techniqueName": "Exfiltration Over Unencrypted Non-C2 Protocol",
+      "procedure": "Exfiltrates data with FileZilla (FTP) and Rclone for data-leak extortion.",
+      "tools": [
+        "FileZilla",
+        "Rclone"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "exact",
+          "note": "Exfiltrates over FTP with Rclone."
+        },
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Rclone exfiltration to cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1688",
+      "techniqueName": "Safe Mode Boot",
+      "procedure": "Sets AnyDesk to run in Safe Mode, tries to disable security components that also run there, reboots into Safe Mode and launches the ransomware.",
+      "tools": [
+        "AnyDesk",
+        "bcdedit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c173c948-65e5-499c-afbe-433722ed5bd4",
+          "testNumber": 35,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode with Network",
+          "fidelity": "exact",
+          "note": "Registers a service under SafeBoot\\Network so it loads in Safe Mode with networking, which is how AnyDesk stays reachable."
+        },
+        {
+          "testGuid": "2a78362e-b79a-4482-8e24-be397bce4d85",
+          "testNumber": 1,
+          "testName": "Safe Mode Boot",
+          "fidelity": "exact",
+          "note": "Sets safeboot with bcdedit."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "The Linux/ESXi variant checks for ESXi/VMFS, lists running VMs and force-kills them before encrypting the VM files.",
+      "tools": [
+        "AvosLocker Linux/ESXi variant",
+        "esxcli"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "189f7d6e-9442-4160-9bc3-5e4104d93ece",
+          "testNumber": 14,
+          "testName": "ESXi - Avoslocker enumerates VMs and forcefully kills VMs",
+          "fidelity": "exact",
+          "note": "ESXi test that reproduces AvosLocker's VM enumeration and force-kill."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts Windows and Linux/ESXi systems (.avos/.avos2 extensions) and threatens to publish the stolen data. The leak site has been offline since July 2023.",
+      "tools": [
+        "AvosLocker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact. The encryptor itself is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

@@ -69,8 +69,13 @@ export async function POST(req: NextRequest) {
 
   // Reject a re-submit of an already-live module owned by someone else.
   const existing = await prisma.simulationModule.findUnique({ where: { moduleId: manifest.id } });
-  if (existing && existing.ownerId && existing.ownerId !== auth.user.id) {
+  if (existing && existing.ownerId && existing.ownerId !== auth.user.id && !(auth.enforced && auth.user.role === "admin")) {
     return NextResponse.json({ error: `module id ${manifest.id} is owned by another publisher` }, { status: 409 });
+  }
+  // Unowned rows are built-in/seeded modules: only an admin may overwrite them,
+  // otherwise any user could re-submit a built-in id and take it over.
+  if (existing && !existing.ownerId && auth.enforced && auth.user.role !== "admin") {
+    return NextResponse.json({ error: `module id ${manifest.id} is a built-in module` }, { status: 409 });
   }
 
   const data = {
@@ -79,7 +84,7 @@ export async function POST(req: NextRequest) {
     manifest: JSON.stringify(manifest), contentHash, status: "submitted",
     signatureState: "signed", signatureB64,
     permissions: JSON.stringify(manifest.permissions || {}),
-    packageRef: stored.packageRef, ownerId: auth.user.id,
+    packageRef: stored.packageRef, ownerId: existing?.ownerId || auth.user.id,
   };
   const row = existing
     ? await prisma.simulationModule.update({ where: { moduleId: manifest.id }, data: { ...data, status: "submitted" } })

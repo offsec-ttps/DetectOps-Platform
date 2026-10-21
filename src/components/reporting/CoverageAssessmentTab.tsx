@@ -48,8 +48,8 @@ export default function CoverageAssessmentTab() {
 
   const [form, setForm] = useState({
     name: "", assessor: "RuSecure", client: "", lab: "", environmentId: "", siemConnectionId: "",
-    scopeMode: "libraries" as "full" | "libraries" | "techniques",
-    libraries: [] as string[], techniques: "", detectionNote: "",
+    scopeMode: "libraries" as "full" | "libraries" | "techniques" | "ransomware",
+    libraries: [] as string[], gangs: [] as string[], techniques: "", detectionNote: "", snapshotBeforeRun: true, includeDestructive: false,
   });
 
   const fetchList = useCallback(async () => {
@@ -64,6 +64,12 @@ export default function CoverageAssessmentTab() {
       const r = await fetch("/api/coverage-assessments/options");
       if (r.ok) setOptions(await r.json());
     } catch { /* */ }
+  }, []);
+
+  // Curated ransomware emulation plans (scope mode "ransomware").
+  const [plans, setPlans] = useState<{ gang: string; displayName: string; runnableAtomics: number; steps: number; signatureSteps: number }[]>([]);
+  useEffect(() => {
+    fetch("/api/ransomware-intel/emulation").then((r) => (r.ok ? r.json() : { items: [] })).then((d) => setPlans(d.items || [])).catch(() => {});
   }, []);
 
   useEffect(() => { fetchList(); fetchOptions(); }, [fetchList, fetchOptions]);
@@ -94,13 +100,15 @@ export default function CoverageAssessmentTab() {
     try {
       const scope: any = { mode: form.scopeMode };
       if (form.scopeMode === "libraries") scope.libraries = form.libraries;
+      if (form.scopeMode === "ransomware") scope.gangs = form.gangs;
+      scope.includeDestructive = form.includeDestructive;
       if (form.scopeMode === "techniques") scope.techniques = form.techniques.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean);
       const r = await fetch("/api/coverage-assessments", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name, assessor: form.assessor, client: form.client, lab: form.lab,
           environmentId: form.environmentId, siemConnectionId: form.siemConnectionId || undefined,
-          scope, detectionNote: form.detectionNote,
+          scope, detectionNote: form.detectionNote, snapshotBeforeRun: form.snapshotBeforeRun,
         }),
       });
       if (r.ok) {
@@ -116,6 +124,9 @@ export default function CoverageAssessmentTab() {
 
   const cancel = async (id: string) => { await fetch(`/api/coverage-assessments/${id}/cancel`, { method: "POST" }); fetchList(); };
   const remove = async (id: string) => { await fetch(`/api/coverage-assessments/${id}`, { method: "DELETE" }); fetchList(); };
+
+  const toggleGang = (g: string) =>
+    setForm((f) => ({ ...f, gangs: f.gangs.includes(g) ? f.gangs.filter((x) => x !== g) : [...f.gangs, g] }));
 
   const toggleLib = (id: string) =>
     setForm((f) => ({ ...f, libraries: f.libraries.includes(id) ? f.libraries.filter((x) => x !== id) : [...f.libraries, id] }));
@@ -210,7 +221,7 @@ export default function CoverageAssessmentTab() {
 
       {showForm && options && (
         <NewAssessmentModal
-          options={options} form={form} setForm={setForm} toggleLib={toggleLib}
+          options={options} form={form} setForm={setForm} toggleLib={toggleLib} plans={plans} toggleGang={toggleGang}
           creating={creating} onClose={() => setShowForm(false)} onCreate={create}
         />
       )}
@@ -225,6 +236,7 @@ const REPORT_TYPES = [
   { key: "branded", label: "Branded Report" },
   { key: "executive", label: "Executive Summary" },
   { key: "technical", label: "Technical Report" },
+  { key: "ransomware", label: "Ransomware Group Coverage" },
 ] as const;
 const FORMATS = [
   { key: "pdf", label: "PDF (.pdf)" },
@@ -331,8 +343,9 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub:
   );
 }
 
-function NewAssessmentModal({ options, form, setForm, toggleLib, creating, onClose, onCreate }: {
+function NewAssessmentModal({ options, form, setForm, toggleLib, plans, toggleGang, creating, onClose, onCreate }: {
   options: Options; form: any; setForm: any; toggleLib: (id: string) => void;
+  plans: { gang: string; displayName: string; runnableAtomics: number; steps: number; signatureSteps: number }[]; toggleGang: (g: string) => void;
   creating: boolean; onClose: () => void; onCreate: () => void;
 }) {
   const envs = options.environments.filter((e) => e.kind === "our-template-deployed" && e.shellMode === "winrm");
@@ -374,11 +387,11 @@ function NewAssessmentModal({ options, form, setForm, toggleLib, creating, onClo
           <div className="space-y-2">
             <label className="text-[10px] font-semibold text-muted uppercase">Scope</label>
             <div className="flex gap-2">
-              {(["libraries", "techniques", "full"] as const).map((m) => (
+              {(["libraries", "ransomware", "techniques", "full"] as const).map((m) => (
                 <button key={m} onClick={() => setForm({ ...form, scopeMode: m })}
                   className={cn("rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                     form.scopeMode === m ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:bg-card-hover")}>
-                  {m === "full" ? "Full library" : m}
+                  {m === "full" ? "Full library" : m === "ransomware" ? "Ransomware groups" : m}
                 </button>
               ))}
             </div>
@@ -392,6 +405,20 @@ function NewAssessmentModal({ options, form, setForm, toggleLib, creating, onClo
                 ))}
               </div>
             )}
+            {form.scopeMode === "ransomware" && (
+              plans.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">No ransomware emulation plans found (config/ransomware-emulation/plans).</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto rounded-lg border border-border p-2">
+                  {plans.map((p) => (
+                    <label key={p.gang} className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer min-w-0" title={`${p.steps} chain steps · ${p.signatureSteps} group-specific`}>
+                      <input type="checkbox" checked={form.gangs.includes(p.gang)} onChange={() => toggleGang(p.gang)} className="h-3 w-3" disabled={p.runnableAtomics === 0} />
+                      <span className="truncate">{p.displayName}</span><span className="text-muted shrink-0">({p.runnableAtomics})</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            )}
             {form.scopeMode === "techniques" && (
               <textarea value={form.techniques} onChange={(e) => setForm({ ...form, techniques: e.target.value })}
                 placeholder="T1082, T1016, T1059.001 …" rows={2}
@@ -401,6 +428,24 @@ function NewAssessmentModal({ options, form, setForm, toggleLib, creating, onClo
               <p className="text-[10px] text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-warning" /> Full library can take ~2 hours. Credential-dumping and destructive atomics are excluded automatically.</p>
             )}
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border border-border p-2.5 cursor-pointer">
+            <input type="checkbox" checked={form.snapshotBeforeRun || form.includeDestructive} disabled={form.includeDestructive} onChange={(e) => setForm({ ...form, snapshotBeforeRun: e.target.checked })} className="h-3 w-3 mt-0.5" />
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-foreground font-medium">Take a VM snapshot before the run</span> (recommended). Atomics change the host:
+              they create files, registry keys, services, scheduled tasks and accounts, and they alter security settings. The snapshot lets you roll the lab back afterwards.
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2.5 cursor-pointer">
+            <input type="checkbox" checked={form.includeDestructive} onChange={(e) => setForm({ ...form, includeDestructive: e.target.checked })} className="h-3 w-3 mt-0.5" />
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-danger font-medium">Include destructive & credential-access atomics (full coverage)</span> — also detonate the
+              normally-excluded steps: data encryption, shadow-copy / backup deletion, service stop, LSASS/NTDS credential dumping, Safe-Mode boot and log clearing.
+              These run <span className="font-medium">last</span>. A snapshot is taken first (forced) and the lab host is <span className="font-medium">automatically reverted and the snapshot deleted</span> when the sweep finishes.
+              Only for an isolated lab with a running local VM.
+            </span>
+          </label>
 
           <div className="space-y-1">
             <label className="text-[10px] font-semibold text-muted uppercase">Detection measurement note (optional)</label>

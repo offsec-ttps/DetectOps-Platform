@@ -1,0 +1,522 @@
+{
+  "gang": "snatch",
+  "displayName": "Snatch",
+  "aliases": [
+    "Team Truniger"
+  ],
+  "status": "active",
+  "activeSince": "2018",
+  "lineage": "",
+  "summary": "Snatch is a Go-based ransomware and data-extortion operation that has run since at least 2018 and that CISA/FBI described as still active in September 2023. It gets in through weak RDP (brute-forcing admin accounts), VPN services and credentials bought on criminal forums. It then moves to the domain controller, steals data through one-off services running batch scripts, and uses Cobalt Strike and Metasploit. Its hallmark is evading endpoint protection by registering its locker as a service under SafeBoot\\Minimal, forcing a reboot into Safe Mode with bcdedit, deleting shadow copies and encrypting while security tools are not loaded.",
+  "uniqueTraits": [
+    "Installs the locker as a service (for example SuperBackupMan, or randomised names) under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Minimal, then 'bcdedit /set {current} safeboot minimal' and an immediate reboot",
+    "Exfiltrates through short-lived Windows services with random names that run batch files from the temp directory",
+    "Brute-forces RDP admin passwords, including on cloud (Azure) servers, and buys access from initial access brokers",
+    "Go binary packed with UPX, OpenPGP keys, 'HOW TO RESTORE YOUR FILES.TXT' note, C:\\$SysReset folder"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Snatch Ransomware (AA23-263A)",
+      "publisher": "CISA / FBI",
+      "date": "2023-09-20",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-263a"
+    },
+    {
+      "id": "S2",
+      "title": "Snatch ransomware reboots PCs into Safe Mode to bypass protection",
+      "publisher": "Sophos",
+      "date": "2019-12-09",
+      "url": "https://www.sophos.com/en-us/blog/snatch-ransomware-reboots-pcs-into-safe-mode-to-bypass-protection"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Connects through weak exposed RDP and VPN services, often with credentials bought on criminal forums. The group also recruits affiliates who already hold RDP, VNC or TeamViewer access.",
+      "tools": [
+        "RDP",
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Purchased-credential logins through perimeter RDP/VPN cannot be reproduced on the endpoint. Validate with remote-access authentication analytics instead."
+    },
+    {
+      "order": 2,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Brute Force: Password Guessing",
+      "procedure": "Brute-forces RDP to get administrator credentials, for example on a Microsoft Azure server.",
+      "tools": [],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "close",
+          "note": "Password-guesses a domain account over SMB, producing the same 4625 failure bursts."
+        },
+        {
+          "testGuid": "c2969434-672b-4ec8-8df0-bbb91f40e250",
+          "testNumber": 2,
+          "testName": "Brute Force Credentials of single Active Directory domain user via LDAP against domain controller (NTLM or Kerberos)",
+          "fidelity": "close",
+          "note": "Password-guesses a domain account over LDAP."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Uses the compromised admin account to RDP into a domain controller on the same network.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "Opens an RDP session to a remote host with admin credentials."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Holds C2 over port 443 to a Russian bulletproof-hosted VPS and uses Cobalt Strike reverse shells and Metasploit.",
+      "tools": [
+        "Cobalt Strike",
+        "Metasploit"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "7a48f482-246f-4aeb-9837-21c271ebf244",
+          "testNumber": 4,
+          "testName": "Cobalt Strike post-exploitation pipe (4.2 and later)",
+          "fidelity": "close",
+          "note": "Creates Cobalt Strike post-exploitation named pipes."
+        },
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "HTTP(S) C2 with suspicious user agents."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1047",
+      "techniqueName": "Windows Management Instrumentation",
+      "procedure": "Dumps WMIC system and user information and process lists, and records which users may log on to the machine. A custom Update_Collector.exe gathers WMI data for upload.",
+      "tools": [
+        "wmic",
+        "Update_Collector.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c107778c-dcf5-47c5-af2e-1d058a3df3ea",
+          "testNumber": 1,
+          "testName": "WMI Reconnaissance Users",
+          "fidelity": "exact",
+          "note": "Enumerates users with WMIC."
+        },
+        {
+          "testGuid": "640cbf6d-659b-498b-ba53-f6dd1a1cc02c",
+          "testNumber": 5,
+          "testName": "Process Discovery - wmic process",
+          "fidelity": "exact",
+          "note": "Discovers processes with 'wmic process'."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1012",
+      "techniqueName": "Query Registry",
+      "procedure": "Queries the registry for system and software information.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8f7578c4-9863-4d83-875c-a565573bbdf0",
+          "testNumber": 1,
+          "testName": "Query Registry",
+          "fidelity": "close",
+          "note": "Queries common registry keys with reg query."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Runs Advanced Port Scanner to find more machines to target.",
+      "tools": [
+        "Advanced Port Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "A PowerShell /24 port sweep that generates the same internal scan pattern."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Dumps LSASS process memory and uploads the dump together with the user and process data.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "close",
+          "note": "Dumps LSASS with ProcDump."
+        },
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "close",
+          "note": "Dumps LSASS with comsvcs.dll MiniDump."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Tries to disable antivirus with Process Hacker, IObit Uninstaller, PowerTool, PsExec and DefenderControl.exe.",
+      "tools": [
+        "Process Hacker",
+        "IObit Uninstaller",
+        "PowerTool",
+        "DefenderControl.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disables a security service."
+        },
+        {
+          "testGuid": "81ce22fd-9612-4154-918e-8a1f285d214d",
+          "testNumber": 31,
+          "testName": "Disable Defender Using NirSoft AdvancedRun",
+          "fidelity": "proxy",
+          "note": "Disables Defender with a third-party utility (NirSoft AdvancedRun), the same class of tool as DefenderControl."
+        },
+        {
+          "testGuid": "966f4c16-1925-4d9b-8ce0-01334ee0867d",
+          "testNumber": 7,
+          "testName": "Process Discovery - Process Hacker",
+          "fidelity": "close",
+          "note": "Runs Process Hacker, the tool Snatch used against AV processes."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "execution",
+      "techniqueId": "T1059.003",
+      "techniqueName": "Command and Scripting Interpreter: Windows Command Shell",
+      "procedure": "Runs randomly named .bat files (for example evhgpp.bat) and deletes them afterwards.",
+      "tools": [
+        "cmd.exe",
+        "batch scripts"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9e8894c0-50bd-4525-a96c-d4ac78ece388",
+          "testNumber": 1,
+          "testName": "Create and Execute Batch Script",
+          "fidelity": "exact",
+          "note": "Creates and runs a batch script."
+        },
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Deletes a file with cmd after it runs."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "persistence",
+      "techniqueId": "T1543.003",
+      "techniqueName": "Create or Modify System Process: Windows Service",
+      "procedure": "Uses sc.exe to create, query, start and stop services. One-off services with random names run batch files, and the locker is installed as a protected service (for example SuperBackupMan).",
+      "tools": [
+        "sc.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "981e2942-e433-44e9-afc1-8c957a1496b6",
+          "testNumber": 2,
+          "testName": "Service Installation CMD",
+          "fidelity": "close",
+          "note": "Installs a service with sc create."
+        },
+        {
+          "testGuid": "2382dee2-a75f-49aa-9378-f52df6ed3fb1",
+          "testNumber": 1,
+          "testName": "Execute a Command as a Service",
+          "fidelity": "close",
+          "note": "Runs a command as a service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "One-off services run batch files from %TEMP% that upload user account data, process lists, the LSASS dump and victim files to the C2 server before encryption.",
+      "tools": [
+        "custom data stealer"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "close",
+          "note": "Exfiltrates staged data over the C2 HTTP channel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Adds the locker's service (for example SuperBackupMan, mXoRpcSsx or VSS) under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Minimal so it starts in Safe Mode.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1dd59fb3-1cb3-4828-805d-cf80b4c3bbb5",
+          "testNumber": 34,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode without Network",
+          "fidelity": "exact",
+          "note": "Adds a service under SafeBoot\\Minimal (Safe Mode without networking)."
+        },
+        {
+          "testGuid": "c173c948-65e5-499c-afbe-433722ed5bd4",
+          "testNumber": 35,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode with Network",
+          "fidelity": "close",
+          "note": "Adds a service under SafeBoot\\Network."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1688",
+      "techniqueName": "Safe Mode Boot",
+      "procedure": "Runs 'bcdedit.exe /set {current} safeboot minimal' and then forces an immediate reboot with shutdown, so encryption happens in Safe Mode while EDR is not loaded.",
+      "tools": [
+        "bcdedit",
+        "shutdown"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2a78362e-b79a-4482-8e24-be397bce4d85",
+          "testNumber": 1,
+          "testName": "Safe Mode Boot",
+          "fidelity": "exact",
+          "note": "Sets safeboot with bcdedit."
+        },
+        {
+          "testGuid": "f4648f0d-bf78-483c-bafc-3ec99cd1c302",
+          "testNumber": 2,
+          "testName": "Restart System - Windows",
+          "fidelity": "close",
+          "note": "Forces an immediate restart."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "In Safe Mode, stops the service with net stop and deletes all shadow copies with 'vssadmin delete shadows /all /quiet'.",
+      "tools": [
+        "vssadmin",
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows /all /quiet."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts files with OpenPGP, skipping system and program folders, and appends a victim-specific hex or 5-character extension. It drops 'HOW TO RESTORE YOUR FILES.TXT'.",
+      "tools": [
+        "Snatch (safe.exe)"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact."
+        },
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "Encrypts files with GPG4Win (OpenPGP), which matches Snatch's OpenPGP-based encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

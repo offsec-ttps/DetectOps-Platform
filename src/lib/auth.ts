@@ -111,12 +111,13 @@ export function passwordPolicyError(pw: string): string | null {
   return null;
 }
 
-export async function createVerification(userId: string): Promise<{ code: string }> {
+export async function createVerification(userId: string, pendingPasswordHash?: string): Promise<{ code: string }> {
   const code = generateCode();
   await prisma.emailVerification.create({
     data: {
       userId,
       codeHash: hashCode(code),
+      pendingPasswordHash: pendingPasswordHash ?? null,
       expiresAt: new Date(Date.now() + VERIFY_TTL_MS),
     },
   });
@@ -124,19 +125,28 @@ export async function createVerification(userId: string): Promise<{ code: string
 }
 
 export async function consumeVerification(userId: string, code: string): Promise<boolean> {
-  const recent = await prisma.emailVerification.findFirst({
+  // Match the code against EVERY still-valid row for this user, not just the
+  // newest — a later (e.g. attacker-triggered) signup must not shadow the code
+  // the real owner received. The matched row's staged password (if any) is what
+  // becomes live, so ownership is proven by the specific code that is entered.
+  const candidates = await prisma.emailVerification.findMany({
     where: { userId, consumedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: "desc" },
   });
-  if (!recent) return false;
-  if (!verifyCode(code, recent.codeHash)) return false;
+  const match = candidates.find((r) => verifyCode(code, r.codeHash));
+  if (!match) return false;
   await prisma.emailVerification.update({
-    where: { id: recent.id },
+    where: { id: match.id },
     data: { consumedAt: new Date() },
   });
   await prisma.authUser.update({
     where: { id: userId },
-    data: { emailVerified: true, emailVerifiedAt: new Date() },
+    data: {
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      // Apply the password staged with THIS code only now that ownership is proven.
+      ...(match.pendingPasswordHash ? { passwordHash: match.pendingPasswordHash } : {}),
+    },
   });
   return true;
 }

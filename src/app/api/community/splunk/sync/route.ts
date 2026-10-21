@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncSplunkDetections } from "@/lib/splunk/sync";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-guard";
 
 export const maxDuration = 300;
 
@@ -21,6 +22,9 @@ async function cleanupStaleRuns() {
 }
 
 export async function POST() {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   await cleanupStaleRuns();
 
   const running = await prisma.splunkSyncMeta.findFirst({

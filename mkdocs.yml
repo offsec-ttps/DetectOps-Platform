@@ -111,6 +111,8 @@ nav:
       - Enterprise Environments: simulation/enterprise-environments.md
       - Enterprise Use Cases: simulation/enterprise-use-cases.md
       - Custom Simulation Builder: simulation/custom-simulation-builder.md
+      - Updating a Library: simulation/updating-libraries.md
+      - Ransomware Emulation Plans: simulation/ransomware-emulation.md
       - Replay Catalog: simulation/replay-catalog.md
       - Build Forge: simulation/build-forge.md
       - Execution Logs: simulation/execution-logs.md

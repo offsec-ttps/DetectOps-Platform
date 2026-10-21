@@ -1,0 +1,611 @@
+{
+  "gang": "qilin",
+  "displayName": "Qilin (Agenda)",
+  "aliases": [
+    "Agenda",
+    "Water Galura"
+  ],
+  "status": "active",
+  "activeSince": "2022",
+  "lineage": "",
+  "summary": "Qilin (formerly Agenda) is a Russian-speaking RaaS that became the most prolific ransomware operation in 2025, publishing 40+ victims a month. Affiliates typically log in through VPNs lacking MFA using leaked credentials or exploit edge devices, then establish multiple RMM tools, kill EDR via vulnerable drivers and harvest credentials at scale (including a domain-wide Chrome password theft via a logon GPO). Data is staged with WinRAR and exfiltrated with Cyberduck to cloud storage before deploying both Windows and Linux/ESXi encryptors, including running the Linux ELF encryptor on Windows hosts through remote-management tooling and WSL.",
+  "uniqueTraits": [
+    "Domain-wide Chrome credential harvesting via a logon GPO (IPScanner.ps1 / logon.bat staged in SYSVOL)",
+    "Linux ELF encryptor executed on Windows hosts (WinSCP transfer, Splashtop/WSL execution) to evade Windows-centric EDR",
+    "BYOVD EDR killing (eskle.sys) plus dark-kill / HRSword",
+    "Cyberduck multipart uploads to Backblaze for exfiltration",
+    "Two-encryptor deployment: one PsExec-propagated, one encrypting network shares from a single host"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Uncovering Qilin attack methods exposed through multiple cases",
+      "publisher": "Cisco Talos",
+      "date": "2025-10",
+      "url": "https://blog.talosintelligence.com/uncovering-qilin-attack-methods-exposed-through-multiple-cases/"
+    },
+    {
+      "id": "S2",
+      "title": "Qilin ransomware caught stealing credentials stored in Google Chrome",
+      "publisher": "Sophos",
+      "date": "2024-08-22",
+      "url": "https://www.sophos.com/en-us/blog/qilin-ransomware-caught-stealing-credentials-stored-in-google-chrome"
+    },
+    {
+      "id": "S3",
+      "title": "Agenda ransomware deploys Linux variant on Windows systems through remote management tools and BYOVD techniques",
+      "publisher": "Trend Micro",
+      "date": "2025-10",
+      "url": "https://www.trendmicro.com/en/research/25/j/agenda-ransomware-deploys-linux-variant-on-windows-systems.html"
+    },
+    {
+      "id": "S4",
+      "title": "Ransomware Spotlight: Agenda",
+      "publisher": "Trend Micro",
+      "date": "2023",
+      "url": "https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-agenda"
+    },
+    {
+      "id": "S5",
+      "title": "Qilin Rising: Continued Global Dominance and Expanded Tradecraft",
+      "publisher": "HivePro",
+      "date": "2026",
+      "url": "https://www.hivepro.com/threat-advisory/qilin-rising-continued-global-dominance-and-expanded-tradecraft"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logs in to VPN gateways without MFA using leaked or purchased administrator credentials; dwell of ~2.5 weeks before hands-on activity in the Sophos case.",
+      "tools": [
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logon with stolen VPN/remote-access credentials has no local atomic; validate with VPN/IdP authentication telemetry (no MFA, unusual geo/ASN)."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploitation of edge and enterprise application vulnerabilities (e.g. SAP NetWeaver CVE-2025-31324 reported in 2025-26 activity).",
+      "tools": [
+        "public exploits"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Exploitation of an internet-facing service is not reproducible with a local Windows atomic; validate with perimeter/WAF and application logs instead."
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Deploys multiple RMM tools for persistence and hands-on control: AnyDesk via ATERA, ScreenConnect, Splashtop and MeshCentral.",
+      "tools": [
+        "AnyDesk",
+        "ATERA",
+        "ScreenConnect",
+        "Splashtop",
+        "MeshCentral"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop execution, the tool Trend Micro saw launching the encryptor."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "exact",
+          "note": "ScreenConnect install/execution."
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk artefacts."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.001",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Bring-your-own-vulnerable-driver (e.g. eskle.sys) plus dark-kill and HRSword to terminate EDR/AV before encryption.",
+      "tools": [
+        "eskle.sys",
+        "dark-kill",
+        "HRSword"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Backstab abuses a signed driver to kill protected AV processes, the same BYOVD EDR-kill pattern (catalogue ID T1685)."
+        },
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "Loads a known-vulnerable signed driver (CVE-2015-2291); exercises vulnerable-driver load detections."
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Stop and remove a security service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Domain or Tenant Policy Modification: Group Policy Modification",
+      "procedure": "On a domain controller, modifies the Default Domain Policy to add a logon GPO that runs logon.bat -> IPScanner.ps1 on every client.",
+      "tools": [
+        "Group Policy",
+        "logon.bat"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b51eae65-5441-4789-b8e8-64783c26c1d1",
+          "testNumber": 2,
+          "testName": "LockBit Black - Modify Group policy settings -Powershell",
+          "fidelity": "close",
+          "note": "Group Policy modification via PowerShell (LockBit-style GPO abuse)."
+        },
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "close",
+          "note": "Group Policy modification via cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "credential-access",
+      "techniqueId": "T1555.003",
+      "techniqueName": "Credentials from Password Stores: Credentials from Web Browsers",
+      "procedure": "IPScanner.ps1 harvests Chrome saved credentials (Login Data SQLite) from each user at logon and writes them back to SYSVOL.",
+      "tools": [
+        "IPScanner.ps1"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3d111226-d09a-4911-8715-fe11664f960d",
+          "testNumber": 4,
+          "testName": "Simulating access to Chrome Login Data",
+          "fidelity": "exact",
+          "note": "Simulates access to Chrome Login Data."
+        },
+        {
+          "testGuid": "70422253-8198-4019-b617-6be401b49fce",
+          "testNumber": 17,
+          "testName": "Dump Chrome Login Data with esentutl",
+          "fidelity": "close",
+          "note": "Copies Chrome Login Data with esentutl."
+        },
+        {
+          "testGuid": "e359627f-2d90-4320-ba5e-b0f878155bbe",
+          "testNumber": 15,
+          "testName": "WebBrowserPassView - Credentials from Browser",
+          "fidelity": "close",
+          "note": "NirSoft WebBrowserPassView, matching Talos-reported NirSoft credential tools."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz against LSASS to obtain domain credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation."
+        },
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "proxy",
+          "note": "comsvcs.dll LSASS MiniDump."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "Steals Veeam Backup & Replication stored credentials to reach and destroy backups.",
+      "tools": [
+        "Veeam credential extraction"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic extracts Veeam B&R credentials from its configuration database; detect via Veeam SQL/PowerShell access telemetry."
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "Browses file servers interactively, opening documents with mspaint.exe, notepad.exe and iexplore.exe to triage sensitive data; enumerates shares.",
+      "tools": [
+        "mspaint",
+        "notepad",
+        "iexplore"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0e36303b-6762-4500-b003-127743b80ba6",
+          "testNumber": 1,
+          "testName": "File and Directory Discovery (cmd.exe)",
+          "fidelity": "proxy",
+          "note": "cmd-based directory enumeration."
+        },
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "Network share discovery via net view."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Stages data into WinRAR archives prior to exfiltration.",
+      "tools": [
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8dd61a55-44c6-43cc-af0c-8bdda276860c",
+          "testNumber": 2,
+          "testName": "Compress Data and lock with password for Exfiltration with winrar",
+          "fidelity": "exact",
+          "note": "Password-protected WinRAR archive."
+        },
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "close",
+          "note": "RAR compression of collected data."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Cyberduck uploads archives to Backblaze using a custom multipart/split upload setting for large files.",
+      "tools": [
+        "Cyberduck",
+        "Backblaze"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "proxy",
+          "note": "rclone to cloud storage; same exfil-to-cloud behaviour, different client than Cyberduck."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "WinSCP transfers the Linux ELF encryptor onto Windows hosts ahead of execution via Splashtop.",
+      "tools": [
+        "WinSCP"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "205e676e-0401-4bae-83a5-94b8c5daeb22",
+          "testNumber": 36,
+          "testName": "Windows push file using sftp.exe",
+          "fidelity": "close",
+          "note": "Windows sftp.exe file push; same SSH/SFTP transfer channel WinSCP uses."
+        },
+        {
+          "testGuid": "2a4b0d29-e5dd-4b66-b729-07423ba1cd9d",
+          "testNumber": 34,
+          "testName": "Windows push file using scp.exe",
+          "fidelity": "close",
+          "note": "Windows scp.exe file push."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "execution",
+      "techniqueId": "T1202",
+      "techniqueName": "Indirect Command Execution",
+      "procedure": "Runs the Linux encryptor inside Windows Subsystem for Linux (WSL) on Windows hosts, bypassing Windows-focused EDR.",
+      "tools": [
+        "WSL",
+        "Splashtop"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No WSL-based atomic exists in the local catalogue; detect wsl.exe/bash.exe launched by RMM agents and ELF files written to Windows disks."
+    },
+    {
+      "order": 14,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "One of two encryptors is pushed laterally across hosts with PsExec.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote execution."
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copy and execute file with PsExec."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "Clears Windows event logs before running the encryptor; the encryptor deletes itself afterwards.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl clearing event logs (catalogue ID T1685.005)."
+        },
+        {
+          "testGuid": "b13e9306-3351-4b4b-a6e8-477358b0b498",
+          "testNumber": 2,
+          "testName": "Delete System Logs Using Clear-EventLog",
+          "fidelity": "close",
+          "note": "Clear-EventLog PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies (vssadmin / WMI) on Windows hosts.",
+      "tools": [
+        "vssadmin",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "WMI shadow copy deletion."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops database, backup and security services before encryption.",
+      "tools": [
+        "net stop"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "Stop a service with net.exe."
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "exact",
+          "note": "Stop a service with sc.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Deploys Windows and Linux/ESXi encryptors; ESXi VMs are powered off before VMDKs are encrypted, and a second encryptor targets network shares from a single host.",
+      "tools": [
+        "Qilin encryptor (Rust/Go)",
+        "Linux/ESXi variant"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "ESXi vim-cmd power-off of VMs, the pre-encryption step of the ESXi variant."
+        },
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in for encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

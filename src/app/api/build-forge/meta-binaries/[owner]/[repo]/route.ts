@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isSafeBranch } from "@/lib/build-forge/validate";
 
 // Extensions that users actually want to grab. Keep this curated so we don't
 // flood the UI with source files, READMEs, signature files, etc.
@@ -64,6 +65,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ owner: stri
     return NextResponse.json({ error: "invalid owner/repo" }, { status: 400 });
   }
   const branch = req.nextUrl.searchParams.get("branch") || "";
+  if (branch && !isSafeBranch(branch)) {
+    return NextResponse.json({ error: "invalid branch" }, { status: 400 });
+  }
 
   // Resolve default branch if not provided
   let effectiveBranch = branch;

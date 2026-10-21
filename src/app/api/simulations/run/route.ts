@@ -8,7 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
+import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { inferSimulations } from "@/lib/detection-packs/infer-sims";
 import { materializeAdhoc } from "@/lib/modules/materialize";
@@ -19,12 +20,20 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
 
-  const techniques = [...new Set((Array.isArray(body.techniques) ? body.techniques : []).map(String).filter((t: string) => /^T\d{4}(\.\d{3})?$/.test(t)))];
+  const techniques = [...new Set((Array.isArray(body.techniques) ? (body.techniques as unknown[]) : []).map(String).filter((t: string) => /^T\d{4}(\.\d{3})?$/.test(t)))];
   const environmentId = String(body.environmentId || "");
   const label = String(body.label || "Technique simulation");
   const mode = body.mode === "simulate-and-validate" ? "simulate-and-validate" : "simulate-only";
   if (techniques.length === 0) return NextResponse.json({ error: "no valid techniques provided" }, { status: 400 });
   if (!environmentId) return NextResponse.json({ error: "environmentId required" }, { status: 400 });
+
+  // The run executes on (and decrypts the credentials of) this environment, so
+  // the caller must own it — otherwise any engineer could detonate atomics on
+  // another tenant's hosts / with another tenant's cloud credentials.
+  const env = await prisma.environmentTarget.findUnique({ where: { id: environmentId }, select: { ownerId: true } });
+  if (!env) return NextResponse.json({ error: "environment not found" }, { status: 404 });
+  const envOwn = ownsOr404(auth, env.ownerId);
+  if (!envOwn.ok) return envOwn.response;
 
   const drafts = await inferSimulations({ techniques, capPerFramework: 25, relevanceHint: label, multiPerTechnique: false });
   const atomic = drafts.filter((d) => d.framework === "atomic" && d.refId);

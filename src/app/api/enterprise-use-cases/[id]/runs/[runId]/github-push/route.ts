@@ -138,7 +138,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     } else {
       const issue = await createIssue(token, owner, repoName, title, issueBody, labels);
       action = "created";
-      issueUrl = issue.html_url;
+      issueUrl = issue.url;
       issueNumber = issue.number;
       await prisma.enterpriseUseCase.update({
         where: { id: uc.id },

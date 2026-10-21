@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { seedFeedSources } from "@/lib/threat-intel/aggregator";
+import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
 
 /** GET — list all feed sources */
 export async function GET(req: NextRequest) {
@@ -29,13 +31,20 @@ export async function POST(req: NextRequest) {
 
   // Add custom source
   if (body.name && body.feedUrl) {
+    // Global feed list polled server-side → admin only, http(s) only.
+    const auth = await requireRole("admin");
+    if (!auth.ok) return auth.response;
+    const bad = invalidHttpUrl(body.feedUrl, "feedUrl") || invalidHttpUrl(body.blogUrl, "blogUrl");
+    if (bad || typeof body.feedUrl !== "string" || typeof body.name !== "string") {
+      return NextResponse.json({ error: bad || "name and feedUrl must be strings" }, { status: 400 });
+    }
     const source = await prisma.tiFeedSource.create({
       data: {
-        name: body.name,
-        type: body.type || "rss",
-        category: body.category || "independent",
-        blogUrl: body.blogUrl || "",
-        feedUrl: body.feedUrl,
+        name: body.name.slice(0, 240),
+        type: typeof body.type === "string" ? body.type.slice(0, 40) : "rss",
+        category: typeof body.category === "string" ? body.category.slice(0, 80) : "independent",
+        blogUrl: typeof body.blogUrl === "string" ? body.blogUrl.slice(0, 1024) : "",
+        feedUrl: body.feedUrl.slice(0, 1024),
         active: true,
       },
     });

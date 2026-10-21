@@ -195,7 +195,7 @@ export async function pushPackToGithub(packId: string, opts: PushOptions): Promi
   if (!token) {
     throw Object.assign(new Error("GITHUB_TOKEN not set — pass token in body or set GITHUB_TOKEN in .env"), { code: "missing_token" });
   }
-  if (!/^[^/]+\/[^/]+$/.test(opts.repo)) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\/[A-Za-z0-9._-]{1,100}$/.test(opts.repo) || opts.repo.includes("..")) {
     throw Object.assign(new Error("repo must be in owner/repo format"), { code: "bad_repo" });
   }
   const [owner, repo] = opts.repo.split("/");

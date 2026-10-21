@@ -46,3 +46,17 @@ export function rateLimit(key: string, max: number, windowMs: number): RateLimit
 export function resetRateLimit(key: string): void {
   buckets.delete(key);
 }
+
+/**
+ * Peek: is `key` currently at/over `max` within its live window, WITHOUT
+ * recording a hit? Use to gate a request on a counter that is incremented
+ * elsewhere (e.g. a login account-lockout checked before the password is
+ * verified, where only failures increment the counter).
+ */
+export function peekRateLimited(key: string, max: number): { limited: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const b = buckets.get(key);
+  if (!b || b.resetAt <= now) return { limited: false, retryAfterMs: 0 };
+  const limited = b.count >= max;
+  return { limited, retryAfterMs: limited ? b.resetAt - now : 0 };
+}

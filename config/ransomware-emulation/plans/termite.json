@@ -1,0 +1,532 @@
+{
+  "gang": "termite",
+  "displayName": "Termite",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Encryptor is a modified build of the leaked Babuk source code; 2026 pre-ransomware tradecraft linked to Velvet Tempest (DEV-0504), a long-time Ryuk/REvil/Conti affiliate",
+  "summary": "Termite is a double-extortion operation that surfaced in late 2024 with high-profile victims including supply-chain SaaS provider Blue Yonder and Australian IVF provider Genea. Symantec assessed its encryptor as a modified Babuk build appending .termite. Early intrusions were circumstantially linked to mass exploitation of Cleo managed-file-transfer flaws (attribution unconfirmed); in 2026 MalBeacon observed the Termite-linked affiliate Velvet Tempest using ClickFix malvertising, finger.exe/PowerShell loaders, csc.exe-compiled .NET components, DonutLoader and CastleRAT ahead of ransomware.",
+  "uniqueTraits": [
+    "Supply-chain impact: targets SaaS/logistics providers (Blue Yonder) for cascading downstream disruption",
+    "Possible exploitation of Cleo MFT flaws (CVE-2024-50623 / CVE-2024-55956) for initial access — reported, not confirmed",
+    "Velvet Tempest pre-ransomware chain: ClickFix fake CAPTCHA -> Run-dialog paste -> finger.exe fetch -> csc.exe compile -> DonutLoader -> CastleRAT",
+    "Chrome credential harvesting via PowerShell script hosted on Termite tool-staging infrastructure",
+    "Babuk-derived locker: API-based service/process stops, shadow-copy deletion, Recycle Bin clearing, network-share encryption"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Cleo File Transfer Vulnerability Under Exploitation (Symantec comment on Termite = modified Babuk)",
+      "publisher": "The Hacker News",
+      "date": "2024-12",
+      "url": "https://thehackernews.com/2024/12/cleo-file-transfer-vulnerability-under.html"
+    },
+    {
+      "id": "S2",
+      "title": "Dark Web Profile: Termite Ransomware",
+      "publisher": "SOCRadar",
+      "date": "2025-01-30",
+      "url": "https://socradar.io/blog/dark-web-profile-termite-ransomware/"
+    },
+    {
+      "id": "S3",
+      "title": "Termite ransomware breaches linked to ClickFix CastleRAT attacks (MalBeacon research on Velvet Tempest)",
+      "publisher": "BleepingComputer",
+      "date": "2026-03-07",
+      "url": "https://www.bleepingcomputer.com/news/security/termite-ransomware-breaches-linked-to-clickfix-castlerat-attacks/"
+    },
+    {
+      "id": "S4",
+      "title": "ClickFix campaign tied to Velvet Tempest stages CastleRAT and DonutLoader in suspected pre-ransomware intrusions",
+      "publisher": "VPNCentral",
+      "date": "2026-03",
+      "url": "https://vpncentral.com/clickfix-campaign-tied-to-velvet-tempest-stages-castlerat-and-donutloader-in-suspected-pre-ransomware-intrusions/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Reported exploitation of Cleo Harmony/VLTrader/LexiCom file-transfer flaws (CVE-2024-50623, CVE-2024-55956) around the Blue Yonder intrusion; researchers note Cl0p claimed the campaign and Termite involvement is unconfirmed.",
+      "tools": [
+        "Cleo MFT exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test exploits Cleo MFT (or any T1190 web-application exploit); validate with perimeter/WAF and file-transfer server telemetry instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1204.004",
+      "techniqueName": "User Execution: Malicious Copy and Paste",
+      "procedure": "Velvet Tempest malvertising served a fake CAPTCHA (ClickFix) that instructed the user to paste an obfuscated command into the Windows Run dialog.",
+      "tools": [
+        "ClickFix lure"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cec8ad4e-0320-4984-a1ae-70ee398c9519",
+          "testNumber": 1,
+          "testName": "Malicious Copy and Paste through Run.exe",
+          "fidelity": "exact",
+          "note": "[T1204.004] Reproduces a pasted command executed through the Run dialog (RunMRU artefacts)."
+        },
+        {
+          "testGuid": "3f3120f0-7e50-4be2-88ae-54c61230cb9f",
+          "testNumber": 12,
+          "testName": "ClickFix Campaign - Abuse RunMRU to Launch mshta via PowerShell",
+          "fidelity": "close",
+          "note": "[T1204.002] ClickFix RunMRU -> mshta via PowerShell pattern; same lure class."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "The pasted command spawned nested cmd.exe chains and used finger.exe to retrieve the first-stage loader; a PDF-disguised archive was also delivered.",
+      "tools": [
+        "finger.exe",
+        "cmd.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5f507e45-8411-4f99-84e7-e38530c45d01",
+          "testNumber": 16,
+          "testName": "File download with finger.exe on Windows",
+          "fidelity": "exact",
+          "note": "[T1105] finger.exe used as a LOLBin downloader, as in the Velvet Tempest chain."
+        },
+        {
+          "testGuid": "d0eb3597-a1b3-4d65-b33b-2cda8d397f20",
+          "testNumber": 3,
+          "testName": "Suspicious Execution via Windows Command Shell",
+          "fidelity": "proxy",
+          "note": "[T1059.003] Suspicious cmd.exe execution chain spawned from the paste."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell download cradles fetched and executed follow-on payloads.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "[T1059.001] PowerShell download cradle fetching remote content."
+        },
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "close",
+          "note": "[T1105] File download via PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1027.004",
+      "techniqueName": "Obfuscated Files or Information: Compile After Delivery",
+      "procedure": "csc.exe compiled .NET components in temporary directories on the victim host.",
+      "tools": [
+        "csc.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ffcdbd6a-b0e8-487d-927a-09127fe9a206",
+          "testNumber": 1,
+          "testName": "Compile After Delivery using csc.exe",
+          "fidelity": "exact",
+          "note": "[T1027.004] Compile after delivery using csc.exe."
+        },
+        {
+          "testGuid": "453614d8-3ba6-4147-acc0-7ec4b3e1faef",
+          "testNumber": 2,
+          "testName": "Dynamic C# Compile",
+          "fidelity": "close",
+          "note": "[T1027.004] Dynamic C# compilation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1620",
+      "techniqueName": "Reflective Code Loading",
+      "procedure": "DonutLoader (Donut shellcode loader) staged in-memory payloads that retrieved the CastleRAT backdoor.",
+      "tools": [
+        "DonutLoader",
+        "CastleRAT"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114c2b95-d992-4c03-8c38-fc58420a3eb5",
+          "testNumber": 2,
+          "testName": "Reflective PE Injection via PowerSploit",
+          "fidelity": "proxy",
+          "note": "[T1620] Reflective PE injection exercises the same in-memory loading telemetry Donut-generated shellcode produces."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "Python-based components were dropped into C:\\ProgramData for persistence (exact autostart mechanism not published).",
+      "tools": [
+        "Python components"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "proxy",
+          "note": "[T1547.001] Generic autostart persistence; the precise mechanism used for the ProgramData Python components is not published."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "CastleRAT (CastleLoader family) provided hands-on-keyboard remote access back to operator infrastructure.",
+      "tools": [
+        "CastleRAT"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "[T1071.001] Suspicious-user-agent HTTP beaconing as a stand-in for RAT web C2."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "Hands-on-keyboard Active Directory reconnaissance after CastleRAT was established.",
+      "tools": [
+        "net.exe",
+        "AD queries"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6fbc9e68-5ad7-444a-bd11-8bf3136c477e",
+          "testNumber": 1,
+          "testName": "Enumerate all accounts (Domain)",
+          "fidelity": "close",
+          "note": "[T1087.002] Domain account enumeration with net.exe."
+        },
+        {
+          "testGuid": "f1bf6c8f-9016-4edf-aff9-80b65f5d711f",
+          "testNumber": 2,
+          "testName": "Remote System Discovery - net group Domain Computers",
+          "fidelity": "close",
+          "note": "[T1018] net group \"Domain Computers\" host enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "Host discovery and environment profiling of the compromised workstation.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66703791-c902-4560-8770-42b8a91f7667",
+          "testNumber": 1,
+          "testName": "System Information Discovery",
+          "fidelity": "close",
+          "note": "[T1082] Native system information discovery commands."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "credential-access",
+      "techniqueId": "T1555.003",
+      "techniqueName": "Credentials from Password Stores: Credentials from Web Browsers",
+      "procedure": "A PowerShell script, hosted on an IP linked to Termite tool staging, harvested credentials stored in Google Chrome.",
+      "tools": [
+        "PowerShell credential script"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3d111226-d09a-4911-8715-fe11664f960d",
+          "testNumber": 4,
+          "testName": "Simulating access to Chrome Login Data",
+          "fidelity": "close",
+          "note": "[T1555.003] Simulates access to the Chrome Login Data store."
+        },
+        {
+          "testGuid": "70422253-8198-4019-b617-6be401b49fce",
+          "testNumber": 17,
+          "testName": "Dump Chrome Login Data with esentutl",
+          "fidelity": "close",
+          "note": "[T1555.003] Copies Chrome Login Data with esentutl."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "The Babuk-derived locker enumerates network drives and shares so they can be encrypted.",
+      "tools": [
+        "Termite locker"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "[T1135] net view/net share style share discovery from the command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "discovery",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "Locker walks the file system, skipping system-critical folders so the host stays usable and the ransom note can be read.",
+      "tools": [
+        "Termite locker"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0e36303b-6762-4500-b003-127743b80ba6",
+          "testNumber": 1,
+          "testName": "File and Directory Discovery (cmd.exe)",
+          "fidelity": "close",
+          "note": "[T1083] Directory enumeration via cmd.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Uses Windows APIs to stop services and processes that could interfere with encryption, including backup and database software.",
+      "tools": [
+        "Termite locker"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "[T1489] Stops a service via the Service Controller."
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "proxy",
+          "note": "[T1489] Process termination to release file locks."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes Volume Shadow Copies before encryption.",
+      "tools": [
+        "Termite locker"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "close",
+          "note": "[T1490] vssadmin delete shadows, the Babuk-lineage recovery-inhibition method."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Empties the Recycle Bin to prevent recovery of deleted files.",
+      "tools": [
+        "Termite locker"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f723d13d-48dc-4317-9990-cf43a9ac0bf2",
+          "testNumber": 11,
+          "testName": "Clears Recycle bin via rd",
+          "fidelity": "exact",
+          "note": "[T1070.004] Clears the Recycle Bin."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Modified Babuk encryptor encrypts local and network files, appending the .termite extension and dropping a ransom note; data is also stolen for leak-site extortion.",
+      "tools": [
+        "Termite (Babuk-based) locker"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        },
+        {
+          "testGuid": "0eeb68ce-e64c-4420-8d53-ad5bdc6f86d5",
+          "testNumber": 4,
+          "testName": "Windows - Display a simulated ransom note via Notepad (non-destructive)",
+          "fidelity": "proxy",
+          "note": "[T1491.001] Non-destructive simulated ransom note display."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

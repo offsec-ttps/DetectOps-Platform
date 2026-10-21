@@ -12,6 +12,7 @@ import { encrypt, tailHint } from "@/lib/crypto/credential-vault";
 import { invalidateMcpServerCache } from "@/lib/llm/mcp/client";
 import { logEvent } from "@/lib/event-log";
 import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
 
 const TRANSPORTS = new Set(["stdio", "http"]);
 const PATCHABLE = new Set(["label", "transport", "address", "token", "enabled"]);
@@ -67,7 +68,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       continue;
     }
     if (k === "enabled") { data.enabled = v === true; continue; }
-    data[k] = v;
+    if (typeof v !== "string") continue;
+    data[k] = v.trim().slice(0, k === "address" ? 1024 : 240);
+  }
+  // Token-exfil guard: moving a server that holds a stored bearer token to a
+  // new address (or switching transport) must re-supply / clear the token.
+  const moved = (typeof data.address === "string" && data.address !== existing.address)
+    || (typeof data.transport === "string" && data.transport !== existing.transport);
+  if (moved && existing.tokenEnc && typeof body.token !== "string") {
+    return NextResponse.json({ error: "changing address/transport requires re-entering the token (or sending token: \"\" to clear it)" }, { status: 400 });
+  }
+  const effTransport = String(data.transport ?? existing.transport);
+  const effAddress = String(data.address ?? existing.address);
+  if (effTransport === "http") {
+    const bad = invalidHttpUrl(effAddress, "address");
+    if (bad) return NextResponse.json({ error: bad }, { status: 400 });
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no patchable fields supplied" }, { status: 400 });

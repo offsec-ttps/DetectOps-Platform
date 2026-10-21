@@ -24,6 +24,8 @@
 
 import type { EnvironmentTarget } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto/credential-vault";
+import { checkC2Url } from "@/lib/c2/url-guard";
+import { assertSafeOutboundUrl, labOutboundPolicy } from "@/lib/net/ssrf";
 
 export interface StepRunResult {
   status: "ok" | "failure" | "stubbed" | "skipped";
@@ -52,8 +54,12 @@ export function resolveCalderaConfig(src: {
   calderaGroup?: string | null; group?: string | null;
   agentPlatform?: string | null;
 }): { ok: true; cfg: CalderaConfig } | { ok: false; reason: string } {
-  const baseUrl = ((src.calderaUrl ?? src.url) || "").trim().replace(/\/+$/, "");
-  if (!baseUrl) return { ok: false, reason: "Caldera URL not set" };
+  const rawUrl = ((src.calderaUrl ?? src.url) || "").trim().replace(/\/+$/, "");
+  if (!rawUrl) return { ok: false, reason: "Caldera URL not set" };
+  // SSRF guard: only http(s), no embedded creds, never cloud-metadata hosts.
+  const checked = checkC2Url(rawUrl);
+  if (!checked.ok) return { ok: false, reason: `Caldera URL rejected: ${checked.error}` };
+  const baseUrl = checked.url;
   const enc = src.calderaApiKeyEnc ?? src.apiKeyEnc ?? "";
   if (!enc) return { ok: false, reason: "Caldera API key not set" };
   let apiKey: string;
@@ -70,12 +76,21 @@ async function cReq(cfg: CalderaConfig, method: string, path: string, body?: unk
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    // Connect-time SSRF guard: resolve the Caldera URL and validate EVERY
+    // resolved address (blocks DNS rebinding to a metadata/link-local endpoint
+    // that the save-time string guard can't catch). LAN/private stays allowed.
+    const safe = await assertSafeOutboundUrl(`${cfg.baseUrl}${path}`, labOutboundPolicy());
+    if (!safe.ok) throw new Error(`refusing Caldera request: ${safe.error}`);
     const res = await fetch(`${cfg.baseUrl}${path}`, {
       method,
       headers: { KEY: cfg.apiKey, "Content-Type": "application/json", Accept: "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: ctrl.signal,
+      // Never follow redirects: a redirect could bounce the request (and the
+      // KEY header) to an internal/metadata endpoint past the URL guard.
+      redirect: "manual",
     });
+    if (res.status >= 300 && res.status < 400) throw new Error(`${method} ${path} → HTTP ${res.status} redirect refused (point the Caldera URL at the final address)`);
     const text = await res.text();
     let json: any = null;
     try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }

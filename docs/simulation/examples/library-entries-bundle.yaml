@@ -1,0 +1,121 @@
+# Example 4 — a bundle (what Export produces, and what Bulk import accepts).
+# Each entry names its own target library; a bad entry is skipped, the rest still apply.
+bundle: detectops-library-entries
+schema: 1
+exportedAt: '2026-10-19T00:00:00.000Z'
+entries:
+- schema: 1
+  kind: technique
+  library: detectops.shellcode-injection-sim
+  key: dirty-vanity-fork-injection
+  name: Dirty Vanity (fork-based process injection)
+  group: Windows
+  domain: Process Lifecycle & Syscall Evasion
+  attack_id: T1055
+  attack_techniques:
+  - T1055
+  tactic: defense-evasion
+  platforms:
+  - windows
+  severity: high
+  summary: Injection that abuses process forking so no remote thread is created in the victim.
+  description: The injector uses Windows process-cloning primitives so the payload runs in a forked copy
+    of the target, avoiding the usual remote-thread and cross-process write telemetry.
+  abuse: Sidesteps CreateRemoteThread-centric detections by executing inside a clone of the victim process.
+  lab_setup:
+  - Windows endpoint (isolated VM)
+  - Sysmon EID 1, 8, 10
+  chain_narrative:
+  - 'Target selection: a long-lived host process.'
+  - 'Memory operation: the process is cloned instead of written to directly.'
+  - 'Execution trigger: the clone runs the staged code; no remote thread appears.'
+  atomics:
+  - technique: T1055
+    name_includes:
+    - Dirty Vanity
+    why: Vetted Atomic Red Team test for Dirty Vanity injection.
+  simulate_note: Run only in an isolated lab VM.
+  detection:
+    summary: Look for process cloning without a remote thread; correlate parent and child.
+    data_sources:
+    - Sysmon EID 1
+    - ETW process-clone events
+    queries:
+    - format: spl
+      title: Cloned process from a non-system parent
+      query: index=* sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=1 | stats
+        count by ParentImage, Image
+    - format: sigma
+      title: Process created as a clone of a sensitive host process
+      query: "title: Process Created Via Reflection Clone\nlogsource:\n  product: windows\n  category:\
+        \ process_creation\ndetection:\n  selection:\n    ParentImage|endswith: '\\svchost.exe'\n  condition:\
+        \ selection\nlevel: medium\n"
+  mitigations:
+  - title: Behavioural EDR
+    kind: edr
+    mitre_id: M1040
+    detail: Use an EDR that inspects process-cloning APIs, not only remote-thread creation.
+  references:
+  - title: MITRE ATT&CK T1055
+    url: https://attack.mitre.org/techniques/T1055/
+  changelog: Initial entry
+- schema: 1
+  kind: technique
+  library: detectops.ad-attack
+  key: shadow-credentials-key-credential-link
+  name: Shadow Credentials (msDS-KeyCredentialLink abuse)
+  group: Credential Access
+  domain: Active Directory
+  attack_id: T1098
+  attack_techniques:
+  - T1098
+  tactic: credential-access
+  platforms:
+  - windows
+  severity: high
+  summary: Writing a key credential to a target account lets an attacker authenticate as it via PKINIT.
+  description: An identity with write access to a user or computer object's msDS-KeyCredentialLink attribute
+    can add its own key and then request a Kerberos TGT as that account, without knowing or changing its
+    password.
+  abuse: 'Gives stealthy account takeover and persistence: no password change occurs and the added key
+    survives password resets.'
+  lab_setup:
+  - Domain controller (isolated lab) with AD CS or PKINIT-capable KDC
+  - Directory Service Changes auditing enabled (SACL on the attribute)
+  chain_narrative:
+  - 'Target selection: an account the attacker can write to.'
+  - 'Directory change: a key credential is added to the account.'
+  - 'Authentication: a TGT is requested for the account using the added key.'
+  atomics: []
+  simulate_note: No vetted local atomic yet — catalogued for detection engineering and coverage mapping.
+  detection:
+    summary: Alert on any write to msDS-KeyCredentialLink by an identity that is not an expected provisioning
+      service.
+    data_sources:
+    - Windows Security 5136 (directory object modified)
+    - Windows Security 4768 (TGT request)
+    queries:
+    - format: spl
+      title: msDS-KeyCredentialLink modified
+      query: index=* source="WinEventLog:Security" EventCode=5136 AttributeLDAPDisplayName="msDS-KeyCredentialLink"
+        | stats count by SubjectUserName, ObjectDN, OperationType
+    - format: sigma
+      title: Key credential attribute modified
+      query: "title: msDS-KeyCredentialLink Modified\nlogsource:\n  product: windows\n  service: security\n\
+        detection:\n  selection:\n    EventID: 5136\n    AttributeLDAPDisplayName: 'msDS-KeyCredentialLink'\n\
+        \  condition: selection\nlevel: high\n"
+  mitigations:
+  - title: Restrict write access to msDS-KeyCredentialLink
+    kind: config
+    mitre_id: M1026
+    detail: Remove broad write permissions on the attribute; only the provisioning identities that need
+      it should hold them.
+  - title: Audit directory changes
+    kind: config
+    mitre_id: M1047
+    detail: Enable Directory Service Changes auditing so 5136 events are generated and forwarded to the
+      SIEM.
+  references:
+  - title: MITRE ATT&CK T1098
+    url: https://attack.mitre.org/techniques/T1098/
+  changelog: Initial entry

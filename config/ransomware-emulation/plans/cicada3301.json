@@ -1,0 +1,375 @@
+{
+  "gang": "cicada3301",
+  "displayName": "Cicada3301",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Rust locker with strong code/command overlap with ALPHV/BlackCat (possible rebrand or code reuse); access possibly via Brutus botnet operators",
+  "summary": "Cicada3301 is a RaaS first observed in June 2024 (affiliate ads on RAMP, first leak post 25 June 2024) targeting mainly SMBs in North America and the UK. Truesec traced one intrusion to valid ScreenConnect credentials used from an IP tied to the Brutus VPN/remote-access brute-force botnet. Its Rust lockers for Windows and ESXi closely mirror BlackCat: embedded credentials drive PsExec propagation, EDRSandBlast tampers with EDR through a vulnerable signed driver, fsutil enables remote symlink evaluation, wevtutil clears logs, bcdedit and shadow-copy deletion inhibit recovery, and ESXi builds force-kill VMs and delete snapshots before ChaCha20 encryption.",
+  "uniqueTraits": [
+    "Initial access with stolen/brute-forced ScreenConnect credentials from Brutus botnet infrastructure",
+    "Credentials of the compromised user embedded in the locker and used to run PsExec across the network",
+    "EDRSandBlast BYOVD tampering of EDR",
+    "BlackCat-identical pre-encryption commands: fsutil SymLinkEvaluation R2L/R2R, MaxMpxCt SMB tweak, wevtutil log clearing, bcdedit recovery disable, iisreset",
+    "ESXi build: esxcli force-kill of VMs and vim-cmd snapshot.removeall unless no_vm_ss is set; intermittent encryption >100 MB"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Dissecting the Cicada",
+      "publisher": "Truesec",
+      "date": "2024-08-30",
+      "url": "https://www.truesec.com/hub/blog/dissecting-the-cicada"
+    },
+    {
+      "id": "S2",
+      "title": "Cicada3301 Ransomware Threat Analysis",
+      "publisher": "Morphisec",
+      "date": "2024-09-03",
+      "url": "https://www.morphisec.com/blog/cicada3301-ransomware-threat-analysis/"
+    },
+    {
+      "id": "S3",
+      "title": "New Rust-Based Ransomware Cicada3301 Targets Windows and Linux Systems",
+      "publisher": "The Hacker News",
+      "date": "2024-09",
+      "url": "https://thehackernews.com/2024/09/new-rust-based-ransomware-cicada3301.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.004",
+      "techniqueName": "Brute Force: Credential Stuffing",
+      "procedure": "The intrusion IP belonged to the Brutus botnet, which runs large-scale password guessing/credential stuffing against VPN and remote-access products including ScreenConnect.",
+      "tools": [
+        "Brutus botnet"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4852c630-87a9-409b-bb5e-5dc12c9ebcde",
+          "testNumber": 4,
+          "testName": "Brute Force:Credential Stuffing using Kerbrute Tool",
+          "fidelity": "proxy",
+          "note": "[T1110.004] Credential stuffing with Kerbrute against AD; same technique, different target service."
+        },
+        {
+          "testGuid": "263ae743-515f-4786-ac7d-41ef3a0d4b2b",
+          "testNumber": 2,
+          "testName": "Password Spray (DomainPasswordSpray)",
+          "fidelity": "proxy",
+          "note": "[T1110.003] Password spraying of domain users."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logged in through ScreenConnect using valid (stolen or brute-forced) credentials.",
+      "tools": [
+        "ScreenConnect"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "proxy",
+          "note": "[T1219] ScreenConnect client install/use on Windows; exercises ScreenConnect telemetry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "EDRSandBlast used with a vulnerable signed driver to tamper with and bypass EDR.",
+      "tools": [
+        "EDRSandBlast"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "[T1685] Driver-based killing of protected anti-malware processes (Backstab)."
+        },
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "proxy",
+          "note": "[T1068] BYOVD vulnerable driver load."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "The locker embeds the compromised user's credentials and uses them to run PsExec for remote execution/propagation.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "[T1569.002] PsExec remote command execution with supplied credentials."
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "[T1021.002] Copy and execute a file with PsExec."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Raises the LanmanServer MaxMpxCt value so SMB can handle heavy PsExec traffic (BlackCat behaviour).",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "31eb7828-97d7-4067-9c1e-c6feb85edc4b",
+          "testNumber": 4,
+          "testName": "BlackCat pre-encryption cmds with Lateral Movement",
+          "fidelity": "exact",
+          "note": "[T1569.002] BlackCat pre-encryption command set (MaxMpxCt change, fsutil symlink evaluation, PsExec propagation)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1222.001",
+      "techniqueName": "File and Directory Permissions Modification: Windows",
+      "procedure": "Uses fsutil behavior set SymLinkEvaluation to enable remote-to-local/remote-to-remote symlinks so redirected files can be encrypted.",
+      "tools": [
+        "fsutil.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "31eb7828-97d7-4067-9c1e-c6feb85edc4b",
+          "testNumber": 4,
+          "testName": "BlackCat pre-encryption cmds with Lateral Movement",
+          "fidelity": "close",
+          "note": "[T1569.002] Includes the BlackCat fsutil SymLinkEvaluation command."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Impair Defenses: Clear Windows Event Logs",
+      "procedure": "Clears all event logs with wevtutil.",
+      "tools": [
+        "wevtutil.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "83dac837-5685-45ed-b10b-9f047572100b",
+          "testNumber": 4,
+          "testName": "BlackCat Ransomware Full Log Clear",
+          "fidelity": "exact",
+          "note": "[T1685.005] BlackCat full event-log clear via wevtutil."
+        },
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "close",
+          "note": "[T1685.005] wevtutil cl log clearing."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops IIS with iisreset.exe and terminates backup/recovery services and a hard-coded process list so locked files can be encrypted.",
+      "tools": [
+        "iisreset.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0f752206-61b2-4f2f-b397-e883a503968b",
+          "testNumber": 9,
+          "testName": "Windows - iisreset.exe to stop Internet services",
+          "fidelity": "exact",
+          "note": "[T1489] iisreset stops Internet services."
+        },
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "[T1489] Stops services with net.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies (BlackCat-like method) and uses bcdedit to disable system recovery.",
+      "tools": [
+        "bcdedit.exe",
+        "vssadmin.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "[T1490] bcdedit disables recovery."
+        },
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "close",
+          "note": "[T1490] Deletes volume shadow copies."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Stops locally deployed VMs; the ESXi build force-kills running VMs via esxcli and deletes all snapshots with vim-cmd (snapshot.removeall) unless no_vm_ss is passed.",
+      "tools": [
+        "esxcli",
+        "vim-cmd"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "987c9b4d-a637-42db-b1cb-e9e242c3991b",
+          "testNumber": 13,
+          "testName": "ESXi - Terminates VMs using pkill",
+          "fidelity": "close",
+          "note": "[T1529] Terminates ESXi VMs by killing their processes."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "[T1529] Powers off ESXi VMs with vim-cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Rust locker encrypts with ChaCha20 (key protected by RSA), partially encrypting files >100 MB, appending a random extension and a matching ransom note; requires a 0x2C-byte key parameter. Data is posted to a leak site for double extortion.",
+      "tools": [
+        "Cicada3301 locker (Windows/ESXi)"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

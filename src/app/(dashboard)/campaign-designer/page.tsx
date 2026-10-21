@@ -7,6 +7,7 @@ import EnvironmentAccessPanel from "@/components/campaign-designer/EnvironmentAc
 import SiemConnectModal from "@/components/siem/SiemConnectModal";
 import AtomicPreview from "@/components/campaign-designer/AtomicPreview";
 import LotlCampaignPicker, { type LotlSelEntry } from "@/components/campaign-designer/LotlCampaignPicker";
+import ModuleCampaignPicker, { type ModuleAddPayload } from "@/components/campaign-designer/ModuleCampaignPicker";
 import DependencyPrompt from "@/components/campaign/DependencyPrompt";
 import {
   Plus, Play, ArrowRight, Copy,
@@ -2579,6 +2580,23 @@ export default function CampaignDesignerPage() {
                   ))}
                 </div>
               )}
+
+              {/* Attack-simulation modules (AD, PrivEsc, Lateral Movement, UAC, Cloud,
+                  Container, Hacktools, ClickFix, Phishing, APT, Ransomware …) — picked
+                  inline, OS-filtered to the chosen server, routed through the normal
+                  technique flow (techniqueList + per-technique test/engine). */}
+              <div className="pt-1 border-t border-border/60">
+                <ModuleCampaignPicker
+                  serverOs={labTargets.find((t) => t.deployedName === selectedServer)?.os || ""}
+                  selectedTechniques={new Set(techniqueList)}
+                  onAdd={(p: ModuleAddPayload) => {
+                    setTechniqueList((prev) => [...new Set([...prev, ...p.techniques])]);
+                    setTechniqueTests((m) => { const n = { ...m }; for (const [k, v] of Object.entries(p.tests)) if (n[k] == null) n[k] = v; return n; });
+                    setTechniqueTestLists((m) => { const n = { ...m }; for (const [k, v] of Object.entries(p.testLists)) n[k] = [...new Set([...(n[k] || []), ...v])]; return n; });
+                    setTechniqueEngines((m) => { const n = { ...m }; for (const [k, v] of Object.entries(p.engines)) n[k] = v; return n; });
+                  }}
+                />
+              </div>
 
               {/* Living-off-the-Land technique selection — routed on launch by
                   target type (fleet → bundle path, SSH labs → enterprise runner). */}

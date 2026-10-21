@@ -75,7 +75,11 @@ export interface ModuleManifest {
     // views. Resolved to atomic tests at simulate-time (no pre-baked testGuids
     // needed). `domain` lets the attack-catalog view facet groups by sub-domain
     // (e.g. Docker vs Kubernetes, AWS vs Azure vs GCP) within one library.
-    catalog?: Array<{ name: string; domain?: string; description?: string; techniques: Array<{ id: string; name: string; tactic?: string }> }>;
+    // `uid` + `match` are optional: several named entries may share one ATT&CK id
+    // (e.g. many shellcode-injection variants all under T1055). `uid` makes each
+    // entry its own row group; `match` narrows the id's atomic tests to those whose
+    // name contains any term (`[]` = catalogued for coverage, no runnable atomic).
+    catalog?: Array<{ name: string; domain?: string; description?: string; techniques: Array<{ id: string; name: string; tactic?: string; uid?: string; match?: string[] }> }>;
   };
   entryPoints?: Record<string, string>;  // declarative pointers only
 }

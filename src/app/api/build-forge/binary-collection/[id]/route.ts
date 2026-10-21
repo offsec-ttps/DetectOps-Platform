@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readFileSync, existsSync, unlinkSync } from "node:fs";
-import { basename } from "node:path";
+import { confinedFile, attachmentDisposition, BINARY_COLLECTION_DIR } from "../../../_shared/safe-file";
 
 /**
  * GET    /api/build-forge/binary-collection/[id]          — get details
@@ -23,15 +23,16 @@ export async function GET(
   }
 
   if (download) {
-    if (!existsSync(item.filePath)) {
+    const file = confinedFile(item.filePath, [BINARY_COLLECTION_DIR]);
+    if (!file || !existsSync(file)) {
       return NextResponse.json({ error: "File not found on disk" }, { status: 404 });
     }
-    const fileBuffer = readFileSync(item.filePath);
+    const fileBuffer = readFileSync(file);
     return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${item.binaryName}"`,
+        "Content-Disposition": attachmentDisposition(item.binaryName, "binary.bin"),
         "Content-Length": String(fileBuffer.length),
         "X-Artifact-SHA256": item.sha256,
       },
@@ -52,9 +53,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Binary not found" }, { status: 404 });
   }
 
-  // Remove file from disk
-  if (existsSync(item.filePath)) {
-    unlinkSync(item.filePath);
+  // Remove file from disk — only if it really lives in the collection dir.
+  const file = confinedFile(item.filePath, [BINARY_COLLECTION_DIR]);
+  if (file) {
+    try { unlinkSync(file); } catch { /* already gone */ }
   }
 
   // Unmark the build record
@@ -74,12 +76,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const data: any = {};
-  if (body.name !== undefined) data.name = body.name;
-  if (body.description !== undefined) data.description = body.description;
-  if (body.tags !== undefined) data.tags = JSON.stringify(body.tags);
+  if (body.name !== undefined) data.name = String(body.name).slice(0, 300);
+  if (body.description !== undefined) data.description = String(body.description).slice(0, 5000);
+  if (body.tags !== undefined) data.tags = JSON.stringify(Array.isArray(body.tags) ? body.tags.map(String).slice(0, 50) : []);
 
   const updated = await prisma.binaryCollection.update({ where: { id }, data });
   return NextResponse.json({ ...updated, tags: JSON.parse(updated.tags) });

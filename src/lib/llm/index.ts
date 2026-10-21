@@ -101,7 +101,20 @@ async function runOn<T>(providerId: ProviderId, input: DispatcherRunToolInput<T>
       );
     }
   }
-  return provider.runTool<T>(input);
+  // Cost/DoS ceiling (OWASP LLM10): one absolute cap on output tokens and on
+  // prompt size for every provider, regardless of what the caller asked for.
+  const maxOut = Number(process.env.LLM_MAX_OUTPUT_TOKENS) || 32_768;
+  const maxInChars = Number(process.env.LLM_MAX_INPUT_CHARS) || 600_000;
+  const promptChars = (input.system?.length || 0) + (input.user?.length || 0);
+  if (promptChars > maxInChars) {
+    throw new LlmProviderError(
+      "input_too_large",
+      `Prompt is ${promptChars} chars; the limit is ${maxInChars} (LLM_MAX_INPUT_CHARS). Trim the source material.`,
+      providerId,
+    );
+  }
+  const capped = input.maxTokens && input.maxTokens > maxOut ? { ...input, maxTokens: maxOut } : input;
+  return provider.runTool<T>(capped);
 }
 
 export { PROVIDERS, defaultProviderId, PROVIDER_IDS, anyProviderConfigured } from "./providers/registry";

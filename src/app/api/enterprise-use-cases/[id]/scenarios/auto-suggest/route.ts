@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { buildAutoScenarios } from "@/lib/enterprise-use-cases/auto-scenarios";
 import { logEvent } from "@/lib/event-log";
@@ -25,6 +26,8 @@ function safeJson<T>(s: string | null | undefined, fb: T): T {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
   const replaceExisting = body.replaceExisting === true;
 

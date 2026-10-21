@@ -16,6 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 
 function safeJson<T>(s: string | null | undefined, fb: T): T {
@@ -32,6 +33,8 @@ function overlap(a: string[], b: string[]): number {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const limit = Math.min(20, Math.max(1, parseInt(sp.get("limit") || "8", 10)));
   const sourceFilter = sp.get("source") || "";

@@ -9,6 +9,7 @@ import type { C2Provider, C2Beacon, C2Health, C2Os, C2DeployOpts, C2DeployResult
 import {
   resolveCalderaConfig, calderaHealthCfg, listCalderaAgents, runCalderaCfg,
 } from "@/lib/enterprise-use-cases/caldera-runner";
+import { checkC2Url, isSafeGroup } from "../url-guard";
 
 function cfgOf(server: C2Server) {
   return resolveCalderaConfig({
@@ -59,7 +60,10 @@ export const calderaProvider: C2Provider = {
 
   enrollmentCommand(server: C2Server, os: C2Os): string {
     const s = beaconServer(server);
-    const group = server.group || "red";
+    // Defence in depth for legacy rows: these land inside a shell/PowerShell
+    // one-liner the operator pastes on an endpoint, so never echo unsafe values.
+    if (!checkC2Url(s).ok) return "# C2 server URL is invalid — fix the server's URL / advertise host first";
+    const group = isSafeGroup(server.group) ? server.group : "red";
     if (os === "windows") {
       // Pull the Sandcat beacon from the C2 over the LAN (no internet), run it hidden.
       return [

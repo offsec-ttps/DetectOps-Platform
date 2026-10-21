@@ -6,10 +6,14 @@
 import { NextResponse } from "next/server";
 import { isSourceEnabled } from "@/lib/community-sources/flags";
 import { mitreCarAdapter } from "@/lib/community-sources/adapters/mitre-car";
+import { requireRole } from "@/lib/auth-guard";
 
 export const maxDuration = 300;
 
 export async function POST() {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   if (!isSourceEnabled("mitreCar")) {
     return NextResponse.json(
       { error: "MITRE CAR source is disabled. Set ENABLE_MITRE_CAR_SOURCE=true." },

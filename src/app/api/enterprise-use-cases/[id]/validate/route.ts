@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { validateUseCase } from "@/lib/enterprise-use-cases/validate";
 import { computeSiemCompat } from "@/lib/enterprise-use-cases/siem-compat";
@@ -33,6 +34,8 @@ function pickLogic(row: {
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const row = await prisma.enterpriseUseCase.findUnique({ where: { id } });
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 

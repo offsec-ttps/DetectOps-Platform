@@ -1,0 +1,643 @@
+{
+  "gang": "conti",
+  "displayName": "Conti",
+  "aliases": [
+    "Wizard Spider (operator)",
+    "GOLD ULRICK",
+    "ITG23"
+  ],
+  "status": "defunct",
+  "activeSince": "2019",
+  "lineage": "Successor of Ryuk (Wizard Spider/TrickBot ecosystem); shut down May 2022 and splintered into Black Basta, Royal/BlackSuit, Karakurt and other crews that still reuse the leaked playbook (2024-2026)",
+  "summary": "Conti was a Russia-based, highly centralised RaaS run by the Wizard Spider/TrickBot organisation, linked to 1,000+ attacks by March 2022. Access came from TrickBot/BazarLoader/IcedID phishing, purchased or stolen RDP/VPN credentials and rapid exploitation of edge bugs (ProxyShell, Log4Shell on vCenter). Hands-on operators followed a leaked, step-by-step playbook: Cobalt Strike, AdFind and ShareFinder discovery, Kerberoasting, NTDS dumping, AnyDesk/Atera persistence, Rclone exfiltration to MEGA, then multi-threaded encryption over SMB.",
+  "uniqueTraits": [
+    "Leaked operator playbook (Aug 2021) standardised affiliate tradecraft: adfind.bat, Invoke-ShareFinder, Invoke-Kerberoast, ntdsutil IFM",
+    "Atera/AnyDesk RMM agents installed as fallback persistence when Cobalt Strike was blocked",
+    "Rclone with MEGA configuration as the standard exfiltration channel",
+    "Fast weaponisation of ProxyShell and Log4Shell (VMware vCenter) for initial access/lateral movement",
+    "Encryptor targets network shares over SMB with up to 32 concurrent threads and skips the local host via command-line modes"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Conti Ransomware (AA21-265A)",
+      "publisher": "CISA / FBI / NSA / USSS",
+      "date": "2021-09-22",
+      "url": "https://media.defense.gov/2021/Sep/22/2002859507/-1/-1/0/CSA_CONTI_RANSOMWARE_20210922.PDF"
+    },
+    {
+      "id": "S2",
+      "title": "Conti (S0575)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/software/S0575/"
+    },
+    {
+      "id": "S3",
+      "title": "Translated: Talos' insights from the recently leaked Conti ransomware playbook",
+      "publisher": "Cisco Talos",
+      "date": "2021-09-02",
+      "url": "https://blog.talosintelligence.com/conti-leak-translation/"
+    },
+    {
+      "id": "S4",
+      "title": "BazarLoader and the Conti Leaks",
+      "publisher": "The DFIR Report",
+      "date": "2021-10-04",
+      "url": "https://thedfirreport.com/2021/10/04/bazarloader-and-the-conti-leaks/"
+    },
+    {
+      "id": "S5",
+      "title": "Conti affiliates use ProxyShell Exchange exploit in ransomware attacks",
+      "publisher": "Sophos",
+      "date": "2021-09-03",
+      "url": "https://news.sophos.com/en-us/2021/09/03/conti-affiliates-use-proxyshell-exchange-exploit-in-ransomware-attacks/"
+    },
+    {
+      "id": "S6",
+      "title": "Conti Ransomware Gang Has Full Log4Shell Attack Chain (AdvIntel research)",
+      "publisher": "Threatpost",
+      "date": "2021-12-17",
+      "url": "https://threatpost.com/conti-ransomware-gang-has-full-log4shell-attack-chain/177173/"
+    },
+    {
+      "id": "S7",
+      "title": "Wizard Spider (G0102)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/groups/G0102/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Malspam with weaponised Office documents/ISO/ZIP delivering TrickBot, BazarLoader or IcedID, which hand off to Conti operators.",
+      "tools": [
+        "TrickBot",
+        "BazarLoader",
+        "IcedID"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S7"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Delivers a macro-enabled attachment, the same lure class used for BazarLoader/TrickBot (local ART T1566.001 #1)"
+        },
+        {
+          "testGuid": "cbb6799a-425c-4f83-9194-5447a909d67f",
+          "testNumber": 2,
+          "testName": "Word spawned a command shell and used an IP address in the command line",
+          "fidelity": "close",
+          "note": "Word spawning cmd with an IP in the command line mirrors maldoc loader execution (local ART T1566.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "execution",
+      "techniqueId": "T1204.002",
+      "techniqueName": "User Execution: Malicious File",
+      "procedure": "Victim opens the document; macro/JS drops and runs the loader that later pulls Cobalt Strike.",
+      "tools": [
+        "BazarLoader",
+        "TrickBot"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5202ee05-c420-4148-bf5e-fd7f7d24850c",
+          "testNumber": 9,
+          "testName": "Office Generic Payload Download",
+          "fidelity": "close",
+          "note": "Office application downloading a second-stage payload (local ART T1204.002 #9)"
+        },
+        {
+          "testGuid": "8bebc690-18c7-4549-bc98-210f7019efff",
+          "testNumber": 1,
+          "testName": "OSTap Style Macro Execution",
+          "fidelity": "proxy",
+          "note": "OSTap-style macro execution chain as used in TrickBot-era loaders (local ART T1204.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Affiliates exploited Exchange ProxyShell (CVE-2021-34473/34523/31207), Log4Shell (CVE-2021-44228) against VMware vCenter, and FortiOS SSL-VPN flaws listed in the playbook.",
+      "tools": [
+        "ProxyShell exploits",
+        "Log4Shell exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S5",
+        "S6",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; exploitation must be validated with vulnerability scanning or a purple-team exploit range, not ART."
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "After ProxyShell, multiple web shells were dropped on Exchange to keep access and launch PowerShell download cradles.",
+      "tools": [
+        "ASPX web shells"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "exact",
+          "note": "Writes a web shell into the IIS web root, matching the post-ProxyShell artefact (local ART T1505.003 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "PowerShell download cradles and encoded commands stage Cobalt Strike Beacon in memory; Beacon used for all hands-on activity.",
+      "tools": [
+        "Cobalt Strike",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle equivalent to the Beacon stager (local ART T1059.001 #9)"
+        },
+        {
+          "testGuid": "7a48f482-246f-4aeb-9837-21c271ebf244",
+          "testNumber": 4,
+          "testName": "Cobalt Strike post-exploitation pipe (4.2 and later)",
+          "fidelity": "proxy",
+          "note": "Creates the default Cobalt Strike 4.2+ post-exploitation named pipe for Beacon telemetry coverage (local ART T1559 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Playbook instructs installing AnyDesk (and AdvIntel observed Atera agents) as resilient remote access that survives Beacon removal.",
+      "tools": [
+        "AnyDesk",
+        "Atera",
+        "Splashtop"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S6",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "Drops/runs AnyDesk as instructed in the Conti playbook (local ART T1219 #2)"
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "proxy",
+          "note": "Splashtop execution - another RMM used by Conti successors (Black Basta/Royal) (local ART T1219 #13)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "adfind.bat from the playbook enumerates users, computers, groups, trusts and subnets to text files.",
+      "tools": [
+        "AdFind"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user object enumeration, as in adfind.bat (local ART T1087.002 #7)"
+        },
+        {
+          "testGuid": "b95fd967-4e62-4109-b48d-265edfd28c3a",
+          "testNumber": 6,
+          "testName": "Adfind - Enumerate Active Directory Admins",
+          "fidelity": "exact",
+          "note": "AdFind enumeration of domain admins (local ART T1087.002 #6)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1482",
+      "techniqueName": "Domain Trust Discovery",
+      "procedure": "AdFind trustdmp and nltest /domain_trusts to map forest trusts before lateral movement.",
+      "tools": [
+        "AdFind",
+        "nltest"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "15fe436d-e771-4ff3-b655-2dca9ba52834",
+          "testNumber": 5,
+          "testName": "Adfind - Enumerate Active Directory Trusts",
+          "fidelity": "exact",
+          "note": "AdFind trust enumeration (adfind.bat trustdmp) (local ART T1482 #5)"
+        },
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "nltest /domain_trusts (local ART T1482 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "PowerView Invoke-ShareFinder run from Beacon to locate file servers and data for theft and encryption.",
+      "tools": [
+        "PowerView ShareFinder"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d07e4cc1-98ae-447e-9d31-36cb430d28c4",
+          "testNumber": 8,
+          "testName": "PowerView ShareFinder",
+          "fidelity": "exact",
+          "note": "PowerView ShareFinder, the exact cmdlet from the playbook (local ART T1135 #8)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1558.003",
+      "techniqueName": "Steal or Forge Kerberos Tickets: Kerberoasting",
+      "procedure": "Invoke-Kerberoast/Rubeus to request SPN tickets and crack service-account passwords offline.",
+      "tools": [
+        "Invoke-Kerberoast",
+        "Rubeus"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "14625569-6def-4497-99ac-8e7817105b55",
+          "testNumber": 2,
+          "testName": "Rubeus kerberoast",
+          "fidelity": "close",
+          "note": "Rubeus kerberoast (local ART T1558.003 #2)"
+        },
+        {
+          "testGuid": "902f4ed2-1aba-4133-90f2-cff6d299d6da",
+          "testNumber": 5,
+          "testName": "Request All Tickets via PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell request of all SPN tickets (local ART T1558.003 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz via Beacon and LSASS dumps to harvest domain admin credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "PowerShell Mimikatz (local ART T1003.001 #10)"
+        },
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "proxy",
+          "note": "comsvcs.dll MiniDump of LSASS, a variant seen in Conti-lineage intrusions (local ART T1003.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "Playbook: ntdsutil 'ac i ntds' 'ifm' 'create full' to copy NTDS.dit from a domain controller.",
+      "tools": [
+        "ntdsutil"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "exact",
+          "note": "ntdsutil IFM dump of the AD database (local ART T1003.003 #3)"
+        },
+        {
+          "testGuid": "dcebead7-6c28-4b4b-bf3c-79deb1b1fc7f",
+          "testNumber": 1,
+          "testName": "Create Volume Shadow Copy with vssadmin",
+          "fidelity": "close",
+          "note": "vssadmin shadow copy creation for NTDS theft (local ART T1003.003 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "Beacon jump psexec / PsExec and admin-share copies to move to servers and to deploy the encryptor.",
+      "tools": [
+        "PsExec",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copy and execute file with PsExec over admin shares (local ART T1021.002 #3)"
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote command execution (local ART T1569.002 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Interactive RDP with harvested credentials to domain controllers and backup servers.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to a remote host with valid credentials (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Disables Windows Defender (GPO / Set-MpPreference / registry) before encryption, as documented in the playbook.",
+      "tools": [
+        "PowerShell",
+        "GPO"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8df440-51ec-4d53-bf83-899591c9b5d7",
+          "testNumber": 19,
+          "testName": "Tamper with Windows Defender ATP PowerShell",
+          "fidelity": "close",
+          "note": "Set-MpPreference tampering of Defender (catalogued under T1685, formerly T1562.001)"
+        },
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "close",
+          "note": "Defender disable via registry policy keys (local ART T1685 #21)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Rclone configured for MEGA copies file-share data before encryption (double extortion).",
+      "tools": [
+        "Rclone",
+        "MEGA"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Rclone exfiltration to MEGA (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies (vssadmin/WMI) to block recovery.",
+      "tools": [
+        "vssadmin",
+        "WMI"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "close",
+          "note": "Shadow copy deletion via WMI (local ART T1490 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Multi-threaded AES/ChaCha encryption of local drives and SMB shares; command-line modes allow network-only encryption.",
+      "tools": [
+        "Conti encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note to exercise ransomware-impact detections without real encryption (local ART T1486 #5)"
+        },
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "proxy",
+          "note": "Mass file rename with ransom note - generic encryption-impact proxy (local ART T1486 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

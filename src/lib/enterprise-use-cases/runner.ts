@@ -38,6 +38,7 @@ import { logEvent } from "@/lib/event-log";
 import { validateCoverage, type CoverageOutcome } from "./validate-coverage";
 import { runAgentStep, runShellStep, runUnsupportedStep } from "./stub-runners";
 import { runCaldera } from "./caldera-runner";
+import { isSafeHost, isSafeSshUser } from "@/lib/c2/url-guard";
 
 export type StepStatus = "ok" | "failure" | "stubbed" | "skipped";
 
@@ -115,6 +116,16 @@ async function sshExec(env: EnvironmentTarget, command: string, timeoutMs: numbe
       durationMs: 0, timedOut: false,
     };
   }
+  // Host-side option injection guard: hostname / sshUser come from the DB
+  // (operator-editable). A value beginning with "-" (e.g. "-oProxyCommand=…")
+  // would be parsed by ssh as an OPTION and execute on the DetectOps host, so
+  // validate strictly and terminate option parsing with "--" before the target.
+  if (!isSafeHost(env.hostname) || !isSafeSshUser(env.sshUser)) {
+    return { exitCode: -1, stdout: "", stderr: "env hostname or sshUser contains disallowed characters", durationMs: 0, timedOut: false };
+  }
+  if (env.sshKeyRef && (env.sshKeyRef.startsWith("-") || /[\r\n\0]/.test(env.sshKeyRef))) {
+    return { exitCode: -1, stdout: "", stderr: "env sshKeyRef is not a valid key path", durationMs: 0, timedOut: false };
+  }
   const args: string[] = [
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
@@ -123,7 +134,7 @@ async function sshExec(env: EnvironmentTarget, command: string, timeoutMs: numbe
   ];
   if (env.sshKeyRef) args.push("-i", env.sshKeyRef);
   if (env.port && env.port > 0) args.push("-p", String(env.port));
-  args.push(`${env.sshUser}@${env.hostname}`, command);
+  args.push("-l", env.sshUser, "--", env.hostname, command);
 
   const t0 = Date.now();
   return new Promise((resolve) => {

@@ -1,0 +1,563 @@
+{
+  "gang": "lynx",
+  "displayName": "Lynx",
+  "aliases": [
+    "INC Ransom rebrand"
+  ],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Successor/rebrand of INC Ransom (shares ~70% function similarity with INC code)",
+  "summary": "Lynx is a RaaS that appeared in July 2024 as the code successor of INC Ransom, with Windows and ESXi encryptors. Affiliates mostly use valid credentials: phished or brute-forced VPN accounts, SSL VPNs with permissive LDAP (any domain user can log in), RMM consoles without MFA and exposed RDP. Intrusions are hands-on and LOTL-heavy: SoftPerfect NetScan, look-alike domain admin accounts, NetExec, RDP to hypervisors and backup servers, 7-Zip + temp.sh exfiltration, then Veeam job deletion before running the encryptor.",
+  "uniqueTraits": [
+    "Initial access via SSL VPN with permissive LDAP and MFA-less RMM client accounts",
+    "Look-alike privileged accounts (e.g. 'administratr') added to Domain Admins and Group Policy Creator Owners",
+    "Exfiltration of 7-Zip archives to temp.sh; also MEGAsync/WinSCP/Rclone",
+    "Deletes Veeam Backup & Replication jobs from the console before deploying w.exe --mode fast",
+    "Encryptor enables SeTakeOwnershipPrivilege, kills sql/veeam/backup processes, can print the ransom note"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Lynx Ransomware: A Rebranding of INC Ransomware",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2024-10-10",
+      "url": "https://unit42.paloaltonetworks.com/inc-ransomware-rebrand-to-lynx/"
+    },
+    {
+      "id": "S2",
+      "title": "Cat's Got Your Files: Lynx Ransomware",
+      "publisher": "The DFIR Report",
+      "date": "2025-12-17",
+      "url": "https://thedfirreport.com/2025/12/17/cats-got-your-files-lynx-ransomware/"
+    },
+    {
+      "id": "S3",
+      "title": "New Name, Same Threat: How Lynx Ransomware Exploits Trusted Access",
+      "publisher": "Triskele Labs",
+      "date": "2026-07-31",
+      "url": "https://www.triskelelabs.com/resources/lynx"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Authenticates to SSL VPNs configured with permissive LDAP (any domain user allowed) or to RMM platforms whose client accounts lack MFA, using phished/brute-forced or IAB-supplied credentials.",
+      "tools": [
+        "SSL VPN",
+        "RMM portal"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no atomic that reproduces an external logon with stolen VPN/RDP credentials; validate with authentication-log analytics (impossible travel, no-MFA VPN logons)."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Single successful RDP logon (elevated token, no failed attempts) to an internet-exposed host with pre-obtained credentials.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no atomic that reproduces an external logon with stolen VPN/RDP credentials; validate with authentication-log analytics (impossible travel, no-MFA VPN logons)."
+    },
+    {
+      "order": 3,
+      "tactic": "discovery",
+      "techniqueId": "T1016",
+      "techniqueName": "System Network Configuration Discovery",
+      "procedure": "Runs ipconfig, route print, systeminfo and ping from cmd.exe on the beachhead.",
+      "tools": [
+        "cmd.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "970ab6a1-0157-4f3f-9a73-ec4166754b23",
+          "testNumber": 1,
+          "testName": "System Network Configuration Discovery on Windows",
+          "fidelity": "exact",
+          "note": "ipconfig/route/arp style network discovery"
+        },
+        {
+          "testGuid": "66703791-c902-4560-8770-42b8a91f7667",
+          "testNumber": 1,
+          "testName": "System Information Discovery",
+          "fidelity": "exact",
+          "note": "systeminfo"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Drops SoftPerfect Network Scanner with a licensed config embedding domain admin credentials, scanning all ranges/ports with share and workstation checks and launching mstsc.",
+      "tools": [
+        "SoftPerfect NetScan"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1136.002",
+      "techniqueName": "Domain Account",
+      "procedure": "On the DC creates look-alike accounts ('administratr' etc.) set to never expire and adds them to Domain Admins and Group Policy Creator Owners.",
+      "tools": [
+        "net",
+        "ADUC"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fcec2963-9951-4173-9bfa-98d8b7834e62",
+          "testNumber": 1,
+          "testName": "Create a new Windows domain admin user",
+          "fidelity": "exact",
+          "note": "Create a new domain admin user"
+        },
+        {
+          "testGuid": "a55a22e9-a3d3-42ce-bd48-2653adb8f7a9",
+          "testNumber": 2,
+          "testName": "Domain Account and Group Manipulate",
+          "fidelity": "close",
+          "note": "Domain account and group manipulation"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk as a service on the DC; affiliates also use Pulseway, DWAgent/DWService, MeshCentral and Cobalt Strike.",
+      "tools": [
+        "AnyDesk",
+        "Pulseway",
+        "DWAgent",
+        "MeshCentral",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Password Guessing",
+      "procedure": "Downloads NetExec via Edge and runs it across SMB/445 with domain admin credentials (password-spray style), reviewing smb.db results.",
+      "tools": [
+        "NetExec"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "close",
+          "note": "SMB credential brute force against AD users"
+        },
+        {
+          "testGuid": "90bc2e54-6c84-47a5-9439-0a2a92b4b175",
+          "testNumber": 1,
+          "testName": "Password Spray all Domain Users",
+          "fidelity": "close",
+          "note": "Password spray across domain users"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "LSASS Memory",
+      "procedure": "Affiliates dump LSASS with Mimikatz and use pass-the-hash.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation"
+        },
+        {
+          "testGuid": "ec23cef9-27d9-46e4-a68d-6f75f7b86908",
+          "testNumber": 1,
+          "testName": "Mimikatz Pass the Hash",
+          "fidelity": "close",
+          "note": "Mimikatz pass-the-hash"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.006",
+      "techniqueName": "DCSync",
+      "procedure": "NTDS/DCSync theft and Kerberoasting by affiliates.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "129efd28-8497-4c87-a1b0-73b9a870ca3e",
+          "testNumber": 1,
+          "testName": "DCSync (Active Directory)",
+          "fidelity": "exact",
+          "note": "DCSync"
+        },
+        {
+          "testGuid": "14625569-6def-4497-99ac-8e7817105b55",
+          "testNumber": 2,
+          "testName": "Rubeus kerberoast",
+          "fidelity": "close",
+          "note": "Rubeus kerberoast"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "Uses the beachhead as an RDP hub to hypervisors, DCs, backup and file servers, testing new accounts' rights.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "Service Execution",
+      "procedure": "RemCom/PsExec-style remote service execution by affiliates.",
+      "tools": [
+        "RemCom"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a5d8cdeb-be90-43a9-8b26-cc618deac1e0",
+          "testNumber": 5,
+          "testName": "Use RemCom to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "RemCom remote execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive via Utility",
+      "procedure": "Uses 7-Zip 'Add to archive' from Explorer on file-server folders, saving archives to the user's Desktop.",
+      "tools": [
+        "7-Zip"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "close",
+          "note": "7-Zip archive creation (password variant)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567",
+      "techniqueName": "Exfiltration Over Web Service",
+      "procedure": "Uploads archives individually to temp.sh (/upload); other affiliates use MEGAsync, WinSCP, CyberDuck and Rclone.",
+      "tools": [
+        "temp.sh",
+        "MEGAsync",
+        "WinSCP",
+        "Rclone"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c2e8ab6e-431e-460a-a2aa-3bc6a32022e3",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with HTTP POST to text storage sites - pastebin.com (Windows)",
+          "fidelity": "close",
+          "note": "HTTP POST upload to an anonymous paste/file service"
+        },
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Rclone to cloud storage"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes Veeam Backup & Replication jobs, tape and storage config from the console; encryptor deletes shadow copies.",
+      "tools": [
+        "Veeam console",
+        "Lynx encryptor"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "Shadow copy deletion"
+        },
+        {
+          "testGuid": "6b1dbaf6-cc8a-4ea6-891f-6058569653bf",
+          "testNumber": 6,
+          "testName": "Windows - Delete Backup Files",
+          "fidelity": "proxy",
+          "note": "Deletes backup files - stands in for Veeam job removal"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1134",
+      "techniqueName": "Access Token Manipulation",
+      "procedure": "Encryptor enables SeTakeOwnershipPrivilege via AdjustTokenPrivileges to take ownership of protected files.",
+      "tools": [
+        "Lynx encryptor"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "dbf4f5a9-b8e0-46a3-9841-9ad71247239e",
+          "testNumber": 1,
+          "testName": "Access Token Manipulation",
+          "fidelity": "proxy",
+          "note": "Token manipulation API use"
+        },
+        {
+          "testGuid": "98d34bb4-6e75-42ad-9c41-1dae7dc6a001",
+          "testNumber": 1,
+          "testName": "Take ownership using takeown utility",
+          "fidelity": "close",
+          "note": "takeown of protected files"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Terminates processes/services matching sql, veeam, backup, exchange etc. before encryption.",
+      "tools": [
+        "Lynx encryptor"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "net stop"
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "exact",
+          "note": "Kill process"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Clear Windows Event Logs",
+      "procedure": "Affiliates clear Windows event logs and delete tooling.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Copies w.exe to backup/file servers and runs w.exe --dir E:\\ --mode fast --verbose --noprint; AES/Curve25519 encryption with .lynx extension, wallpaper change and optional printing of the note.",
+      "tools": [
+        "w.exe (Lynx)"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop"
+        },
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "close",
+          "note": "Desktop wallpaper replacement"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

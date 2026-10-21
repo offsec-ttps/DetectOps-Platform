@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const result = await tick({ maxConcurrent: 2 });
   return NextResponse.json(result);
 }

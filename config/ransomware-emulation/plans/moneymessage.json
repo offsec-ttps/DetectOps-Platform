@@ -1,0 +1,276 @@
+{
+  "gang": "moneymessage",
+  "displayName": "Money Message",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "",
+  "summary": "Money Message is a double-extortion operation first reported in March-April 2023 with a C++ Windows encryptor and a Linux 'esxi' build. The one detailed public intrusion (Sophos X-Ops, August 2023) began with a single-factor VPN login, then disabled Defender through Group Policy, used PsExec to enable RDP, dumped the SAM with Impacket, and exfiltrated finance/HR shares with MEGAsync before encryption. No 2024-2026 TTP reporting was found, and current activity is unverified.",
+  "uniqueTraits": [
+    "Windows Defender real-time protection disabled domain-wide through a GPO",
+    "Encryptor config embeds domain credentials to encrypt network shares; files are not renamed and the note is C:\\money_message.log",
+    "Separate Linux 'esxi' payload that deletes virtual disks on ESXi hosts",
+    "MEGAsync used to exfiltrate data"
+  ],
+  "insufficientReporting": true,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Step by step through the Money Message ransomware",
+      "publisher": "Sophos X-Ops",
+      "date": "2023",
+      "url": "https://www.sophos.com/en-us/blog/step-by-step-through-the-money-message-ransomware"
+    },
+    {
+      "id": "S2",
+      "title": "Demystifying Money Message Ransomware",
+      "publisher": "Cyble Research & Intelligence Labs",
+      "date": "2023-04-06",
+      "url": "https://blog.cyble.com/2023/04/06/demystifying-money-message-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logs in through the victim's VPN, which used single-factor authentication, with valid credentials.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic reproduces VPN logon with valid credentials (local T1133 test is a Chrome VPN-extension check). Validate with VPN/IdP logon analytics and an MFA-coverage review."
+    },
+    {
+      "order": 2,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Domain or Tenant Policy Modification: Group Policy Modification",
+      "procedure": "Creates or modifies a Group Policy Object to turn off Windows Defender real-time protection across the domain.",
+      "tools": [
+        "Group Policy Management"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "close",
+          "note": "Modifies Group Policy settings from cmd (LockBit-style GPO abuse) (local ART T1484.001 #1)"
+        },
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "proxy",
+          "note": "Tampers with Windows Defender settings locally; covers the end-state of the GPO change (local ART T1685 #20)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "PsExec runs a batch script on remote hosts to enable the RDP port.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec runs a command on a remote host (local ART T1569.002 #2)"
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "Copies and executes a file with PsExec (local ART T1021.002 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "After RDP is enabled, the attacker moves between hosts over RDP.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "16bdbe52-371c-4ccf-b708-79fba61f1db4",
+          "testNumber": 70,
+          "testName": "Enable RDP via Registry (fDenyTSConnections)",
+          "fidelity": "close",
+          "note": "Enables RDP through the fDenyTSConnections registry value (the batch-script effect) (local ART T1112 #70)"
+        },
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP connection to a remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.002",
+      "techniqueName": "OS Credential Dumping: Security Account Manager",
+      "procedure": "Impacket secretsdump.py retrieves the SAM registry hive.",
+      "tools": [
+        "Impacket secretsdump"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5c2571d0-1572-416d-9676-812e64ca9f44",
+          "testNumber": 1,
+          "testName": "Registry dump of SAM, creds, and secrets",
+          "fidelity": "close",
+          "note": "reg save of SAM/SYSTEM/SECURITY hives, the same artefacts secretsdump reads remotely (local ART T1003.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "collection",
+      "techniqueId": "T1039",
+      "techniqueName": "Data from Network Shared Drive",
+      "procedure": "A compromised account browses Finance, Payroll, SalesReport and HR folders on a file server to collect data for extortion.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6ed67921-1774-44ba-bac6-adb51ed60660",
+          "testNumber": 1,
+          "testName": "Copy a sensitive File over Administrative share with copy",
+          "fidelity": "close",
+          "note": "Copies a sensitive file over an administrative share (local ART T1039 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "MEGAsync uploads the collected data to MEGA.",
+      "tools": [
+        "MEGAsync"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "Exfiltrates to MEGA with rclone; same destination, different client (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "windows.exe (C++, ChaCha + ECDH) uses an embedded JSON config (excluded folders, service/process kill list, domain credentials) to encrypt local files and network shares without renaming them, then writes C:\\money_message.log.",
+      "tools": [
+        "windows.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "impact",
+      "techniqueId": "T1561",
+      "techniqueName": "Disk Wipe",
+      "procedure": "On ESXi the operator copies the Linux 'esxi' build to /tmp, sets it to 777 and runs it; the payload deletes the virtual hard disks.",
+      "tools": [
+        "esxi (Linux build)"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1207ddff-f25b-41b3-aa0e-7c26d2b546d1",
+          "testNumber": 5,
+          "testName": "ESXi - Delete VM Snapshots",
+          "fidelity": "proxy",
+          "note": "Deletes ESXi VM snapshots (T1485); the closest local ESXi destructive test to deleting virtual disks (local ART T1485 #5)"
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "proxy",
+          "note": "Powers off VMs with vim-cmd, the usual precursor to ESXi disk deletion/encryption (local ART T1529 #15)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

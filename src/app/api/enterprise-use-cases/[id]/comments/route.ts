@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
@@ -15,6 +16,8 @@ const KINDS = new Set(["note", "review", "tuning", "hand-off", "escalation"]);
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const runId = sp.get("runId") || "";
   const where: Record<string, unknown> = { useCaseId: id };
@@ -33,6 +36,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
 
   const uc = await prisma.enterpriseUseCase.findUnique({ where: { id } });

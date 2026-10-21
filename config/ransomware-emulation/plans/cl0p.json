@@ -1,0 +1,516 @@
+{
+  "gang": "Cl0p",
+  "displayName": "Cl0p",
+  "aliases": [
+    "Clop",
+    "TA505",
+    "FIN11",
+    "Lace Tempest"
+  ],
+  "status": "active",
+  "activeSince": "2019",
+  "lineage": "Operated by the TA505/FIN11 cybercrime cluster",
+  "summary": "Cl0p began as a CryptoMix-derived encryptor deployed after TA505 phishing (Get2/SDBot/FlawedAmmyy/TrueBot) but since 2020 specialises in mass zero-day exploitation of managed file-transfer and ERP platforms (Accellion FTA, GoAnywhere, MOVEit, Cleo, Oracle E-Business Suite) for data-theft-only extortion. Web shells such as DEWMODE and LEMURLOOT pull data from the application database; encryption is now rare.",
+  "uniqueTraits": [
+    "Serial zero-day mass exploitation of file-transfer/ERP platforms: Accellion FTA (2020), GoAnywhere CVE-2023-0669, MOVEit CVE-2023-34362, Cleo CVE-2024-50623/CVE-2024-55956, Oracle EBS CVE-2025-61882",
+    "Purpose-built web shells (DEWMODE, LEMURLOOT human2.aspx) that query application databases",
+    "Encryption-less extortion via emails to executives and leak-site/torrent publication",
+    "Historical TA505 tooling: FlawedAmmyy RAT, SDBot, TrueBot, Cobalt Strike"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: CL0P Ransomware Gang Exploits CVE-2023-34362 MOVEit Vulnerability (AA23-158A)",
+      "publisher": "CISA",
+      "date": "2023-06-07",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-158a"
+    },
+    {
+      "id": "S2",
+      "title": "Clop (S0611)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/software/S0611/"
+    },
+    {
+      "id": "S3",
+      "title": "TA505 (G0092)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/groups/G0092/"
+    },
+    {
+      "id": "S4",
+      "title": "Zero-Day Vulnerability in MOVEit Transfer Exploited for Data Theft",
+      "publisher": "Mandiant",
+      "date": "2023-06-02",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/zero-day-moveit-data-theft"
+    },
+    {
+      "id": "S5",
+      "title": "Threat Advisory: Oh No Cleo! Cleo Software Actively Being Exploited in the Wild",
+      "publisher": "Huntress",
+      "date": "2024-12-09",
+      "url": "https://www.huntress.com/blog/threat-advisory-oh-no-cleo-cleo-software-actively-being-exploited-in-the-wild"
+    },
+    {
+      "id": "S6",
+      "title": "Cl0p exploits Oracle E-Business Suite zero-day in data theft, extortion campaign (CVE-2025-61882)",
+      "publisher": "Help Net Security",
+      "date": "2025-10-06",
+      "url": "https://www.helpnetsecurity.com/2025/10/06/cl0p-oracle-data-theft-extortion-cve-2025-61882/"
+    },
+    {
+      "id": "S7",
+      "title": "Addressing CL0P Extortion Campaign Targeting Oracle EBS CVE-2025-61882",
+      "publisher": "Cybereason",
+      "date": "2025-10-07",
+      "url": "https://www.cybereason.com/blog/oracle-ebs-extortion-cl0p"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Mass zero-day exploitation of MFT/ERP servers: Accellion FTA, GoAnywhere MFT CVE-2023-0669, MOVEit Transfer SQLi CVE-2023-34362, Cleo Harmony/VLTrader/LexiCom CVE-2024-50623 & CVE-2024-55956, Oracle E-Business Suite CVE-2025-61882 (BI Publisher/Concurrent Processing).",
+      "tools": [
+        "MFT/ERP zero-day exploits"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S5",
+        "S6",
+        "S7"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1190 exploit atomic (and plans never add exploit code); validate with perimeter/WAF/appliance log detections instead."
+    },
+    {
+      "order": 2,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "Drops application-specific web shells: DEWMODE (Accellion), LEMURLOOT human2.aspx (MOVEit) that authenticates via a header and dumps DB contents/Azure storage settings.",
+      "tools": [
+        "LEMURLOOT",
+        "DEWMODE"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "close",
+          "note": "Web shell written to an IIS webroot, as with LEMURLOOT on MOVEit (IIS/.aspx)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Historical TA505 large-scale malspam with macro documents/HTML attachments delivering Get2/SDBot/FlawedAmmyy loaders.",
+      "tools": [
+        "Get2",
+        "SDBot"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Macro-enabled attachment download."
+        },
+        {
+          "testGuid": "5202ee05-c420-4148-bf5e-fd7f7d24850c",
+          "testNumber": 9,
+          "testName": "Office Generic Payload Download",
+          "fidelity": "proxy",
+          "note": "Office document downloading a payload."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "PowerShell",
+      "procedure": "Cleo exploitation spawns PowerShell to fetch a Java-based loader (Malichus); historical intrusions used PowerShell download cradles for Cobalt Strike/TrueBot.",
+      "tools": [
+        "PowerShell",
+        "Malichus"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle as seen post-Cleo exploitation."
+        },
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "close",
+          "note": "PowerShell file download (ingress tool transfer)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "FlawedAmmyy RAT, built on leaked Ammyy Admin source, provided hands-on access in TA505 intrusions.",
+      "tools": [
+        "FlawedAmmyy"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0ae9e327-3251-465a-a53b-485d4e3f58fa",
+          "testNumber": 6,
+          "testName": "Ammyy Admin Software Execution",
+          "fidelity": "close",
+          "note": "Ammyy Admin execution; FlawedAmmyy is derived from Ammyy Admin."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "TrueBot and Cobalt Strike beacons over HTTP(S).",
+      "tools": [
+        "TrueBot",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "Suspicious user-agent HTTP C2 traffic from PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "AdFind and net commands enumerate AD before lateral movement (TA505/FIN11 intrusions).",
+      "tools": [
+        "AdFind",
+        "net"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user enumeration."
+        },
+        {
+          "testGuid": "a889f5be-2d54-4050-bd05-884578748bb4",
+          "testNumber": 10,
+          "testName": "Adfind - Enumerate Active Directory Computer Objects",
+          "fidelity": "exact",
+          "note": "AdFind computer enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz used to harvest credentials in TA505 intrusions.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "Cobalt Strike/SMB used to spread loaders and the encryptor.",
+      "tools": [
+        "Cobalt Strike",
+        "SMB"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "close",
+          "note": "Admin share mapping."
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "proxy",
+          "note": "PsExec copy-and-execute over SMB."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "collection",
+      "techniqueId": "T1005",
+      "techniqueName": "Data from Local System",
+      "procedure": "Web shells and follow-on tooling bulk-copy files and database records from the compromised MFT/ERP server.",
+      "tools": [
+        "LEMURLOOT"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S7"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d3d9af44-b8ad-4375-8b0a-4bff4b7e419c",
+          "testNumber": 1,
+          "testName": "Search files of interest and save them to a single zip file (Windows)",
+          "fidelity": "proxy",
+          "note": "Search and zip files of interest as a local-collection proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "Data pulled out through the web shell/HTTPS session from the exploited application.",
+      "tools": [
+        "LEMURLOOT",
+        "HTTPS"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "proxy",
+          "note": "Data exfiltration over the C2 channel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Historical Cl0p encryptor disables Windows Defender via registry and kills security processes (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "Clop encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "close",
+          "note": "Defender tamper via registry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Batch script resizes shadow storage then deletes shadow copies with vssadmin.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "da558b07-69ae-41b9-b9d4-4d98154a7049",
+          "testNumber": 10,
+          "testName": "Windows - vssadmin Resize Shadowstorage Volume",
+          "fidelity": "exact",
+          "note": "vssadmin Resize ShadowStorage, a Cl0p-characteristic step."
+        },
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops ~hundreds of services (backup, DB, AV) with net stop before encryption.",
+      "tools": [
+        "net stop"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "net stop of a service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Historical encryption with .Clop/.CIIp extensions; since 2021 MFT campaigns usually skip encryption.",
+      "tools": [
+        "Clop encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "File encryption telemetry proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1657",
+      "techniqueName": "Financial Theft",
+      "procedure": "Extortion emails sent (often from compromised third-party mailboxes) to executives claiming EBS/MFT data theft, followed by leak-site/torrent publication.",
+      "tools": [
+        "email extortion"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S6",
+        "S7",
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Extortion messaging is an off-host activity; no endpoint atomic exists. Validate via mail-gateway detections."
+    }
+  ]
+}

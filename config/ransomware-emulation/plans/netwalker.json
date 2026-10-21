@@ -1,0 +1,515 @@
+{
+  "gang": "netwalker",
+  "displayName": "NetWalker",
+  "aliases": [
+    "Mailto",
+    "Koko"
+  ],
+  "status": "disrupted",
+  "activeSince": "2019",
+  "lineage": "Originally named Mailto; disrupted by a coordinated US/Bulgarian law-enforcement action in January 2021 (leak site seized, affiliate arrested)",
+  "summary": "NetWalker (formerly Mailto) was a RaaS that surged in 2020, targeting healthcare, education and government. Early waves used COVID-themed phishing with VBS loaders; from April 2020 affiliates exploited VPN appliances (Pulse Secure CVE-2019-11510) and web UI components (Telerik CVE-2019-18935), or weak RDP passwords. The payload was often delivered filelessly by a PowerShell script that reflectively injected the DLL into explorer.exe. Sophos and The DFIR Report document SoftPerfect netscan, Mimikatz variants, ProcDump, TeamViewer/AnyDesk and PsExec-based mass deployment.",
+  "uniqueTraits": [
+    "Fileless delivery: PowerShell loader reflectively injects the NetWalker DLL into explorer.exe",
+    "Exploited Telerik UI CVE-2019-18935 and Pulse Secure CVE-2019-11510",
+    "Toolkit with Mimidogz/Mimikittenz Mimikatz variants and privilege-escalation exploits (CVE-2015-1701, CVE-2018-8453)",
+    "Encryption of all domain systems within ~1 hour via PsExec"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "FBI FLASH MI-000130-MW: Indicators Associated with Netwalker Ransomware",
+      "publisher": "FBI (via AHA)",
+      "date": "2020-07-28",
+      "url": "https://www.aha.org/fbi-tlp-alert/2020-08-04-tlp-white-fbi-flash-indicators-associated-netwalker-ransomware"
+    },
+    {
+      "id": "S2",
+      "title": "NetWalker (S0457)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-04-01",
+      "url": "https://attack.mitre.org/software/S0457/"
+    },
+    {
+      "id": "S3",
+      "title": "Netwalker Fileless Ransomware Injected via Reflective Loading",
+      "publisher": "Trend Micro",
+      "date": "2020-05-18",
+      "url": "https://www.trendmicro.com/en_us/research/20/e/netwalker-fileless-ransomware-injected-via-reflective-loading.html"
+    },
+    {
+      "id": "S4",
+      "title": "Netwalker ransomware tools give insight into threat actor",
+      "publisher": "Sophos",
+      "date": "2020-05-27",
+      "url": "https://www.sophos.com/en-us/blog/netwalker-ransomware-tools-give-insight-into-threat-actor"
+    },
+    {
+      "id": "S5",
+      "title": "NetWalker Ransomware in 1 Hour",
+      "publisher": "The DFIR Report",
+      "date": "2020-08-31",
+      "url": "https://thedfirreport.com/2020/08/31/netwalker-ransomware-in-1-hour/"
+    },
+    {
+      "id": "S6",
+      "title": "Take a \"NetWalk\" on the Wild Side",
+      "publisher": "McAfee ATR",
+      "date": "2020-08-03",
+      "url": "https://www.mcafee.com/blogs/other-blogs/mcafee-labs/take-a-netwalk-on-the-wild-side/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "COVID-19-themed phishing delivering a VBS loader (pre-April 2020).",
+      "tools": [
+        "VBS loader"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Phishing attachment download (local ART T1566.001 #1)"
+        },
+        {
+          "testGuid": "e8209d5f-e42d-45e6-9c2f-633ac4f1eefa",
+          "testNumber": 2,
+          "testName": "Encoded VBS code execution",
+          "fidelity": "close",
+          "note": "Encoded VBS execution, as in the loader (local ART T1059.005 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits Pulse Secure VPN CVE-2019-11510 and Telerik UI for ASP.NET CVE-2019-18935.",
+      "tools": [
+        "Pulse Secure exploit",
+        "Telerik UI exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; validate via vulnerability scanning/exploit range."
+    },
+    {
+      "order": 3,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP logons with weak/brute-forced passwords for initial access and lateral movement.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "Obfuscated PowerShell loader (base64/hex, XOR-encrypted payload) runs filelessly.",
+      "tools": [
+        "PowerShell loader"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fa050f5e-bc75-4230-af73-b6fd7852cd73",
+          "testNumber": 10,
+          "testName": "PowerShell Fileless Script Execution",
+          "fidelity": "close",
+          "note": "Fileless PowerShell script execution (local ART T1059.001 #10)"
+        },
+        {
+          "testGuid": "a50d5a97-2531-499e-a1de-5544c74432c6",
+          "testNumber": 2,
+          "testName": "Execute base64-encoded PowerShell",
+          "fidelity": "close",
+          "note": "Base64-encoded PowerShell (local ART T1027 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1620",
+      "techniqueName": "Reflective Code Loading",
+      "procedure": "Loader reflectively loads the NetWalker DLL from memory without touching disk.",
+      "tools": [
+        "Invoke-ReflectivePEInjection-style loader"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114c2b95-d992-4c03-8c38-fc58420a3eb5",
+          "testNumber": 2,
+          "testName": "Reflective PE Injection via PowerSploit",
+          "fidelity": "exact",
+          "note": "Reflective PE injection via PowerSploit (local ART T1620 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1055.001",
+      "techniqueName": "Process Injection: Dynamic-link Library Injection",
+      "procedure": "Injects the ransomware DLL into explorer.exe.",
+      "tools": [],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "74496461-11a1-4982-b439-4d87a550d254",
+          "testNumber": 1,
+          "testName": "Process Injection via mavinject.exe",
+          "fidelity": "close",
+          "note": "DLL injection via mavinject.exe (local ART T1055.001 #1)"
+        },
+        {
+          "testGuid": "69534efc-d5f5-4550-89e6-12c6457b9edd",
+          "testNumber": 9,
+          "testName": "Remote Process Injection with Go using CreateRemoteThread WinAPI",
+          "fidelity": "proxy",
+          "note": "CreateRemoteThread remote injection (local ART T1055 #9)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Cobalt Strike Beacon over HTTP(S) used for hands-on access.",
+      "tools": [
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "7a48f482-246f-4aeb-9837-21c271ebf244",
+          "testNumber": 4,
+          "testName": "Cobalt Strike post-exploitation pipe (4.2 and later)",
+          "fidelity": "proxy",
+          "note": "Cobalt Strike post-exploitation named pipe (local ART T1559 #4)"
+        },
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "Suspicious user-agent web C2 traffic (local ART T1071.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "SoftPerfect Network Scanner to find hosts with open SMB.",
+      "tools": [
+        "SoftPerfect netscan"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "Enumerate remote hosts with Netscan (local ART T1018 #22)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Toolkit includes exploits for CVE-2015-1701, CVE-2018-8453 and others.",
+      "tools": [
+        "LPE exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local T1068 tests are BYOVD/driver specific and do not reproduce win32k kernel exploits."
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "ProcDump of LSASS plus Mimikatz/Mimidogz/Mimikittenz.",
+      "tools": [
+        "ProcDump",
+        "Mimikatz",
+        "Mimikittenz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "exact",
+          "note": "ProcDump LSASS dump (local ART T1003.001 #1)"
+        },
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "PowerShell Mimikatz (local ART T1003.001 #10)"
+        },
+        {
+          "testGuid": "ec1d0b37-f659-4186-869f-31a554891611",
+          "testNumber": 12,
+          "testName": "WinPwn - Loot local Credentials - mimi-kittenz",
+          "fidelity": "close",
+          "note": "mimi-kittenz credential scraping (local ART T1555.003 #12)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "TeamViewer and AnyDesk found in the toolkit for remote access.",
+      "tools": [
+        "TeamViewer",
+        "AnyDesk"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8ca3b96d-8983-4a7f-b125-fc98cc0a2aa0",
+          "testNumber": 1,
+          "testName": "TeamViewer Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "TeamViewer (local ART T1219 #1)"
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk (local ART T1219 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "PsExec batch files push the PowerShell loader / payload to every domain-joined host.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote execution (local ART T1569.002 #2)"
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "PsExec copy-and-execute (local ART T1021.002 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Stolen data uploaded to a public file-sharing service before encryption.",
+      "tools": [
+        "file-sharing service"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "proxy",
+          "note": "Rclone to cloud storage - representative cloud-sharing exfil (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Terminates services and processes defined in its configuration.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "Stop service via sc (local ART T1489 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies (vssadmin) before encryption.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Salsa20 encryption of local and network drives with per-victim config and ransom note.",
+      "tools": [
+        "NetWalker encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop as a non-destructive encryption-impact proxy (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

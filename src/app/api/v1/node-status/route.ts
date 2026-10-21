@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
       status: node.status === "paused" ? "paused" : "online",
       lastSeen: new Date(),
       agentVersion: body.agent_version ? String(body.agent_version).slice(0, 60) : node.agentVersion,
-      currentRunId: body.current_run_id ? String(body.current_run_id) : null,
+      // Agent-reported value: bound it (it is only a display pointer; the
+      // authoritative claim lives on FleetOperation.claimedBy).
+      currentRunId: typeof body.current_run_id === "string" && body.current_run_id ? body.current_run_id.slice(0, 64) : null,
       hostStatus: JSON.stringify(host).slice(0, 4000),
     },
   });

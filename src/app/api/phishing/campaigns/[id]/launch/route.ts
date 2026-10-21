@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { logEvent } from "@/lib/event-log";
 import { inferSimulations } from "@/lib/detection-packs/infer-sims";
 import { materializeAdhoc } from "@/lib/modules/materialize";
@@ -28,6 +28,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (c.status !== "approved") return NextResponse.json({ error: `campaign must be approved before launch (is ${c.status})` }, { status: 409 });
   if (!environmentId) return NextResponse.json({ error: "environmentId required" }, { status: 400 });
+  const own = ownsOr404(auth, c.ownerId);
+  if (!own.ok) return own.response;
+  // Confused-deputy guard: the caller must own the environment being detonated against.
+  const env = await prisma.environmentTarget.findUnique({ where: { id: environmentId }, select: { ownerId: true } });
+  if (!env) return NextResponse.json({ error: "environment not found" }, { status: 404 });
+  const envOwn = ownsOr404(auth, env.ownerId);
+  if (!envOwn.ok) return envOwn.response;
 
   const techniques = (() => { try { return JSON.parse(c.techniques) as string[]; } catch { return []; } })();
   const drafts = await inferSimulations({ techniques, capPerFramework: 25, relevanceHint: `phishing ${c.name}`, multiPerTechnique: false });
@@ -46,7 +53,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const results = { status: out.status, stepCount: steps.length, mappedTechniques: covered, droppedTechniques: techniques.filter((t) => !covered.includes(t)), stepResults: out.stepResults, validationOutcome: out.validationOutcome };
     await prisma.phishingCampaign.update({ where: { id }, data: { status: "completed", runId: out.runId, results: JSON.stringify(results), completedAt: new Date() } });
     void logEvent({ category: "phishing" as any, action: "phishing.campaign.complete", actor: auth.user.email, status: out.status === "success" ? "ok" : "warn", targetType: "PhishingCampaign", targetId: id, message: `${c.name} → ${out.status}` });
-    return NextResponse.json({ ok: true, runId: out.runId, status: out.status, ...results });
+    return NextResponse.json({ ok: true, runId: out.runId, ...results });
   } catch (e: any) {
     await prisma.phishingCampaign.update({ where: { id }, data: { status: "approved" } }).catch(() => {});
     return NextResponse.json({ error: e?.message || String(e), code: e?.code }, { status: e?.code === "confirm_required" ? 409 : 500 });

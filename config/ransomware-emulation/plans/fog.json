@@ -1,0 +1,565 @@
+{
+  "gang": "FOG",
+  "displayName": "Fog",
+  "aliases": [
+    "Fog ransomware"
+  ],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Arctic Wolf tracks Fog as a variant rather than a single cohesive group; early intrusions overlapped with Akira targeting of SonicWall SSL VPN",
+  "summary": "Fog first surfaced in May 2024 against US education and recreation organisations, entering through compromised SSL VPN accounts (including SonicWall devices exposed to CVE-2024-40766) and later exploiting Veeam Backup & Replication CVE-2024-40711. Operators move fast: pass-the-hash to admin accounts, RDP to Hyper-V and Veeam servers, Veeam credential theft, Defender disabled, shadow copies deleted, and VMDK/backups encrypted, often within hours. In 2025 Fog campaigns added phishing with LNK-in-ZIP lures, the ktool BYOVD privilege-escalation utility (Intel iQVW64.sys) and unusual post-exploitation tooling (Syteca monitoring, GC2, Adaptix, Stowaway) in an Asian financial-sector intrusion.",
+  "uniqueTraits": [
+    "SonicWall SSL VPN account abuse (CVE-2024-40766 era) shared with Akira",
+    "Veeam Backup & Replication CVE-2024-40711 exploitation to create a local admin, plus Veeam-Get-Creds.ps1",
+    "ktool.exe BYOVD using the vulnerable Intel iQVW64.sys driver (CVE-2015-2291)",
+    "'DOGE'-themed lures and lootsubmit.ps1 geolocation via the Wigle API",
+    "Use of Syteca employee-monitoring software and GC2 (Google Sheets C2) in 2025"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Lost in the Fog: A New Ransomware Threat",
+      "publisher": "Arctic Wolf Labs",
+      "date": "2024-06-04",
+      "url": "https://arcticwolf.com/resources/blog/lost-in-the-fog-a-new-ransomware-threat"
+    },
+    {
+      "id": "S2",
+      "title": "Fog and Akira ransomware target corporate networks via SonicWall VPN flaws (reporting Arctic Wolf)",
+      "publisher": "TechNadu",
+      "date": "2024-10",
+      "url": "https://www.technadu.com/fog-and-akira-ransomware-targets-corporate-networks-via-sonicwall-vpns-flaws/553601/"
+    },
+    {
+      "id": "S3",
+      "title": "Akira and Fog ransomware now exploit critical Veeam RCE flaw (reporting Sophos X-Ops)",
+      "publisher": "BleepingComputer",
+      "date": "2024-10",
+      "url": "https://www.bleepingcomputer.com/news/security/akira-and-fog-ransomware-now-exploit-critical-veeam-rce-flaw/"
+    },
+    {
+      "id": "S4",
+      "title": "Fog Ransomware Concealed Within Binary Loaders Linking Themselves to DOGE",
+      "publisher": "Trend Micro",
+      "date": "2025-04",
+      "url": "https://www.trendmicro.com/en_th/research/25/d/fog-ransomware-concealed-within-binary-loaders-linking-themselve.html"
+    },
+    {
+      "id": "S5",
+      "title": "Fog ransomware attack on Asia financial org draws attention over use of employee monitoring software (reporting Symantec)",
+      "publisher": "The Record",
+      "date": "2025-06",
+      "url": "https://therecord.media/fog-ransomware-incident-asia-financial-org-employee-monitoring"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logs in to SSL VPN gateways (two vendors, notably SonicWall SSLVPN accounts exposed by CVE-2024-40766) with compromised credentials and no MFA.",
+      "tools": [
+        "SonicWall SSL VPN"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logon with stolen VPN/remote-access credentials has no local atomic; validate with VPN/IdP authentication telemetry (no MFA, unusual geo/ASN)."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "2025 campaigns send a 'Pay Adjustment' ZIP containing a malicious LNK that launches PowerShell.",
+      "tools": [
+        "LNK",
+        "ZIP"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "581d7521-9c4b-420e-9695-2aec5241167f",
+          "testNumber": 10,
+          "testName": "LNK Payload Download",
+          "fidelity": "close",
+          "note": "LNK-triggered payload download, matching the LNK-in-ZIP lure."
+        },
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "proxy",
+          "note": "Phishing attachment download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "stage1.ps1 downloads cwiper.exe (loader), ktool.exe, lootsubmit.ps1 and trackerjacker.ps1.",
+      "tools": [
+        "stage1.ps1"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "exact",
+          "note": "PowerShell file download of next-stage components."
+        },
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradle."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "ktool.exe drops the embedded vulnerable Intel network diagnostic driver iQVW64.sys to %TEMP% and abuses it (target PID + key) to elevate/kill processes.",
+      "tools": [
+        "ktool.exe",
+        "iQVW64.sys"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "exact",
+          "note": "Loads the same vulnerable Intel Ethernet diagnostics driver (iQVW64.sys, CVE-2015-2291)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1614",
+      "techniqueName": "System Location Discovery",
+      "procedure": "lootsubmit.ps1 collects IP/MAC/hardware details and geolocates the host via the Wigle API, posting results to a Netlify-hosted endpoint.",
+      "tools": [
+        "lootsubmit.ps1",
+        "Wigle API"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fe53e878-10a3-477b-963e-4367348f5af5",
+          "testNumber": 1,
+          "testName": "Get geolocation info through IP-Lookup services using curl Windows",
+          "fidelity": "close",
+          "note": "IP-lookup geolocation via curl from Windows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1497.001",
+      "techniqueName": "Virtualization/Sandbox Evasion: System Checks",
+      "procedure": "The loader checks hardware specs, registry keys, tick counts and MAC values to detect analysis environments.",
+      "tools": [
+        "cwiper.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "502a7dc4-9d6f-4d28-abf2-f0e84692562d",
+          "testNumber": 3,
+          "testName": "Detect Virtualization Environment (Windows)",
+          "fidelity": "close",
+          "note": "Virtualisation detection on Windows."
+        },
+        {
+          "testGuid": "4a41089a-48e0-47aa-82cb-5b81a463bc78",
+          "testNumber": 5,
+          "testName": "Detect Virtualization Environment via WMI Manufacturer/Model Listing (Windows)",
+          "fidelity": "close",
+          "note": "WMI manufacturer/model VM checks."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1136.001",
+      "techniqueName": "Create Account: Local Account",
+      "procedure": "Exploits Veeam Backup & Replication CVE-2024-40711 (URI on port 8000) to spawn net.exe and create a local administrator account.",
+      "tools": [
+        "Veeam CVE-2024-40711",
+        "net.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fda74566-a604-4581-a4cc-fbbe21d66559",
+          "testNumber": 8,
+          "testName": "Create a new Windows admin user",
+          "fidelity": "exact",
+          "note": "Creates a new local Windows admin user, the post-exploit action of CVE-2024-40711."
+        },
+        {
+          "testGuid": "6657864e-0323-4206-9344-ac9cd7265a4f",
+          "testNumber": 4,
+          "testName": "Create a new user in a command prompt",
+          "fidelity": "close",
+          "note": "net user account creation from cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "Runs Veeam-Get-Creds.ps1 to recover passwords from the Veeam Backup & Replication credentials manager.",
+      "tools": [
+        "Veeam-Get-Creds.ps1"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic reads the Veeam credential store; detect PowerShell access to the Veeam configuration database."
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "Dumps NTDS.dit for domain hashes.",
+      "tools": [
+        "ntdsutil / VSS"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "close",
+          "note": "ntdsutil NTDS dump."
+        },
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "close",
+          "note": "Copy NTDS.dit from a volume shadow copy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1550.002",
+      "techniqueName": "Use Alternate Authentication Material: Pass the Hash",
+      "procedure": "Pass-the-hash against administrator accounts, then RDP to Hyper-V and Veeam servers; credential stuffing also suspected.",
+      "tools": [
+        "pass-the-hash"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ec23cef9-27d9-46e4-a68d-6f75f7b86908",
+          "testNumber": 1,
+          "testName": "Mimikatz Pass the Hash",
+          "fidelity": "exact",
+          "note": "Mimikatz pass-the-hash."
+        },
+        {
+          "testGuid": "eb05b028-16c8-4ad8-adea-6f5b219da9a9",
+          "testNumber": 2,
+          "testName": "crackmapexec Pass the Hash",
+          "fidelity": "close",
+          "note": "crackmapexec pass-the-hash."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "SoftPerfect Network Scanner and Advanced Port Scanner enumerate hosts and services.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "Advanced Port Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Netscan host enumeration."
+        },
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "close",
+          "note": "Port scan with nmap."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "SharpShares v2.3 enumerates accessible network shares.",
+      "tools": [
+        "SharpShares"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1fa2a69-b0a2-4e8a-9112-529b00c19a41",
+          "testNumber": 11,
+          "testName": "Enumerate All Network Shares with SharpShares",
+          "fidelity": "exact",
+          "note": "Enumerate all network shares with SharpShares."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP to Windows servers running Hyper-V and Veeam.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to a remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1570",
+      "techniqueName": "Lateral Tool Transfer",
+      "procedure": "PsExec used for remote execution and to transfer tooling over admin shares.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copy and execute file with PsExec."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "PsExec remote command execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.001",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Disables Windows Defender on servers touched by the operators.",
+      "tools": [
+        "Set-MpPreference / registry"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Tamper with Windows Defender from cmd (catalogue ID T1685)."
+        },
+        {
+          "testGuid": "6b8df440-51ec-4d53-bf83-899591c9b5d7",
+          "testNumber": 19,
+          "testName": "Tamper with Windows Defender ATP PowerShell",
+          "fidelity": "close",
+          "note": "Tamper with Windows Defender via PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "command-and-control",
+      "techniqueId": "T1102",
+      "techniqueName": "Web Service",
+      "procedure": "2025 financial-sector intrusion used GC2 (C2 over Google Sheets/SharePoint), Adaptix C2, the Stowaway proxy and the Syteca employee-monitoring product; operators retained access after encryption.",
+      "tools": [
+        "GC2",
+        "Adaptix",
+        "Stowaway",
+        "Syteca"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic emulates Google Sheets/SharePoint-based C2 (GC2) or Syteca abuse; detect via proxy logs to Sheets API and unsanctioned monitoring-agent installs."
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "vssadmin.exe delete shadows /all /quiet; Veeam object-storage backups deleted.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows /all /quiet."
+        },
+        {
+          "testGuid": "6b1dbaf6-cc8a-4ea6-891f-6058569653bf",
+          "testNumber": 6,
+          "testName": "Windows - Delete Backup Files",
+          "fidelity": "close",
+          "note": "Delete backup files."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Prioritises VMDK files in VM storage; encrypted files renamed .FOG/.FLOCKED with readme.txt note (2025 notes mock DOGE).",
+      "tools": [
+        "Fog encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in for encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

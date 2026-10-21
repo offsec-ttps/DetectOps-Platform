@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth-guard";
 
 const SAR_API = process.env.SAR_API_URL || "http://localhost:4000";
 
@@ -49,7 +50,16 @@ const ALLOW: ReadonlyArray<{ method: string; pattern: RegExp }> = [
 // DETECTOPS_API_KEY). Browser-facing endpoints are unchanged.
 const SERVICE_ONLY = /^attack-range\/(revoke$|clients\/)/;
 
+// Spend money / grant network access on the cloud — admin only.
+const ADMIN_ONLY = /^attack-range\/(build|destroy|abort|share)$/;
+
+// Each segment is decoded by Next before we see it, so "%2e%2e" arrives as "..":
+// `[^/]+` in the allowlist would accept it and fetch() would then normalise
+// "templates/../x" to an UNLISTED upstream path. Require plain segments only.
+const SAFE_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+
 function isAllowed(method: string, path: string): boolean {
+  if (!path.split("/").every((s) => SAFE_SEGMENT.test(s))) return false;
   return ALLOW.some((r) => r.method === method && r.pattern.test(path));
 }
 
@@ -60,6 +70,11 @@ async function proxy(req: NextRequest, path: string) {
       { status: "error", message: `Path not allowed: ${method} ${path}` },
       { status: 403 },
     );
+  }
+
+  if (ADMIN_ONLY.test(path)) {
+    const auth = await requireRole("admin");
+    if (!auth.ok) return auth.response;
   }
 
   // Service-key gate for the LMS-driven lab-access endpoints.

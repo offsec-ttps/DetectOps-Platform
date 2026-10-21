@@ -1,0 +1,632 @@
+{
+  "gang": "blackbyte",
+  "displayName": "BlackByte",
+  "aliases": [
+    "Hecamede",
+    "BlackByte 2.0"
+  ],
+  "status": "active",
+  "activeSince": "2021",
+  "lineage": "Ransomware-as-a-service widely reported as an offshoot of Conti",
+  "summary": "BlackByte is a RaaS operation active since mid-2021 that has hit US critical infrastructure. Early intrusions exploited ProxyShell/ProxyLogon on Exchange and planted ASPX web shells; in 2024 Talos saw entry with valid, likely brute-forced, VPN credentials and abuse of the ESXi 'ESX Admins' authentication bypass (CVE-2024-37085) days after disclosure. The group stands out for its bring-your-own-vulnerable-driver EDR blinding (RTCore64.sys, DBUtil_2_3.sys, zamguard64.sys, gdrv.sys) and its custom ExByte exfiltration tool that uploads to MEGA. Its wormable encryptor spreads with embedded domain credentials, and Talos assesses that only 20–30% of victims ever appear on its leak site.",
+  "uniqueTraits": [
+    "BYOVD EDR blinding: RTCore64.sys (CVE-2019-16098) loaded as service RABAsSaa to zero kernel callbacks; 2024 builds drop four drivers (RtCore64, DBUtil_2_3, zamguard64, gdrv)",
+    "Exploited CVE-2024-37085 by creating the AD group 'ESX Admins' within days of disclosure",
+    "ExByte: Go-based exfiltration tool that uploads to MEGA using an obfuscated data.txt credential file",
+    "Signature registry changes: LocalAccountTokenFilterPolicy=1, EnableLinkedConnections=1 and LongPathsEnabled, plus a Defender '*.exe' extension exclusion",
+    "vssadmin resize shadowstorage 401MB, then UNBOUNDED; wordpad /p print-bombing of the ransom note; wormable SMB/PsExec self-propagation with hard-coded credentials"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Indicators of Compromise Associated with BlackByte Ransomware (Joint CSA)",
+      "publisher": "FBI / US Secret Service",
+      "date": "2022-02-11",
+      "url": "https://www.ic3.gov/CSA/2022/220211.pdf"
+    },
+    {
+      "id": "S2",
+      "title": "BlackByte Ransomware Gang Adds Bring-Your-Own-Driver Technique (Remove All the Callbacks: RTCore64.sys)",
+      "publisher": "Sophos",
+      "date": "2022-10-04",
+      "url": "https://www.sophos.com/en-us/press/press-releases/2022/10/blackbyte-ransomware-gang-adds-bring-your-own-driver-technique"
+    },
+    {
+      "id": "S3",
+      "title": "Exbyte: BlackByte Ransomware Attackers Deploy New Exfiltration Tool",
+      "publisher": "Symantec (Broadcom)",
+      "date": "2022-10-21",
+      "url": "https://www.security.com/threat-intelligence/blackbyte-exbyte-ransomware"
+    },
+    {
+      "id": "S4",
+      "title": "The five-day job: A BlackByte ransomware intrusion case study",
+      "publisher": "Microsoft Incident Response",
+      "date": "2023-07-06",
+      "url": "https://www.microsoft.com/en-us/security/blog/2023/07/06/the-five-day-job-a-blackbyte-ransomware-intrusion-case-study/"
+    },
+    {
+      "id": "S5",
+      "title": "BlackByte blends tried-and-true tradecraft with newly disclosed vulnerabilities to support ongoing attacks",
+      "publisher": "Cisco Talos",
+      "date": "2024-08-28",
+      "url": "https://blog.talosintelligence.com/blackbyte-blends-tried-and-true-tradecraft-with-newly-disclosed-vulnerabilities-to-support-ongoing-attacks"
+    },
+    {
+      "id": "S6",
+      "title": "BlackByte (G1043)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024",
+      "url": "https://attack.mitre.org/groups/G1043/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits ProxyShell (CVE-2021-34473, CVE-2021-34523, CVE-2021-31207) and ProxyLogon on internet-facing Exchange. It then forges an Exchange PowerShell backend token to impersonate domain admins.",
+      "tools": [
+        "ProxyShell exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic exploits Exchange ProxyShell or ProxyLogon. Validate with IIS/Exchange logs (autodiscover SSRF patterns) and with the follow-on web-shell step."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "2024: logs in to the VPN with a valid account that has a basic naming convention and a weak password, likely brute-forced through internet scanning, and the VPN does not enforce MFA.",
+      "tools": [
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S5",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Brute force against the VPN appliance happens at the perimeter, and there is no endpoint atomic for it. Validate with VPN authentication-failure and success-after-failure analytics instead."
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1505.003",
+      "techniqueName": "Server Software Component: Web Shell",
+      "procedure": "Uses New-MailboxExportRequest to write ASPX web shells under the Exchange OWA auth directories, and uses them to drop Cobalt Strike.",
+      "tools": [
+        "ASPX web shell",
+        "New-MailboxExportRequest"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0a2ce662-1efa-496f-a472-2fe7b080db16",
+          "testNumber": 1,
+          "testName": "Web Shell Written to Disk",
+          "fidelity": "close",
+          "note": "Writes a web shell into a web-server directory. It exercises the file-write detection that the Exchange web-shell drop triggers."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Downloads a Cobalt Strike beacon (sys.exe) from public file-sharing sites such as temp[.]sh.",
+      "tools": [
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "proxy",
+          "note": "Downloads a file with PowerShell."
+        },
+        {
+          "testGuid": "2b080b99-0deb-4d51-af0f-833d37c4ca6a",
+          "testNumber": 18,
+          "testName": "Curl Download File",
+          "fidelity": "proxy",
+          "note": "Downloads a file with curl."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys",
+      "procedure": "Creates an HKCU Run value named 'MsEdgeMsE' that loads the api-msvc.dll backdoor through rundll32 from Downloads, C:\\temp or C:\\system\\test.",
+      "tools": [
+        "api-msvc.dll",
+        "rundll32"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "close",
+          "note": "Creates a Run key value that launches a payload."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk as a service from several paths and logs in through Tor and Mullvad exit IPs. In 2024 it used the victim's own authorised remote-access tooling instead.",
+      "tools": [
+        "AnyDesk"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "Drops and runs AnyDesk."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Runs NetScan (renamed netscan.exe or netapp.exe) for network enumeration, and AdFind for AD account and trust discovery.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "AdFind"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "Enumerates remote hosts with NetScan."
+        },
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "Enumerates AD user objects with AdFind."
+        },
+        {
+          "testGuid": "15fe436d-e771-4ff3-b655-2dca9ba52834",
+          "testNumber": 5,
+          "testName": "Adfind - Enumerate Active Directory Trusts",
+          "fidelity": "exact",
+          "note": "Enumerates AD trusts with AdFind."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Dumps credentials with Mimikatz (mimikatz.log artifact) and Cobalt Strike to obtain domain-admin credentials.",
+      "tools": [
+        "Mimikatz",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Runs Mimikatz against LSASS."
+        },
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "In-memory PowerShell Mimikatz."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1098",
+      "techniqueName": "Account Manipulation",
+      "procedure": "With domain-admin access it joins ESXi hosts to AD through vCenter, then creates an AD group 'ESX Admins' and adds accounts to it. This exploits CVE-2024-37085 to get full ESXi admin. It also creates privileged domain accounts.",
+      "tools": [
+        "Active Directory",
+        "vCenter"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a55a22e9-a3d3-42ce-bd48-2653adb8f7a9",
+          "testNumber": 2,
+          "testName": "Domain Account and Group Manipulate",
+          "fidelity": "close",
+          "note": "Creates and manipulates a domain group and its membership, the AD-side change behind CVE-2024-37085. Run it with the group name 'ESX Admins' for full fidelity."
+        },
+        {
+          "testGuid": "5a3497a4-1568-4663-b12a-d4a5ed70c7d7",
+          "testNumber": 3,
+          "testName": "Create a new Domain Account using PowerShell",
+          "fidelity": "close",
+          "note": "Creates a new domain account with PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation (BYOVD)",
+      "procedure": "Loads the vulnerable MSI Afterburner driver RTCore64.sys (CVE-2019-16098) through a service named RABAsSaa and zeroes kernel callbacks and ETW to blind more than 1,000 security drivers. 2024 builds drop four drivers (RtCore64.sys, DBUtil_2_3.sys, zamguard64.sys, gdrv.sys) with random 8-character names.",
+      "tools": [
+        "RTCore64.sys",
+        "DBUtil_2_3.sys",
+        "zamguard64.sys",
+        "gdrv.sys"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "close",
+          "note": "Loads a known-vulnerable signed driver (iqvw64e.sys) as a kernel service, the same BYOVD service-load pattern with a different driver."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "proxy",
+          "note": "Kills protected AV processes through a signed driver with Backstab."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Disables Defender through the registry and adds a '*.exe' extension exclusion. It also stops the Defender service where tamper protection is off, uninstalls EDR on key hosts and disables Raccine.",
+      "tools": [
+        "reg.exe",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "315f4be6-2240-4552-b3e1-d1047f5eecea",
+          "testNumber": 27,
+          "testName": "Tamper with Windows Defender Evade Scanning -Extension",
+          "fidelity": "exact",
+          "note": "Adds a Defender extension exclusion, like the '*.exe' exclusion."
+        },
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "close",
+          "note": "Disables Defender through registry values."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Sets LocalAccountTokenFilterPolicy=1, EnableLinkedConnections=1 and LongPathsEnabled so remote execution and long-path encryption work across the network.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4f4e2f9f-6209-4fcf-9b15-3b7455706f5b",
+          "testNumber": 8,
+          "testName": "BlackByte Ransomware Registry Changes - CMD",
+          "fidelity": "exact",
+          "note": "Applies the BlackByte registry changes from cmd."
+        },
+        {
+          "testGuid": "0b79c06f-c788-44a2-8630-d69051f1123d",
+          "testNumber": 9,
+          "testName": "BlackByte Ransomware Registry Changes - Powershell",
+          "fidelity": "exact",
+          "note": "Applies the BlackByte registry changes from PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1686",
+      "techniqueName": "Disable or Modify System Firewall",
+      "procedure": "Turns off Windows Firewall with netsh and enables the File and Printer Sharing and Network Discovery rule groups for remote discovery.",
+      "tools": [
+        "netsh"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "91f348e6-3760-4997-a93b-2ceee7f254ee",
+          "testNumber": 22,
+          "testName": "Blackbit - Disable Windows Firewall using netsh firewall",
+          "fidelity": "exact",
+          "note": "Turns off the firewall with 'netsh advfirewall set allprofiles state off'."
+        },
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "Opens SMB and RDP through the firewall."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.006",
+      "techniqueName": "Indicator Removal: Timestomp",
+      "procedure": "Sets encrypted files and the ReadMe to 2000-01-01. The binary deletes itself with a ping delay, fsutil zeroing and del, and the 2024 build deletes taskmgr/perfmon/resmon.",
+      "tools": [
+        "BlackByte encryptor",
+        "fsutil"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d7512c33-3a75-4806-9893-69abc3ccdd43",
+          "testNumber": 8,
+          "testName": "Windows - Timestomp a File",
+          "fidelity": "close",
+          "note": "Timestomps a file."
+        },
+        {
+          "testGuid": "b4115c7a-0e92-47f0-a61e-17e7218b2435",
+          "testNumber": 1,
+          "testName": "Indicator Removal using FSUtil",
+          "fidelity": "close",
+          "note": "Removes indicators with fsutil, as in the self-delete routine."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "The wormable encryptor installs itself as a service and spreads over SMB/NTLM using victim credentials compiled into the binary. With -a, BlackByte 2.0 uses a UPX-packed PsExec to push itself to hosts.",
+      "tools": [
+        "PsExec",
+        "BlackByte encryptor"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "Copies a payload over an admin share and runs it with PsExec."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "Runs a remote command with PsExec."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "ExByte, a Go tool sometimes disguised as explorer.exe or atieclxx.exe, catalogues target file extensions into a log, decrypts MEGA credentials from data.txt and uploads data through the MEGA API. Files have also been sent to anonymfiles/file.io.",
+      "tools": [
+        "ExByte",
+        "MEGA"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S3",
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "proxy",
+          "note": "Uploads to MEGA with rclone instead of ExByte. The destination is the same, so it exercises the MEGA egress analytics."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "For each drive, runs 'vssadmin resize shadowstorage /maxsize=401MB' then '/maxsize=unbounded' to purge shadow copies, and deletes shadow copies through WMI.",
+      "tools": [
+        "vssadmin",
+        "WMI"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "da558b07-69ae-41b9-b9d4-4d98154a7049",
+          "testNumber": 10,
+          "testName": "Windows - vssadmin Resize Shadowstorage Volume",
+          "fidelity": "exact",
+          "note": "vssadmin resize shadowstorage."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "close",
+          "note": "Shadow-copy deletion through WMI."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts local, mapped and network-share data (extensions .blackbyte, later .blackbytent_h) and leaves a ransom note in every encrypted directory. It also 'print-bombs' the note with 'wordpad.exe /p' on connected printers.",
+      "tools": [
+        "BlackByte encryptor",
+        "wordpad.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b2903ac-8f36-450d-9ad5-b220e8a2dcb9",
+          "testNumber": 4,
+          "testName": "Simulate BlackByte Ransomware Print Bombing",
+          "fidelity": "exact",
+          "note": "Simulates BlackByte print-bombing of the ransom note."
+        },
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact. The encryptor itself is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

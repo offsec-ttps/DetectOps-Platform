@@ -20,7 +20,8 @@ function j<T>(s: string, fb: T): T { try { return JSON.parse(s) as T; } catch { 
 export async function GET() {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  const rows = await prisma.phishingCampaign.findMany({ orderBy: { updatedAt: "desc" }, take: 200 });
+  const scope = auth.enforced && auth.user.role !== "admin" ? { ownerId: auth.user.id } : {};
+  const rows = await prisma.phishingCampaign.findMany({ where: scope, orderBy: { updatedAt: "desc" }, take: 200 });
   return NextResponse.json({
     items: rows.map((r) => ({
       id: r.id, name: r.name, mode: r.mode, status: r.status, techniques: j<string[]>(r.techniques, []),

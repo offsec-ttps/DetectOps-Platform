@@ -1,0 +1,620 @@
+{
+  "gang": "Akira",
+  "displayName": "Akira",
+  "aliases": [
+    "Storm-1567",
+    "Howling Scorpius",
+    "Gold Sahara",
+    "Punk Spider"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Code and personnel overlap with Conti; Megazord (Rust) and Akira_v2 (Linux/ESXi) variants",
+  "summary": "Akira targets SMBs and critical infrastructure, overwhelmingly entering through VPN appliances lacking MFA: Cisco ASA/FTD (CVE-2020-3259, CVE-2023-20269) and SonicWall SSL VPN (CVE-2024-40766, 2024-2025 waves). Operators create domain accounts, Kerberoast, dump LSASS via comsvcs, steal Veeam credentials, BYOVD to kill Defender, tunnel with ngrok, exfiltrate via WinRAR/FileZilla/WinSCP/rclone, then encrypt Windows, ESXi, Hyper-V and (2025) Nutanix AHV workloads.",
+  "uniqueTraits": [
+    "VPN-without-MFA entry: Cisco ASA/FTD CVE-2020-3259/CVE-2023-20269, SonicWall CVE-2024-40766",
+    "Veeam Backup & Replication credential theft (CVE-2023-27532 / CVE-2024-40711)",
+    "BYOVD with ThrottleStop rwdrv.sys + hlpdrv.sys (2025) and Zemana driver via PowerTool",
+    "Attaching domain controller virtual disks to a rogue VM to steal NTDS.dit",
+    "Hypervisor targeting: ESXi, Hyper-V and Nutanix AHV encryption"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Akira Ransomware (AA24-109A, updated 2025-11-13)",
+      "publisher": "CISA",
+      "date": "2025-11-13",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-109a"
+    },
+    {
+      "id": "S2",
+      "title": "Joint CSA: #StopRansomware Akira Ransomware (updated PDF)",
+      "publisher": "FBI IC3",
+      "date": "2025-11-13",
+      "url": "https://www.ic3.gov/CSA/2025/251113.pdf"
+    },
+    {
+      "id": "S3",
+      "title": "Akira (G1024)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2025-04-15",
+      "url": "https://attack.mitre.org/groups/G1024/"
+    },
+    {
+      "id": "S4",
+      "title": "Arctic Wolf Observes Akira Ransomware Campaign Targeting SonicWall SSLVPN Accounts",
+      "publisher": "Arctic Wolf",
+      "date": "2024-09-06",
+      "url": "https://arcticwolf.com/resources/blog/arctic-wolf-observes-akira-ransomware-campaign-targeting-sonicwall-sslvpn-accounts/"
+    },
+    {
+      "id": "S5",
+      "title": "Huntress Threat Advisory: Active Exploitation of SonicWall VPNs",
+      "publisher": "Huntress",
+      "date": "2025-08-01",
+      "url": "https://www.huntress.com/blog/exploitation-of-sonicwall-vpn"
+    },
+    {
+      "id": "S6",
+      "title": "Akira Ransomware Uses Intel CPU Tool to Kill Microsoft Defender (summarising GuidePoint research)",
+      "publisher": "TMCnet",
+      "date": "2025-08-06",
+      "url": "https://blog.tmcnet.com/blog/rich-tehrani/security/akira-ransomware-uses-intel-cpu-tool-to-kill-microsoft-defender.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logs into Cisco ASA/FTD AnyConnect and SonicWall SSL VPN accounts lacking MFA, exploiting CVE-2020-3259, CVE-2023-20269 and SonicWall CVE-2024-40766 (2024-2025 waves, sometimes bypassing MFA with stolen OTP seeds).",
+      "tools": [
+        "Cisco AnyConnect",
+        "SonicWall SSLVPN"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No VPN-appliance exploitation/login atomic in catalogue; validate with VPN authentication logs (geo-anomalous logins, VPS ASN sources)."
+    },
+    {
+      "order": 2,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.003",
+      "techniqueName": "Brute Force: Password Spraying",
+      "procedure": "Brute force/password spraying of VPN and domain accounts (CVE-2023-20269 enables ASA brute force).",
+      "tools": [
+        "brute force"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "263ae743-515f-4786-ac7d-41ef3a0d4b2b",
+          "testNumber": 2,
+          "testName": "Password Spray (DomainPasswordSpray)",
+          "fidelity": "proxy",
+          "note": "Domain password spray; VPN-side spraying is not reproducible in a Windows lab."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1136.002",
+      "techniqueName": "Create Account: Domain Account",
+      "procedure": "Creates new domain accounts (e.g. 'itadm') and adds them to privileged groups.",
+      "tools": [
+        "net user"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5a3497a4-1568-4663-b12a-d4a5ed70c7d7",
+          "testNumber": 3,
+          "testName": "Create a new Domain Account using PowerShell",
+          "fidelity": "close",
+          "note": "Domain account creation."
+        },
+        {
+          "testGuid": "a55a22e9-a3d3-42ce-bd48-2653adb8f7a9",
+          "testNumber": 2,
+          "testName": "Domain Account and Group Manipulate",
+          "fidelity": "close",
+          "note": "Add account to privileged domain group."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "Advanced IP Scanner, SoftPerfect NetScan, AdFind and nltest for network and domain discovery.",
+      "tools": [
+        "Advanced IP Scanner",
+        "SoftPerfect NetScan",
+        "AdFind",
+        "nltest"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect netscan."
+        },
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "nltest domain-trust discovery."
+        },
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "exact",
+          "note": "AdFind user enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "credential-access",
+      "techniqueId": "T1558.003",
+      "techniqueName": "Steal or Forge Kerberos Tickets: Kerberoasting",
+      "procedure": "Kerberoasting of service accounts.",
+      "tools": [
+        "Rubeus"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3f987809-3681-43c8-bcd8-b3ff3a28533a",
+          "testNumber": 1,
+          "testName": "Request for service tickets",
+          "fidelity": "close",
+          "note": "Service ticket requests for SPN accounts."
+        },
+        {
+          "testGuid": "14625569-6def-4497-99ac-8e7817105b55",
+          "testNumber": 2,
+          "testName": "Rubeus kerberoast",
+          "fidelity": "close",
+          "note": "Rubeus kerberoast."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "LSASS dumped with rundll32 comsvcs.dll MiniDump; Mimikatz and LaZagne also used.",
+      "tools": [
+        "comsvcs.dll",
+        "Mimikatz",
+        "LaZagne"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "exact",
+          "note": "comsvcs.dll MiniDump of LSASS, as cited by CISA."
+        },
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "close",
+          "note": "Mimikatz."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "Extracts credentials stored in Veeam Backup & Replication (CVE-2023-27532, CVE-2024-40711) to reach backups and hypervisors.",
+      "tools": [
+        "Veeam exploit/scripts"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No Veeam credential-extraction atomic in catalogue; validate with Veeam DB/service-account access detections."
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "Dumps NTDS.dit via ntdsutil/VSS; in 2025 attached domain controller virtual disks to a newly created VM to copy NTDS.dit and SYSTEM hive offline.",
+      "tools": [
+        "ntdsutil",
+        "hypervisor console"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "exact",
+          "note": "ntdsutil NTDS dump."
+        },
+        {
+          "testGuid": "dcebead7-6c28-4b4b-bf3c-79deb1b1fc7f",
+          "testNumber": 1,
+          "testName": "Create Volume Shadow Copy with vssadmin",
+          "fidelity": "close",
+          "note": "vssadmin shadow copy creation for NTDS extraction."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "BYOVD: ThrottleStop rwdrv.sys registered as a service plus hlpdrv.sys to disable Defender (2025); earlier, Zemana AntiMalware driver loaded via PowerTool to kill AV.",
+      "tools": [
+        "rwdrv.sys",
+        "hlpdrv.sys",
+        "PowerTool",
+        "zamguard64.sys"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S6",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "close",
+          "note": "Vulnerable signed driver load (BYOVD)."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "close",
+          "note": "Driver-assisted protected-process kill (Backstab)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "hlpdrv.sys / scripts set DisableAntiSpyware and tamper with Defender (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "hlpdrv.sys",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S6",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "exact",
+          "note": "Defender tamper via registry (DisableAntiSpyware)."
+        },
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Defender tamper via command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "AnyDesk, RustDesk, MobaXterm and RDP for persistent remote access.",
+      "tools": [
+        "AnyDesk",
+        "RustDesk",
+        "MobaXterm"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk."
+        },
+        {
+          "testGuid": "f1641ba9-919a-4323-b74f-33372333bf0e",
+          "testNumber": 12,
+          "testName": "RustDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "RustDesk."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Ngrok tunnels to reach internal hosts.",
+      "tools": [
+        "ngrok"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "ngrok execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP with harvested credentials; WMI for remote execution.",
+      "tools": [
+        "RDP",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host."
+        },
+        {
+          "testGuid": "9c8ef159-c666-472f-9874-90c8d60d136b",
+          "testNumber": 6,
+          "testName": "WMI Execute Remote Process",
+          "fidelity": "close",
+          "note": "WMI remote process execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "WinRAR archives data before exfiltration.",
+      "tools": [
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "exact",
+          "note": "Rar compression."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "Exfiltration with FileZilla, WinSCP and rclone.",
+      "tools": [
+        "rclone",
+        "FileZilla",
+        "WinSCP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone to cloud storage."
+        },
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "FTP exfiltration via rclone (FileZilla-like FTP)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies with PowerShell: Get-WmiObject Win32_Shadowcopy | Remove-WmiObject.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "39a295ca-7059-4a88-86f6-09556c1211e7",
+          "testNumber": 5,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI with PowerShell",
+          "fidelity": "exact",
+          "note": "WMI shadow-copy deletion via PowerShell, the exact command in AA24-109A."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "ChaCha20/RSA hybrid encryption with .akira (Megazord: .powerranges/.akiranew) extensions and akira_readme.txt notes; partial-encryption options.",
+      "tools": [
+        "Akira",
+        "Megazord",
+        "Akira_v2"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "exact",
+          "note": "ART Akira test drops .akira files and ransom note."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Akira_v2 Linux/ESXi locker stops VMs and encrypts VMDKs; 2025 update adds Hyper-V and Nutanix AHV VM disk encryption.",
+      "tools": [
+        "Akira_v2"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "vim-cmd VM power-off on ESXi."
+        },
+        {
+          "testGuid": "2040405c-eea6-4c1c-aef3-c2acc430fac9",
+          "testNumber": 31,
+          "testName": "ESXi - VM Discovery using ESXCLI",
+          "fidelity": "close",
+          "note": "ESXi VM discovery via esxcli."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

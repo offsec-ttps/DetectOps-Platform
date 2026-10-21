@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { validateUseCase } from "@/lib/enterprise-use-cases/validate";
 import { computeSiemCompat } from "@/lib/enterprise-use-cases/siem-compat";
@@ -34,6 +35,8 @@ function pickBody(choice: string, originals: { original: string; recommended: st
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
 
   const choice = String(body.choice || "");

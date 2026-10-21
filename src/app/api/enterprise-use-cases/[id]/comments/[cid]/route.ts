@@ -3,12 +3,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string; cid: string }> }) {
   const { id, cid } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const row = await prisma.enterpriseUseCaseComment.findUnique({ where: { id: cid } });
   if (!row || row.useCaseId !== id) return NextResponse.json({ error: "not found" }, { status: 404 });
 

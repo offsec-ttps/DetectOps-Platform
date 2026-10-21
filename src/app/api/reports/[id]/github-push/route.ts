@@ -11,6 +11,7 @@ import {
   generateIssueBody,
 } from "@/lib/github";
 import { logEvent } from "@/lib/event-log";
+import { isSafeSegment } from "@/lib/build-forge/validate";
 import { getSessionUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -35,6 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const owner: string = body.owner || await getDefaultGitHubOwner();
   if (!owner) {
     return NextResponse.json({ error: "Could not determine a GitHub owner from the integration. Add an owner/org, or check the token." }, { status: 400 });
+  }
+  // owner/repoName are interpolated into GitHub API paths with the server token.
+  if (!isSafeSegment(owner) || !isSafeSegment(repoName)) {
+    return NextResponse.json({ error: "invalid owner or repoName" }, { status: 400 });
   }
 
   // Fetch report

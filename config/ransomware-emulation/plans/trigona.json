@@ -1,0 +1,545 @@
+{
+  "gang": "trigona",
+  "displayName": "Trigona",
+  "aliases": [],
+  "status": "disrupted",
+  "activeSince": "2022",
+  "lineage": "TTP overlap with CryLock (suspected successor, per Unit 42); infrastructure wiped and leak site defaced by the Ukrainian Cyber Alliance in October 2023",
+  "summary": "Trigona was a 2022-2023 double-extortion operation that got in by brute-forcing poorly managed MS-SQL servers (then loading a CLR shell inside SQL Server), exploiting ManageEngine CVE-2021-40539, or buying access from brokers. Operators created backdoor admin accounts, set Sticky Keys debugger backdoors, opened RDP, dumped credentials with Mimikatz, scanned with NetScan/Advanced Port Scanner and used Splashtop to spread tools. A turnoff.bat script stopped 100+ services, cleared logs and deleted shadow copies before AES encryption with a .\\_locked extension and an HTA ransom note. The Ukrainian Cyber Alliance wiped its servers in October 2023, and no reliable 2024-2026 TTP reporting was found.",
+  "uniqueTraits": [
+    "CLR assembly shell loaded inside MS-SQL (sqlservr.exe drops svcservice.exe) with MS16-032 privilege escalation",
+    "Sticky Keys debugger backdoor on sethc/utilman/Magnify/HelpPane (DC4.exe)",
+    "Splashtop used for lateral tool transfer and deployment",
+    "Password-protected, UPX/Inno-packed tool bundle (DC2.exe Mimikatz, DC6.exe Advanced Port Scanner)",
+    "HTML-application (.hta) ransom note with embedded JavaScript and Run-key relaunch"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Bee-Ware of Trigona, An Emerging Ransomware Strain",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2023-03-16",
+      "url": "https://unit42.paloaltonetworks.com/trigona-ransomware-update/"
+    },
+    {
+      "id": "S2",
+      "title": "Trigona Ransomware Attacking MS-SQL Servers",
+      "publisher": "AhnLab ASEC",
+      "date": "2023-04-14",
+      "url": "https://asec.ahnlab.com/en/51343/"
+    },
+    {
+      "id": "S3",
+      "title": "An Overview of the Trigona Ransomware",
+      "publisher": "Trend Micro",
+      "date": "2023-06-23",
+      "url": "https://www.trendmicro.com/en_us/research/23/f/an-overview-of-the-trigona-ransomware.html"
+    },
+    {
+      "id": "S4",
+      "title": "Ukrainian activists hack Trigona ransomware gang, wipe servers",
+      "publisher": "BleepingComputer",
+      "date": "2023-10-18",
+      "url": "https://www.bleepingcomputer.com/news/security/ukrainian-activists-hack-trigona-ransomware-gang-wipe-servers/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Brute Force: Password Guessing",
+      "procedure": "Brute-force / dictionary attacks against internet-exposed MS-SQL servers with weak account credentials.",
+      "tools": [
+        "MS-SQL brute forcer"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "proxy",
+          "note": "No MS-SQL brute-force atomic exists; SMB password guessing exercises the same failed-logon burst detections (local ART T1110.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploitation of Zoho ManageEngine ADSelfService Plus CVE-2021-40539 (per Arete, cited by Trend Micro).",
+      "tools": [],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; validate with vulnerability scanning / patch-state checks or a purple-team exploit range, not ART."
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Re-use of compromised accounts bought from initial access brokers.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logging in with purchased credentials has no ART equivalent; validate with identity-analytics detections (impossible travel, new-device logons)."
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1505.001",
+      "techniqueName": "Server Software Component: SQL Stored Procedures",
+      "procedure": "Loads a CLR assembly shell into SQL Server that accepts operator commands like a web shell (system info, account changes, privilege escalation); sqlservr.exe then installs the ransomware as svcservice.exe.",
+      "tools": [
+        "CLR Shell",
+        "sqlservr.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The local catalogue has no SQL stored-procedure / CLR assembly atomic (T1505.001). Validate with SQL Server audit logging for CREATE ASSEMBLY and sqlservr.exe child processes."
+    },
+    {
+      "order": 5,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "The CLR shell escalates privileges via the Windows Secondary Logon Service flaw MS16-032, dropping nt.exe.",
+      "tools": [
+        "nt.exe (MS16-032)"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local T1068 atomics are BYOVD/driver-specific; none exercise MS16-032. Validate patch state."
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1136.001",
+      "techniqueName": "Create Account: Local Account",
+      "procedure": "newuser.bat creates local user 'fredla' and DC4.exe creates 'sys', both added to Administrators and Remote Desktop Users.",
+      "tools": [
+        "newuser.bat",
+        "DC4.exe",
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fda74566-a604-4581-a4cc-fbbe21d66559",
+          "testNumber": 8,
+          "testName": "Create a new Windows admin user",
+          "fidelity": "exact",
+          "note": "Creates a new local admin user (local ART T1136.001 #8)"
+        },
+        {
+          "testGuid": "6657864e-0323-4206-9344-ac9cd7265a4f",
+          "testNumber": 4,
+          "testName": "Create a new user in a command prompt",
+          "fidelity": "close",
+          "note": "net user account creation (local ART T1136.001 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1546.008",
+      "techniqueName": "Event Triggered Execution: Accessibility Features",
+      "procedure": "DC4.exe sets cmd.exe as the Image File Execution Options debugger for sethc.exe, utilman.exe, Magnify.exe and HelpPane.exe (Sticky Keys backdoor).",
+      "tools": [
+        "DC4.exe",
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3309f53e-b22b-4eb6-8fd2-a6cf58b355a9",
+          "testNumber": 1,
+          "testName": "Attaches Command Prompt as a Debugger to a List of Target Processes",
+          "fidelity": "exact",
+          "note": "Attaches cmd.exe as the debugger to a list of accessibility binaries (local ART T1546.008 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1686",
+      "techniqueName": "Impair Defenses: Disable or Modify System Firewall",
+      "procedure": "DC4.exe changes the registry to allow RDP and opens RDP ports with netsh.",
+      "tools": [
+        "DC4.exe",
+        "netsh.exe",
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "Allows SMB and RDP through Windows Firewall (local ART T1686 #3)"
+        },
+        {
+          "testGuid": "9636dd6e-7599-40d2-8eee-ac16434f35ed",
+          "testNumber": 5,
+          "testName": "Open a local port through Windows Firewall to any profile",
+          "fidelity": "close",
+          "note": "Opens a local port through Windows Firewall (local ART T1686 #5)"
+        },
+        {
+          "testGuid": "16bdbe52-371c-4ccf-b708-79fba61f1db4",
+          "testNumber": 70,
+          "testName": "Enable RDP via Registry (fDenyTSConnections)",
+          "fidelity": "close",
+          "note": "Enables RDP through the fDenyTSConnections registry value (local ART T1112 #70)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "NetScan (netscan.exe) enumerates domain hosts and local Administrators membership; DC6.exe installs Advanced Port Scanner.",
+      "tools": [
+        "NetScan",
+        "Advanced Port Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "Runs SoftPerfect NetScan, the same tool Trigona used (local ART T1018 #22)"
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "PowerShell /24 port scan for scan-volume detections (local ART T1046 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Password-protected Mimikatz build (DC2.exe / mim32.exe) dumps credentials from LSASS and the registry.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation (local ART T1003.001 #15)"
+        },
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "close",
+          "note": "PowerShell-loaded Mimikatz (local ART T1003.001 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Moves laterally over RDP with the backdoor and compromised admin accounts.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP connection to a remote host (local ART T1021.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Software",
+      "procedure": "Splashtop used to move between hosts and drop additional tools/malware (also mapped to T1570/T1072 by Unit 42).",
+      "tools": [
+        "Splashtop"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop execution (local ART T1219 #13)"
+        },
+        {
+          "testGuid": "3e1858ee-3550-401c-86ec-5e70ed79295b",
+          "testNumber": 14,
+          "testName": "Splashtop Streamer Execution",
+          "fidelity": "exact",
+          "note": "Splashtop Streamer execution (local ART T1219 #14)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "Two CurrentVersion\\Run values relaunch the ransomware (svhost.exe, or via /autorun_only) and open how_to_decrypt.hta at every logon.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "exact",
+          "note": "Adds a Run key value (local ART T1547.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1036.005",
+      "techniqueName": "Masquerading: Match Legitimate Name or Location",
+      "procedure": "The encryptor is named svhost.exe to mimic svchost.exe.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "close",
+          "note": "Runs a binary masquerading as a built-in system executable (local ART T1036.005 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "turnoff.bat runs sc stop / taskkill against more than 100 services and processes, including AV, Remote Desktop, VMware, Hyper-V and SQL.",
+      "tools": [
+        "turnoff.bat",
+        "sc.exe",
+        "taskkill.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "exact",
+          "note": "Stops a service with sc.exe (local ART T1489 #1)"
+        },
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "Stops a service with net.exe (local ART T1489 #2)"
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "exact",
+          "note": "Stops a service by killing its process (local ART T1489 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "turnoff.bat clears event logs with wevtutil cl; tool files (mim.exe, zam.exe, zam.bat) are deleted afterwards.",
+      "tools": [
+        "wevtutil.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl of Windows event logs (local ART T1685.005 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies and disables the system recovery feature.",
+      "tools": [
+        "vssadmin.exe",
+        "bcdedit.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "Disables Windows recovery with bcdedit (local ART T1490 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "AES (Delphi TDCP_rijndael) encryption with randomised file names and the .\\_locked extension; HTA ransom note; optional /erase and /shdwn modes; Linux build seen in May 2023.",
+      "tools": [
+        "Trigona encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

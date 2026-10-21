@@ -130,7 +130,8 @@ interface RawExec {
 
 async function runLinux(t: LinuxTarget, command: string, timeoutMs: number): Promise<RawExec> {
   // The compiled bash runs on the target's /bin/sh via a single SSH invocation.
-  const r = await run("ssh", ["-i", t.keyPath, ...sshHostKeyOpts(t), ...SSH_BASE, `${t.user}@${t.host}`, command], { timeoutMs });
+  // "--" ends ssh option parsing so a host/user value can never be read as an option.
+  const r = await run("ssh", ["-i", t.keyPath, ...sshHostKeyOpts(t), ...SSH_BASE, "-l", t.user, "--", t.host, command], { timeoutMs });
   return { transport: "ssh", ...r };
 }
 

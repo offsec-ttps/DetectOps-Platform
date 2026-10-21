@@ -99,7 +99,8 @@ export async function syncLotl(library: string): Promise<LotlSyncResult> {
 
     // Remove entries no longer upstream.
     for (const [ref, row] of existingMap) {
-      if (!seen.has(ref)) {
+      // `custom:` rows are analyst-added library entries (Module Builder) — never upstream, never pruned.
+      if (!seen.has(ref) && !ref.startsWith("custom:")) {
         await prisma.lotlTechnique.delete({ where: { id: row.id } });
         result.removedCount++;
       }

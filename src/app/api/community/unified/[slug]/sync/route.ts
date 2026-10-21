@@ -11,10 +11,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAdapter } from "@/lib/community-sources/registry";
+import { requireRole } from "@/lib/auth-guard";
 
 export const maxDuration = 600;
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const { slug } = await ctx.params;
 
   const adapter = await getAdapter(slug);

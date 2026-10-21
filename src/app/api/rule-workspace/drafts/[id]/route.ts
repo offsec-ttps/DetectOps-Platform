@@ -32,6 +32,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   for (const [k, v] of Object.entries(body)) {
     if (PATCHABLE.has(k)) data[k] = v;
   }
+  // prUrl is rendered as a link — only accept http(s) URLs (no javascript:/data:).
+  if (data.prUrl !== undefined && data.prUrl !== null && data.prUrl !== "" && !/^https?:\/\//i.test(String(data.prUrl))) {
+    return NextResponse.json({ error: "prUrl must be an http(s) URL" }, { status: 400 });
+  }
   if (data.status && !ALLOWED_STATUSES.has(data.status as string)) {
     return NextResponse.json({ error: `invalid status; allowed: ${[...ALLOWED_STATUSES].join(", ")}` }, { status: 400 });
   }

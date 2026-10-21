@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
@@ -35,6 +36,8 @@ function normaliseSteps(raw: unknown): unknown[] {
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const uc = await prisma.enterpriseUseCase.findUnique({ where: { id }, select: { id: true } });
   if (!uc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -58,6 +61,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
 
   const uc = await prisma.enterpriseUseCase.findUnique({ where: { id } });

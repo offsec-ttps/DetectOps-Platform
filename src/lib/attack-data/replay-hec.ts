@@ -16,6 +16,7 @@ import * as path from "path";
 import { randomUUID } from "crypto";
 import { ATTACK_DATA_ROOT, resolveRepoRoot } from "./scanner";
 import { getEffectiveHecConfig } from "@/lib/hec-config";
+import { labFetch } from "@/lib/net/lab-https";
 
 export interface ReplayInput {
   dataFilePath: string;
@@ -131,19 +132,17 @@ export async function replayToHec(input: ReplayInput): Promise<ReplayResult> {
   });
   const splunkUrl = `https://${splunkHost}:${port}/services/collector/raw?${params.toString()}`;
 
-  // Bypass TLS validation for self-signed Splunk
-  const origTLS = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  // Self-signed Splunk: TLS relaxation is scoped to this request (labFetch).
 
   try {
-    const res = await fetch(splunkUrl, {
+    const res = await labFetch(splunkUrl, {
       method: "POST",
       headers: {
         Authorization: `Splunk ${hecToken}`,
         "X-Splunk-Request-Channel": hecChannel,
       },
       body,
-      redirect: "follow",
+      timeoutMs: 120_000,
     });
 
     const durationMs = Date.now() - startTime;
@@ -178,8 +177,5 @@ export async function replayToHec(input: ReplayInput): Promise<ReplayResult> {
       success: false, bytesSent: 0, durationMs, hecChannel,
       splunkUrl: "", error: `Network error: ${err.message}`,
     };
-  } finally {
-    if (origTLS === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = origTLS;
   }
 }

@@ -30,7 +30,9 @@ export function normalizeArch(arch: string): string {
   const a = (arch || "").toLowerCase();
   if (["x86_64", "amd64", "x64"].includes(a)) return "x86_64";
   if (["aarch64", "arm64"].includes(a)) return "aarch64";
-  return a || "x86_64";
+  // Anything else must be a plain token: this value becomes part of a file
+  // path on a PUBLIC route, so "../" etc. would be an arbitrary file read.
+  return /^[a-z0-9_]{1,16}$/.test(a) ? a : "x86_64";
 }
 
 export function normalizeOs(os: string): string {
@@ -56,7 +58,12 @@ export interface ArtifactInfo {
 
 export async function resolveArtifact(os: string, arch: string): Promise<ArtifactInfo> {
   const filename = artifactName(os, arch);
-  const absPath = path.join(artifactsDir(), filename);
+  const root = path.resolve(artifactsDir());
+  const absPath = path.resolve(root, filename);
+  // Belt and braces: the resolved file must sit directly inside the artifacts dir.
+  if (path.dirname(absPath) !== root) {
+    return { available: false, filename, absPath: "", sizeBytes: 0, sha256: "", version: AGENT_VERSION };
+  }
   try {
     const buf = await fs.readFile(absPath);
     // Prefer the sidecar sha256 (cheap); fall back to hashing the bytes.

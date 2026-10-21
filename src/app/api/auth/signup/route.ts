@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { signupAllowed, policyRole } from "@/lib/auth-policy";
+import { rateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import {
   hashPassword,
@@ -7,6 +9,7 @@ import {
   createVerification,
 } from "@/lib/auth";
 import { devEscapeHatchAllowed } from "@/lib/auth-guard";
+import { clientIp } from "@/lib/client-ip";
 import { logEvent } from "@/lib/event-log";
 
 /** Include the verification code in the response ONLY in dev (no SMTP). */
@@ -26,16 +29,33 @@ export async function POST(req: NextRequest) {
   const pwErr = passwordPolicyError(password);
   if (pwErr) return NextResponse.json({ error: pwErr }, { status: 400 });
 
+  // Throttle registration / code-resend abuse (each call can send an email).
+  // Per-IP caps spraying; per-email caps hammering one address (email bombing),
+  // which the per-IP limit alone misses when the source rotates IPs.
+  const ip = clientIp(req);
+  const byIp = rateLimit(`signup:ip:${ip}`, 10, 60 * 60_000);
+  const byEmail = rateLimit(`signup:email:${email}`, 5, 60 * 60_000);
+  if (!byIp.ok || !byEmail.ok) return NextResponse.json({ error: "Too many sign-up attempts. Try again later." }, { status: 429 });
+
+  // Production: self-registration is invite/domain-gated (see lib/auth-policy.ts).
+  if (!signupAllowed(email)) {
+    return NextResponse.json({ error: "Registration is by invitation only. Ask an administrator for access." }, { status: 403 });
+  }
+
   const existing = await prisma.authUser.findUnique({ where: { email } });
   if (existing) {
     // Avoid email enumeration: 200 with neutral message + always resend a code
     // so signup is idempotent for "I forgot I had an account".
     if (!existing.emailVerified) {
-      const { code } = await createVerification(existing.id);
+      // Anti account-pre-hijacking: an UNVERIFIED account has never proven email
+      // ownership, so we do NOT touch the live passwordHash from this
+      // unauthenticated request. The new password is STAGED with this code and
+      // becomes live only when this specific code is verified (consumeVerification).
+      const { code } = await createVerification(existing.id, hashPassword(password));
       void logEvent({
         category: "auth", action: "auth.signup.resend",
         actor: email, status: "info", targetType: "user", targetId: existing.id,
-        message: "resent verification (unverified existing account)",
+        message: "resent verification + reset credentials (unverified existing account)",
       });
       return NextResponse.json({
         status: "verification_sent",
@@ -56,12 +76,15 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.authUser.create({
     data: {
+      role: policyRole(email, "engineer"),
       email,
       name,
-      passwordHash: hashPassword(password),
+      // No usable password until the email is verified: a non-matchable
+      // placeholder now, the real hash staged with the code and applied on verify.
+      passwordHash: "unset:unset",
     },
   });
-  const { code } = await createVerification(user.id);
+  const { code } = await createVerification(user.id, hashPassword(password));
   void logEvent({
     category: "auth", action: "auth.signup",
     actor: email, status: "ok", targetType: "user", targetId: user.id,

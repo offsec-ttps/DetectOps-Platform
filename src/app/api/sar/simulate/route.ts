@@ -83,8 +83,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "At least one technique ID is required" }, { status: 400 });
   }
 
+  if (!Array.isArray(techniques) || techniques.length > 50) {
+    return NextResponse.json({ error: "techniques must be an array of at most 50 IDs" }, { status: 400 });
+  }
+  // `target` is passed as a CLI argument to SAR (which hands it to vagrant/ansible):
+  // no leading '-' (option injection) and no shell/pattern metacharacters.
+  if (target && (typeof target !== "string" || !/^[A-Za-z0-9_.][A-Za-z0-9_.-]{0,127}$/.test(target))) {
+    return NextResponse.json({ error: "Invalid target name" }, { status: 400 });
+  }
   for (const t of techniques) {
-    if (!/^T\d{4}(\.\d{3})?$/i.test(t)) {
+    if (typeof t !== "string" || !/^T\d{4}(\.\d{3})?$/i.test(t)) {
       return NextResponse.json({ error: `Invalid technique ID format: ${t}` }, { status: 400 });
     }
   }

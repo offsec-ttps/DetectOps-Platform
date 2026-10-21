@@ -6,6 +6,8 @@ import {
   mergePR,
   githubRequest,
 } from "@/lib/github";
+import { requireRole, requireUser } from "@/lib/auth-guard";
+import { isSafeSegment } from "@/lib/build-forge/validate";
 
 /** GET — list PRs from configured GitHub repo */
 export async function GET(req: NextRequest) {
@@ -13,6 +15,9 @@ export async function GET(req: NextRequest) {
   const owner = searchParams.get("owner") || "";
   const repo = searchParams.get("repo") || "detection-reports";
   const state = (searchParams.get("state") || "all") as "open" | "closed" | "all";
+  if ((owner && !isSafeSegment(owner)) || !isSafeSegment(repo)) {
+    return NextResponse.json({ error: "invalid owner / repo", items: [] }, { status: 400 });
+  }
 
   const creds = await getGitHubCredentials();
   if (!creds) {
@@ -77,12 +82,21 @@ export async function GET(req: NextRequest) {
 
 /** POST — merge or review a PR */
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { owner, repo, prNumber, action } = body;
+  const body = await req.json().catch(() => ({}));
+  const { owner, repo, action } = body;
+  const prNumber = Number(body.prNumber);
+
+  // Merging with the platform's GitHub token is a privileged action.
+  const auth = action === "merge" ? await requireRole("admin") : await requireUser();
+  if (!auth.ok) return auth.response;
 
   const creds = await getGitHubCredentials();
   if (!creds) return NextResponse.json({ error: "GitHub not configured" }, { status: 400 });
   if (!owner || !repo || !prNumber) return NextResponse.json({ error: "owner, repo, prNumber required" }, { status: 400 });
+  // Interpolated into GitHub API paths with the server token.
+  if (!isSafeSegment(owner) || !isSafeSegment(repo) || !Number.isInteger(prNumber) || prNumber <= 0) {
+    return NextResponse.json({ error: "invalid owner / repo / prNumber" }, { status: 400 });
+  }
 
   if (action === "merge") {
     const result = await mergePR(creds.token, owner, repo, prNumber, "squash");

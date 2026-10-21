@@ -62,8 +62,8 @@ export interface TechniqueDef {
   references: Reference[];
 
   // ── provenance (set for entries contributed by the TI watcher; omitted for hand-curated ones) ──
-  /** "curated" (default, hand-authored) or "ti-watcher" (auto-contributed from Threat Intelligence). */
-  origin?: "curated" | "ti-watcher";
+  /** "curated" (default, hand-authored), "ti-watcher" (auto-contributed from Threat Intelligence) or "analyst" (added via the Module Builder library-entry flow). */
+  origin?: "curated" | "ti-watcher" | "analyst";
   /** Source Threat-Intel report this entry was derived from. */
   sourceRef?: { url?: string; vendor?: string; reportId: string };
   /** SimLibraryContribution id backing this entry (for the atomics resolver + review trail). */

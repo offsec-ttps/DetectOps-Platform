@@ -107,6 +107,9 @@ export async function seedGangs(): Promise<{ created: number; filled: number }> 
 export async function ensureSeeded(): Promise<void> {
   const n = await prisma.ransomwareGang.count();
   if (n === 0) await seedGangs();
+  // Curated emulation plans fill empty TTP/reference fields (dynamic import: the
+  // plan module pulls in the coverage-assessment exclusions).
+  try { const { syncPlanTTPs } = await import("./emulation"); await syncPlanTTPs(); } catch { /* best-effort */ }
 }
 
 /** Canonical-name map (normalized name + aliases → seed name) for collector reconciliation. */

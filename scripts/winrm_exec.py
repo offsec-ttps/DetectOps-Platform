@@ -45,6 +45,24 @@ def main():
     if not host or not user:
         print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "host and user required"}))
         return
+    # Hardening: host is spliced into the WSMan URL, so it must be a bare
+    # hostname / IP (no "/", "@", "?", "#" that would redirect the request to a
+    # different endpoint), and only the PowerShell path is supported — the raw
+    # "cmd" branch would run the whole command string as an executable name.
+    import re
+    if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\]", host):
+        print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "invalid host"}))
+        return
+    if scheme not in ("http", "https") or transport not in ("basic", "ntlm", "kerberos", "credssp", "plaintext", "ssl", "certificate"):
+        print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "invalid scheme/transport"}))
+        return
+    if not (0 < port < 65536):
+        print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "invalid port"}))
+        return
+    if shell != "powershell":
+        print(json.dumps({"exitCode": -1, "stdout": "", "stderr": "only shell=powershell is supported"}))
+        return
+    timeout = max(5, min(timeout, 3600))
     try:
         from winrm.protocol import Protocol
         proto_kwargs = dict(transport=transport, username=user, password=pw,

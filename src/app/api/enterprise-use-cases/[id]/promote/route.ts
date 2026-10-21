@@ -17,12 +17,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { promoteUseCase } from "@/lib/enterprise-use-cases/promote";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
   const force = body.force === true;
   const sessionUser = await getSessionUser().catch(() => null);
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       targetType: "EnterpriseUseCase",
       targetId: id,
       message: `${result.reusedExisting ? "reused" : "created"} DetectionPack ${result.slug} · rules=${result.ruleCount} · sims=${result.simulationCount}${force ? " · force=true" : ""}`,
-      details: { detectionPackId: result.detectionPackId, slug: result.slug, force, ...result },
+      details: { ...result, force },
     });
     return NextResponse.json(result);
   } catch (err: any) {

@@ -15,6 +15,7 @@ import { getC2CatalogEntry } from "@/config/c2-catalog";
 import { registerC2AsEnvironmentTarget } from "@/lib/c2/register";
 import { logEvent } from "@/lib/event-log";
 import { loadOwnedC2 } from "@/lib/c2/http";
+import { isSafeHost } from "@/lib/c2/url-guard";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   // Optional: choose which host address to advertise to beacons (the console URL
   // + enrollment one-liner target). Caldera binds 0.0.0.0, so no rebind needed.
   const advertiseHost = String(body.advertiseHost || "").trim();
+  if (advertiseHost && !isSafeHost(advertiseHost)) {
+    return NextResponse.json({ error: "advertiseHost must be a hostname or IP address" }, { status: 400 });
+  }
   if (action === "start" && advertiseHost) {
     const port = (() => { try { return new URL(server.url).port || "8888"; } catch { return "8888"; } })();
     await prisma.c2Server.update({ where: { id }, data: { advertiseHost, url: `http://${advertiseHost}:${port}` } });

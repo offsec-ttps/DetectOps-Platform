@@ -35,7 +35,23 @@ const MAX_TOOLS_PER_SERVER = 2;
 const MAX_RESULT_CHARS_PER_TOOL = 1500;
 const MAX_TOTAL_ENRICHMENT_CHARS = 6000;
 
-function pickRelevantTools(tools: Tool[], input: EnrichInput): Tool[] {
+/**
+ * Excessive-agency guard (OWASP LLM06): enrichment is automatic and its args
+ * come from untrusted report content (IOCs, technique hints), so only call
+ * tools that look read-only. Honour MCP annotations when the server provides
+ * them, and otherwise skip tools whose names read as mutating / executing.
+ */
+const MUTATING_NAME = /(^|[_\-.\s])(delete|remove|create|add|update|edit|write|set|put|post|submit|upload|send|block|unblock|isolate|quarantine|kill|terminate|exec|execute|shell|command|deploy|install|disable|enable|revoke|ban|tag)([_\-.\s]|$)/i;
+function isReadOnlyTool(t: Tool): boolean {
+  const a = (t as any).annotations || {};
+  if (a.destructiveHint === true) return false;
+  if (a.readOnlyHint === true) return true;
+  if (a.readOnlyHint === false) return false;
+  return !MUTATING_NAME.test(t.name);
+}
+
+function pickRelevantTools(allTools: Tool[], input: EnrichInput): Tool[] {
+  const tools = allTools.filter(isReadOnlyTool);
   const terms: string[] = [];
   if (input.techniques?.length) terms.push(...TECHNIQUE_TERMS);
   if (input.iocs && Object.keys(input.iocs).length) terms.push(...IOC_TERMS);

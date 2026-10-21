@@ -20,6 +20,8 @@ import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 import { URL } from "url";
 import { saveHecConfig } from "@/lib/hec-config";
+import { requireRole } from "@/lib/auth-guard";
+import { safeLookup, labOutboundPolicy, syncUrlBlockReason } from "@/lib/net/ssrf";
 
 const HEC_NAME = "detection-platform-replay";
 const DEFAULT_PASSWORD = "changeme123!";
@@ -72,6 +74,7 @@ function splunkFetch(rawUrl: string, init: { method?: string; headers?: Record<s
       headers,
       rejectUnauthorized: false,
       timeout: init.timeoutMs || 15000,
+      lookup: safeLookup(labOutboundPolicy("SIEM_ALLOW_LOOPBACK")) as any,
     }, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
@@ -90,6 +93,9 @@ function splunkFetch(rawUrl: string, init: { method?: string; headers?: Record<s
 }
 
 export async function POST(req: NextRequest) {
+  // Rewrites the global HEC sink → admin only.
+  const session = await requireRole("admin");
+  if (!session.ok) return session.response;
   const body = await req.json().catch(() => ({}));
   const rangeId = typeof body.rangeId === "string" ? body.rangeId : "";
   const splunkPassword = typeof body.splunkPassword === "string" && body.splunkPassword.length > 0
@@ -101,7 +107,7 @@ export async function POST(req: NextRequest) {
   // 1. Fetch range status via SAR (through our proxy or direct — we're server-side so direct is fine)
   let rangeStatus: SarStatus;
   try {
-    const r = await fetch(`http://localhost:4000/attack-range/status/${rangeId}`, { cache: "no-store" });
+    const r = await fetch(`http://localhost:4000/attack-range/status/${encodeURIComponent(rangeId)}`, { cache: "no-store" });
     if (!r.ok) throw new Error(`SAR status ${r.status}`);
     rangeStatus = await r.json();
   } catch (e: any) {
@@ -122,6 +128,9 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
+  if (!/^[A-Za-z0-9.\-]+$/.test(splunkIp) || syncUrlBlockReason(`https://${splunkIp}:8089/`, labOutboundPolicy("SIEM_ALLOW_LOOPBACK"))) {
+    return NextResponse.json({ status: "error", message: `Refusing Splunk host "${String(splunkIp).slice(0, 80)}" (blocked by outbound policy)` }, { status: 400 });
+  }
   const mgmtBase = `https://${splunkIp}:8089`;
   const auth = `admin:${splunkPassword}`;
 

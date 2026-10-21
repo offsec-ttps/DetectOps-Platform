@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
@@ -37,6 +38,8 @@ function normaliseSteps(raw: unknown): unknown[] {
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; sid: string }> }) {
   const { id, sid } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const body = await req.json().catch(() => ({}));
 
   const sc = await prisma.enterpriseUseCaseScenario.findUnique({ where: { id: sid } });
@@ -79,6 +82,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string; sid: string }> }) {
   const { id, sid } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const sc = await prisma.enterpriseUseCaseScenario.findUnique({ where: { id: sid } });
   if (!sc || sc.useCaseId !== id) return NextResponse.json({ error: "not found" }, { status: 404 });
 

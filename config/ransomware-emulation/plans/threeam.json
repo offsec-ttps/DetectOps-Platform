@@ -1,0 +1,584 @@
+{
+  "gang": "threeam",
+  "displayName": "3AM (ThreeAM)",
+  "aliases": [
+    "3AM",
+    "ThreeAM"
+  ],
+  "status": "active",
+  "activeSince": "2023",
+  "lineage": "Assessed by Sophos as tied to BlackSuit/Royal (ex-Conti) and to BlackBasta-affiliated vishing actors (STAC5777)",
+  "summary": "3AM first appeared in 2023 when Symantec saw an affiliate fall back to it after LockBit was blocked; that intrusion used gpresult, Cobalt Strike, PsExec, account creation and Wput FTP exfiltration before stopping security/backup services and deleting shadow copies (.threeamtime). In 2025 Sophos documented 3AM affiliates combining email bombing with spoofed-IT vishing to obtain Microsoft Quick Assist sessions, then running a hidden QEMU virtual machine with the QDoor backdoor, WMIC/PowerShell execution, a local 'SupportUser' admin account, XEOX RMM, extensive native discovery, EDR-killer attempts and GoodSync exfiltration of ~868 GB to Backblaze.",
+  "uniqueTraits": [
+    "Email bombing followed by phone vishing that spoofs the victim's own IT department number",
+    "Microsoft Quick Assist for hands-on initial access",
+    "QEMU-hosted Windows 7 VM carrying the QDoor backdoor to hide from endpoint protection (T1564.006)",
+    "XEOX and Syncro RMM for persistence; GoodSync to Backblaze for large-scale exfiltration",
+    "Scheduled task named 'WindowsSensor15' (Conti playbook) and EDR killer attempts",
+    "Used as a fallback encryptor when LockBit deployment was blocked (Wput FTP exfil, .threeamtime)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "A familiar playbook with a twist: 3AM ransomware actors dropped virtual machine with vishing and Quick Assist",
+      "publisher": "Sophos X-Ops",
+      "date": "2025-05",
+      "url": "https://www.sophos.com/en-us/blog/a-familiar-playbook-with-a-twist-3am-ransomware-actors-dropped-virtual-machine-with-vishing-and-quick-assist"
+    },
+    {
+      "id": "S2",
+      "title": "3AM: New Ransomware Family Used As Fallback in Failed LockBit Attack",
+      "publisher": "Symantec Threat Hunter Team",
+      "date": "2023-09",
+      "url": "https://www.security.com/threat-intelligence/3am-ransomware-lockbit"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566",
+      "techniqueName": "Phishing (email bombing + voice phishing)",
+      "procedure": "Target inboxes are flooded via mailing-list subscriptions (24 emails in 3 minutes), then a VoIP call spoofing the internal IT number persuades the employee to grant remote access.",
+      "tools": [
+        "email bombing",
+        "spoofed VoIP call"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Email bombing and vishing are social-engineering steps outside the endpoint; no local Atomic Red Team test applies. Validate with mail-flow anomaly and helpdesk-call procedures."
+    },
+    {
+      "order": 2,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "The victim launches Microsoft Quick Assist and hands the session to the caller.",
+      "tools": [
+        "Quick Assist"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1aea6d15-70f1-4b4e-8b02-397b5d5ffe75",
+          "testNumber": 15,
+          "testName": "Microsoft App Quick Assist Execution",
+          "fidelity": "exact",
+          "note": "[T1219] Microsoft Quick Assist execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Via the victim's Chrome session, the actor visits a lookalike msquick[.]link domain that redirects to a Google Drive archive (UpdatePackage_excic.zip) extracted to C:\\ProgramData.",
+      "tools": [
+        "Chrome",
+        "Google Drive"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "proxy",
+          "note": "[T1105] PowerShell download of a remote archive."
+        },
+        {
+          "testGuid": "4449c89b-ec82-43a4-89c1-91e2f1abeecc",
+          "testNumber": 2,
+          "testName": "Malware Masquerading and Execution from Zip File",
+          "fidelity": "proxy",
+          "note": "[T1036] Execution from a downloaded ZIP masquerading as an update."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1564.006",
+      "techniqueName": "Hide Artifacts: Run Virtual Instance",
+      "procedure": "A VBS script launches a portable QEMU Windows 7 VM bridged to the host network; no install or admin rights needed, invisible to the host EDR.",
+      "tools": [
+        "QEMU",
+        "VBS launcher"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "88b81702-a1c0-49a9-95b2-2dd53d755767",
+          "testNumber": 2,
+          "testName": "Create and start VirtualBox virtual machine",
+          "fidelity": "close",
+          "note": "[T1564.006] Creates and starts a VirtualBox VM (different hypervisor, same evasion)."
+        },
+        {
+          "testGuid": "1620de42-160a-4fe5-bbaf-d3fef0181ce9",
+          "testNumber": 1,
+          "testName": "Visual Basic script execution to gather local computer information",
+          "fidelity": "proxy",
+          "note": "[T1059.005] VBScript execution, as used to launch the VM."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1095",
+      "techniqueName": "Non-Application Layer Protocol",
+      "procedure": "The pre-installed QDoor backdoor inside the VM connects to a hard-coded C2 IP on TCP/443; Quick Assist is then closed.",
+      "tools": [
+        "QDoor"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3e0e0e7f-6aa2-4a61-b61d-526c2cc9330e",
+          "testNumber": 3,
+          "testName": "Powercat C2",
+          "fidelity": "proxy",
+          "note": "[T1095] Raw TCP reverse channel (powercat) as a stand-in for QDoor."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "execution",
+      "techniqueId": "T1047",
+      "techniqueName": "Windows Management Instrumentation",
+      "procedure": "WMIC is used to run PowerShell on a server, and later to move to nine further hosts.",
+      "tools": [
+        "wmic.exe",
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9c8ef159-c666-472f-9874-90c8d60d136b",
+          "testNumber": 6,
+          "testName": "WMI Execute Remote Process",
+          "fidelity": "exact",
+          "note": "[T1047] WMI remote process execution."
+        },
+        {
+          "testGuid": "7db7a7f9-9531-4840-9b30-46220135441c",
+          "testNumber": 7,
+          "testName": "Create a Process using WMI Query and an Encoded Command",
+          "fidelity": "close",
+          "note": "[T1047] WMI process creation with encoded PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1136.001",
+      "techniqueName": "Create Account: Local Account",
+      "procedure": "Creates local account 'SupportUser' and adds it to the local Administrators group, then logs on over RDP; Symantec also saw a new user added for persistence in 2023.",
+      "tools": [
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fda74566-a604-4581-a4cc-fbbe21d66559",
+          "testNumber": 8,
+          "testName": "Create a new Windows admin user",
+          "fidelity": "exact",
+          "note": "[T1136.001] Creates a new Windows admin user."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs XEOX remote-management (cloud portal) and later Syncro Live Agent for persistent access.",
+      "tools": [
+        "XEOX",
+        "Syncro"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b1b8128b-c5d4-4de9-bf70-e60419274562",
+          "testNumber": 11,
+          "testName": "MSP360 Connect Execution",
+          "fidelity": "proxy",
+          "note": "[T1219] Cloud RMM agent execution; no XEOX/Syncro-specific atomic exists."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "proxy",
+          "note": "[T1219] RMM application download and install."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1615",
+      "techniqueName": "Group Policy Discovery",
+      "procedure": "Runs gpresult to dump policy settings for a user (first activity in the 2023 intrusion).",
+      "tools": [
+        "gpresult.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0976990f-53b1-4d3f-a185-6df5be429d3b",
+          "testNumber": 1,
+          "testName": "Display group policy information via gpresult",
+          "fidelity": "exact",
+          "note": "[T1615] gpresult group policy discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1482",
+      "techniqueName": "Domain Trust Discovery",
+      "procedure": "nltest used to list domain trusts and domain controllers, alongside whoami /all, net group \"Domain Admins\", net sessions, quser, wmic product, ipconfig /all, netstat and ping sweeps; output saved to pc.txt/dir.txt/a1.txt.",
+      "tools": [
+        "nltest",
+        "net.exe",
+        "quser",
+        "whoami",
+        "Cobalt Strike (2023)"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "[T1482] Domain trust discovery with nltest."
+        },
+        {
+          "testGuid": "0afb5163-8181-432e-9405-4322710c0c37",
+          "testNumber": 3,
+          "testName": "Elevated group enumeration using net group (Domain)",
+          "fidelity": "exact",
+          "note": "[T1069.002] net group enumeration of Domain Admins."
+        },
+        {
+          "testGuid": "0940a971-809a-48f1-9c4d-b1d785e96ee5",
+          "testNumber": 1,
+          "testName": "System Network Connections Discovery",
+          "fidelity": "close",
+          "note": "[T1049] netstat / net session network connection discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Moves with a compromised domain admin via RDP, remote PowerShell, WMIC and XEOX; a d.bat file enables RDP and opens a firewall port on targets.",
+      "tools": [
+        "d.bat",
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "16bdbe52-371c-4ccf-b708-79fba61f1db4",
+          "testNumber": 70,
+          "testName": "Enable RDP via Registry (fDenyTSConnections)",
+          "fidelity": "exact",
+          "note": "[T1112] Enables RDP via fDenyTSConnections registry change."
+        },
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "exact",
+          "note": "[T1686] Allows SMB and RDP through the Windows firewall."
+        },
+        {
+          "testGuid": "5295bd61-bd7e-4744-9d52-85962a4cf2d6",
+          "testNumber": 2,
+          "testName": "Remote Code Execution with PS Credentials Using Invoke-Command",
+          "fidelity": "close",
+          "note": "[T1021.006] Remote PowerShell execution with Invoke-Command."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Attempts to remove Duo MFA via WMIC, a SYSTEM scheduled task named 'WindowsSensor15' and msiexec, and runs an EDR killer (EDR Sandblaster); 3AM itself stops security services before encryption.",
+      "tools": [
+        "EDR Sandblaster",
+        "schtasks",
+        "msiexec"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "[T1685] Stops and removes a security service."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "proxy",
+          "note": "[T1685] Kills protected AV processes via a vulnerable-driver tool (Backstab)."
+        },
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "proxy",
+          "note": "[T1053.005] Scheduled task creation as used for the 'WindowsSensor15' task."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "GoodSync installed on two hosts uploads ~868 GB to Backblaze cloud storage.",
+      "tools": [
+        "GoodSync",
+        "Backblaze"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "[T1567.002] Sync-tool (rclone) exfiltration to cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048.003",
+      "techniqueName": "Exfiltration Over Unencrypted Non-C2 Protocol",
+      "procedure": "Wput used to exfiltrate victim files to an attacker-controlled FTP server.",
+      "tools": [
+        "Wput"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "[T1048.003] FTP exfiltration with a command-line client (rclone)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "PsExec used to escalate/execute remotely; on Day 9 C:\\L.exe and 1.bat target 88 computers through C$ admin shares.",
+      "tools": [
+        "PsExec",
+        "1.bat"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "[T1569.002] PsExec remote execution."
+        },
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "close",
+          "note": "[T1021.002] Maps the C$ admin share."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops services of security and backup products (Veeam, Acronis, Ivanti, McAfee, Symantec) before encryption.",
+      "tools": [
+        "3AM locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "[T1489] Stops services with net.exe."
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "[T1489] Stops services with sc.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes Volume Shadow Copies after encryption.",
+      "tools": [
+        "vssadmin.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "close",
+          "note": "[T1490] vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts files appending .threeamtime; in 2025 encryption was largely blocked except on the unprotected server, but data had already been stolen.",
+      "tools": [
+        "3AM locker (L.exe)"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

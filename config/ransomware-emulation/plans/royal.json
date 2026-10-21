@@ -1,0 +1,520 @@
+{
+  "gang": "Royal",
+  "displayName": "Royal / BlackSuit",
+  "aliases": [
+    "BlackSuit",
+    "Zeon",
+    "DEV-0569 (access cluster)"
+  ],
+  "status": "rebranded",
+  "activeSince": "2022",
+  "lineage": "Conti 'Team One' -> Zeon -> Royal (2022) -> BlackSuit (2023); BlackSuit infrastructure seized in Operation Checkmate (Jul 2025); Chaos RaaS assessed as likely successor",
+  "summary": "Royal, run by ex-Conti operators, favoured callback phishing (fake subscription invoices directing victims to install remote tools) and malvertising/BatLoader installers, alongside RDP and public-facing exploits. Operators then use RMM tools, Chisel tunnels, SoftPerfect NetScan, NirSoft/Mimikatz, PCHunter/PowerTool/GMER to kill AV, PsExec/RDP, and Cobalt Strike/Ursnif/rclone for exfiltration, before partial encryption of Windows and ESXi. The group rebranded to BlackSuit in 2023.",
+  "uniqueTraits": [
+    "Callback phishing (TOAD) inherited from Conti BazarCall",
+    "Malvertising and signed MSI/BatLoader installers via DEV-0569",
+    "Configurable partial encryption (-ep percentage) and network-only (-id) modes",
+    "Ursnif/Gozi repurposed for data aggregation and exfiltration",
+    "ESXi variant terminating VMs via esxcli"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: BlackSuit (Royal) Ransomware (AA23-061A, updated 2024-08-07)",
+      "publisher": "CISA",
+      "date": "2024-08-07",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-061a"
+    },
+    {
+      "id": "S2",
+      "title": "Royal (S1073)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-10-01",
+      "url": "https://attack.mitre.org/software/S1073/"
+    },
+    {
+      "id": "S3",
+      "title": "DEV-0569 finds new ways to deliver Royal ransomware, various payloads",
+      "publisher": "Microsoft",
+      "date": "2022-11-17",
+      "url": "https://www.microsoft.com/en-us/security/blog/2022/11/17/dev-0569-finds-new-ways-to-deliver-royal-ransomware-various-payloads/"
+    },
+    {
+      "id": "S4",
+      "title": "Law enforcement seizes BlackSuit ransomware leak sites",
+      "publisher": "BleepingComputer",
+      "date": "2025-07-24",
+      "url": "https://www.bleepingcomputer.com/news/security/law-enforcement-seizes-blacksuit-ransomware-leak-sites/"
+    },
+    {
+      "id": "S5",
+      "title": "Unmasking the new Chaos RaaS group attacks",
+      "publisher": "Cisco Talos",
+      "date": "2025-07-24",
+      "url": "https://blog.talosintelligence.com/new-chaos-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.004",
+      "techniqueName": "Phishing: Spearphishing Voice",
+      "procedure": "Callback phishing: emails impersonating subscription/software vendors prompt the victim to call an operator who directs installation of remote-access software.",
+      "tools": [
+        "callback phishing"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The voice interaction is off-host; the resulting remote-tool install is covered in step 4."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1189",
+      "techniqueName": "Drive-by Compromise",
+      "procedure": "DEV-0569 malvertising (Google Ads) and fake installer pages delivering signed MSI/BatLoader leading to Royal.",
+      "tools": [
+        "BatLoader",
+        "MSI installers"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "44a4bedf-ffe3-452e-bee4-6925ab125662",
+          "testNumber": 11,
+          "testName": "Msiexec.exe - Execute Remote MSI file",
+          "fidelity": "close",
+          "note": "msiexec executing a remote MSI, the delivery mechanism used by DEV-0569 installers."
+        },
+        {
+          "testGuid": "ed3fa08a-ca18-4009-973e-03d13014d0e8",
+          "testNumber": 4,
+          "testName": "Msiexec.exe - Execute Local MSI file with an embedded EXE",
+          "fidelity": "proxy",
+          "note": "msiexec executing a local MSI with an embedded EXE."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "RDP compromise (most common Royal vector after phishing) and access bought from brokers; public-facing exploits (e.g. Citrix CVE-2019-19781) also seen.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "proxy",
+          "note": "RDP logon with a valid account."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "AnyDesk, LogMeIn and Atera used for persistence and remote control.",
+      "tools": [
+        "AnyDesk",
+        "LogMeIn",
+        "Atera"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk."
+        },
+        {
+          "testGuid": "d03683ec-aae0-42f9-9b4c-534780e0f8e1",
+          "testNumber": 3,
+          "testName": "LogMeIn Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "LogMeIn."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Chisel tunnels C2 traffic; Cobalt Strike for C2.",
+      "tools": [
+        "Chisel",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "ngrok tunnel as a stand-in; Chisel is not in the catalogue."
+        },
+        {
+          "testGuid": "b8223ea9-4be2-44a6-b50a-9657a3d4e72a",
+          "testNumber": 3,
+          "testName": "portproxy reg key",
+          "fidelity": "proxy",
+          "note": "portproxy internal proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "SoftPerfect NetScan and Advanced IP Scanner map the network.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "Advanced IP Scanner"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect netscan."
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "Subnet port sweep."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz and NirSoft password-harvesting tools.",
+      "tools": [
+        "Mimikatz",
+        "NirSoft"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz."
+        },
+        {
+          "testGuid": "e359627f-2d90-4320-ba5e-b0f878155bbe",
+          "testNumber": 15,
+          "testName": "WebBrowserPassView - Credentials from Browser",
+          "fidelity": "exact",
+          "note": "NirSoft WebBrowserPassView."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "PowerTool, GMER, PCHunter and Process Hacker used to kill AV/EDR processes (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "PCHunter",
+        "PowerTool",
+        "GMER",
+        "Process Hacker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b4ca838d-d013-4461-bf2c-f7132617b409",
+          "testNumber": 8,
+          "testName": "Process Discovery - PC Hunter",
+          "fidelity": "exact",
+          "note": "PC Hunter execution."
+        },
+        {
+          "testGuid": "966f4c16-1925-4d9b-8ce0-01334ee0867d",
+          "testNumber": 7,
+          "testName": "Process Discovery - Process Hacker",
+          "fidelity": "exact",
+          "note": "Process Hacker execution."
+        },
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disable an arbitrary security service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "RDP, PsExec and SMB to move laterally and deploy the encryptor; Group Policy also used by BlackSuit.",
+      "tools": [
+        "PsExec",
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "PsExec copy-and-execute."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "Cobalt Strike and Ursnif/Gozi repurposed for data aggregation and exfiltration.",
+      "tools": [
+        "Cobalt Strike",
+        "Ursnif"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "proxy",
+          "note": "Data exfiltration over C2."
+        },
+        {
+          "testGuid": "c375558d-7c25-45e9-bd64-7b23a97c1db0",
+          "testNumber": 41,
+          "testName": "Ursnif Malware Registry Key Creation",
+          "fidelity": "proxy",
+          "note": "Ursnif registry artefacts (malware presence), not exfil itself."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "RClone (and Brute Ratel) reported for exfiltration in BlackSuit-era intrusions.",
+      "tools": [
+        "rclone"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone to cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "wevtutil clears event logs before encryption.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil clear logs."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "vssadmin delete shadows /all /quiet.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Partial encryption controlled by -ep percentage and network-only targeting (-id), appending .royal/.blacksuit; ransom note README.TXT.",
+      "tools": [
+        "Royal/BlackSuit encryptor"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "File encryption telemetry proxy."
+        },
+        {
+          "testGuid": "0eeb68ce-e64c-4420-8d53-ad5bdc6f86d5",
+          "testNumber": 4,
+          "testName": "Windows - Display a simulated ransom note via Notepad (non-destructive)",
+          "fidelity": "proxy",
+          "note": "Non-destructive ransom-note display."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Linux/ESXi variant lists and kills running VMs with esxcli before encrypting VMDKs.",
+      "tools": [
+        "Royal ESXi locker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "189f7d6e-9442-4160-9bc3-5e4104d93ece",
+          "testNumber": 14,
+          "testName": "ESXi - Avoslocker enumerates VMs and forcefully kills VMs",
+          "fidelity": "close",
+          "note": "esxcli VM enumeration and forced kill."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "vim-cmd VM power-off."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

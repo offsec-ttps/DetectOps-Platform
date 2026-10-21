@@ -1,0 +1,360 @@
+{
+  "gang": "daixin",
+  "displayName": "Daixin Team",
+  "aliases": [
+    "Daixin"
+  ],
+  "status": "active",
+  "activeSince": "2022",
+  "lineage": "ESXi encryptor derived from the leaked Babuk Locker source code",
+  "summary": "Daixin Team is a data-extortion and ransomware group that has hit US healthcare and public-health organisations since mid-2022. It still made claims in 2024, against Omni Hotels and Dubai Municipality. It gets in through organisations' VPN servers, either by exploiting an unpatched appliance or by reusing credentials phished earlier on legacy VPNs without MFA. It then moves with RDP, SSH and pass-the-hash, uses vCenter to reset ESXi root passwords, and encrypts the virtual machine files with a Babuk-derived ESXi locker after exfiltrating data through Rclone and Ngrok.",
+  "uniqueTraits": [
+    "Uses privileged accounts in VMware vCenter to reset ESXi server passwords, then SSHes into the hosts to deploy the encryptor",
+    "Babuk-derived ESXi locker targeting /vmfs/volumes (.vmdk, .vmem, .vswp, .vmsd, .vmx, .vmsn)",
+    "Exfiltrates with Rclone to a dedicated VPS and with the Ngrok reverse proxy",
+    "Gets VPN credentials through phishing and targets legacy VPN servers without MFA"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Daixin Team (AA22-294A)",
+      "publisher": "CISA / FBI / HHS",
+      "date": "2022-10-21",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-294a"
+    },
+    {
+      "id": "S2",
+      "title": "The Week in Ransomware - April 19th 2024 - Attacks ramp up (Daixin claims Omni Hotels)",
+      "publisher": "BleepingComputer",
+      "date": "2024-04-19",
+      "url": "https://www.bleepingcomputer.com/news/security/the-week-in-ransomware-april-19th-2024-attacks-ramp-up/"
+    },
+    {
+      "id": "S3",
+      "title": "Daixin Team Ransomware: A Growing Cyber Threat (TA2025028)",
+      "publisher": "Hive Pro",
+      "date": "2025-02",
+      "url": "https://www.hivepro.com/threat-advisory/daixin-team-ransomware-a-growing-cyber-threat/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "reconnaissance",
+      "techniqueId": "T1598.002",
+      "techniqueName": "Phishing for Information: Spearphishing Attachment",
+      "procedure": "Phishing emails with malicious attachments harvest VPN credentials, which are later used for initial access.",
+      "tools": [
+        "Phishing attachment"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "proxy",
+          "note": "Downloads a macro-enabled phishing attachment to the endpoint. It exercises attachment-delivery telemetry, but the credential-harvesting lure itself is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Gets into the network through the organisation's VPN server. In some cases it exploits an unpatched VPN appliance (no CVE named); in others it logs in to a legacy VPN without MFA using credentials compromised earlier.",
+      "tools": [
+        "VPN"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "VPN exploitation and credential replay happen at the perimeter appliance, and there is no endpoint atomic for them. Validate with VPN authentication logs (legacy VPN, no MFA, unusual geography) instead."
+    },
+    {
+      "order": 3,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "After VPN access, moves laterally with RDP. CISA maps this to RDP hijacking (T1563.002).",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "close",
+          "note": "Opens an RDP session to a remote host with supplied credentials."
+        },
+        {
+          "testGuid": "a37ac520-b911-458e-8aed-c5f1576d9f46",
+          "testNumber": 1,
+          "testName": "RDP hijacking",
+          "fidelity": "close",
+          "note": "RDP session hijacking with tscon, the technique CISA maps."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "credential-access",
+      "techniqueId": "T1003",
+      "techniqueName": "OS Credential Dumping",
+      "procedure": "Dumps OS credentials to obtain privileged accounts.",
+      "tools": [],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "proxy",
+          "note": "LSASS dump with ProcDump. The advisory names no specific dumping tool."
+        },
+        {
+          "testGuid": "5c2571d0-1572-416d-9676-812e64ca9f44",
+          "testNumber": 1,
+          "testName": "Registry dump of SAM, creds, and secrets",
+          "fidelity": "proxy",
+          "note": "Dumps the SAM, SECURITY and SYSTEM hives with reg save."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1550.002",
+      "techniqueName": "Use Alternate Authentication Material: Pass the Hash",
+      "procedure": "Uses pass-the-hash to get onto privileged accounts.",
+      "tools": [],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ec23cef9-27d9-46e4-a68d-6f75f7b86908",
+          "testNumber": 1,
+          "testName": "Mimikatz Pass the Hash",
+          "fidelity": "close",
+          "note": "Pass-the-hash with Mimikatz sekurlsa::pth."
+        },
+        {
+          "testGuid": "eb05b028-16c8-4ad8-adea-6f5b219da9a9",
+          "testNumber": 2,
+          "testName": "crackmapexec Pass the Hash",
+          "fidelity": "close",
+          "note": "Pass-the-hash over SMB with crackmapexec."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1098",
+      "techniqueName": "Account Manipulation",
+      "procedure": "Uses privileged accounts in VMware vCenter Server to reset the account passwords of ESXi servers, locking out administrators and giving the actor root on the hypervisors.",
+      "tools": [
+        "VMware vCenter"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5598f7cb-cf43-455e-883a-f6008c5d46af",
+          "testNumber": 1,
+          "testName": "Admin Account Manipulate",
+          "fidelity": "proxy",
+          "note": "Manipulates a privileged Windows account's password. The vCenter-to-ESXi password reset is not reproduced on Windows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.004",
+      "techniqueName": "Remote Services: SSH",
+      "procedure": "Connects to ESXi servers over SSH (CISA also cites SSH hijacking, T1563.001) to deploy the encryptor.",
+      "tools": [
+        "SSH"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "280812c8-4dae-43e9-a74e-1d08ab997c0e",
+          "testNumber": 2,
+          "testName": "ESXi - Enable SSH via VIM-CMD",
+          "fidelity": "close",
+          "note": "Enables SSH on an ESXi host with vim-cmd, the precondition for SSH-based deployment."
+        },
+        {
+          "testGuid": "8f6c14d1-f13d-4616-b7fc-98cc69fe56ec",
+          "testNumber": 1,
+          "testName": "ESXi - Enable SSH via PowerCLI",
+          "fidelity": "close",
+          "note": "Enables ESXi SSH remotely with PowerCLI, the way vCenter-level access would."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "The ESXi encryptor walks /vmfs/volumes/ looking for virtual-machine files (.vmdk, .vmem, .vswp, .vmsd, .vmx, .vmsn) to encrypt.",
+      "tools": [
+        "Babuk-derived ESXi locker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a233a40-caf7-4cf1-890a-c6331bbc72cf",
+          "testNumber": 7,
+          "testName": "ESXi - Enumerate VMDKs available on an ESXi Host",
+          "fidelity": "close",
+          "note": "Lists the VMDK files on an ESXi host's datastores."
+        },
+        {
+          "testGuid": "2040405c-eea6-4c1c-aef3-c2acc430fac9",
+          "testNumber": 31,
+          "testName": "ESXi - VM Discovery using ESXCLI",
+          "fidelity": "close",
+          "note": "Discovers VMs with ESXCLI before encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "Uses Rclone (v1.59.2) to exfiltrate data to a dedicated virtual private server.",
+      "tools": [
+        "Rclone"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "Pushes data to a remote server with Rclone over FTP."
+        },
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "proxy",
+          "note": "Rclone exfiltration to cloud storage (MEGA) rather than a VPS."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Runs the Ngrok reverse proxy to tunnel data out of the network. CISA maps this use to Exfiltration Over Web Service (T1567).",
+      "tools": [
+        "Ngrok"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "Runs ngrok on the endpoint to open a reverse tunnel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Deploys the Babuk-based encryptor over SSH to ESXi hosts. It encrypts VM files under /vmfs/volumes/ and writes a ransom note there, after data has been stolen for double extortion (for example the 2024 Omni Hotels claim).",
+      "tools": [
+        "Babuk-derived ESXi locker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Windows ransom-note drop. No local atomic encrypts ESXi datastores, so this only exercises the note-creation analytic."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "proxy",
+          "note": "Powers off VMs with vim-cmd, the hypervisor-side precursor ESXi lockers need before they encrypt VMDKs."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

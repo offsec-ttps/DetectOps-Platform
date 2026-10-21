@@ -1,0 +1,622 @@
+{
+  "gang": "ALPHV",
+  "displayName": "ALPHV / BlackCat",
+  "aliases": [
+    "BlackCat",
+    "Noberus"
+  ],
+  "status": "defunct",
+  "activeSince": "2021",
+  "lineage": "Linked to DarkSide/BlackMatter operators; FBI disruption Dec 2023; apparent exit scam after Change Healthcare (Mar 2024)",
+  "summary": "Rust-based RaaS (first major Rust ransomware) with Windows, Linux and ESXi lockers. Affiliates included Scattered Spider/Octo Tempest, who used help-desk social engineering, plus others exploiting Veritas Backup Exec and Exchange. Post-access: RMM tools, ngrok/Ligolo tunnels, ADRecon, Mimikatz/LaZagne, signed malicious kernel drivers to kill EDR, ExMatter/rclone exfiltration, and an encryptor with embedded PsExec propagation.",
+  "uniqueTraits": [
+    "Rust encryptor with JSON config, embedded PsExec self-propagation and remote/local symlink enabling",
+    "Help-desk vishing and MFA reset via Scattered Spider/Octo Tempest affiliates",
+    "Signed malicious kernel driver (BYOVD-style) to terminate EDR",
+    "Veritas Backup Exec CVE-2021-27876/27877/27878 initial access (UNC4466)",
+    "Full event-log clearing loop via wevtutil"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: ALPHV Blackcat (AA23-353A)",
+      "publisher": "CISA",
+      "date": "2023-12-19",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-353a"
+    },
+    {
+      "id": "S2",
+      "title": "BlackCat (S1068)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-10-01",
+      "url": "https://attack.mitre.org/software/S1068/"
+    },
+    {
+      "id": "S3",
+      "title": "The many lives of BlackCat ransomware",
+      "publisher": "Microsoft",
+      "date": "2022-06-13",
+      "url": "https://www.microsoft.com/en-us/security/blog/2022/06/13/the-many-lives-of-blackcat-ransomware/"
+    },
+    {
+      "id": "S4",
+      "title": "Octo Tempest crosses boundaries to facilitate extortion, encryption, and destruction",
+      "publisher": "Microsoft",
+      "date": "2023-10-25",
+      "url": "https://www.microsoft.com/en-us/security/blog/2023/10/25/octo-tempest-crosses-boundaries-to-facilitate-extortion-encryption-and-destruction/"
+    },
+    {
+      "id": "S5",
+      "title": "ALPHV Ransomware Affiliate Targets Vulnerable Backup Installations to Gain Initial Access",
+      "publisher": "Mandiant",
+      "date": "2023-04-03",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/alphv-ransomware-backup/"
+    },
+    {
+      "id": "S6",
+      "title": "BlackCat Ransomware Deploys New Signed Kernel Driver",
+      "publisher": "Trend Micro",
+      "date": "2023-05-22",
+      "url": "https://www.trendmicro.com/en_us/research/23/e/blackcat-ransomware-deploys-new-signed-kernel-driver.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.004",
+      "techniqueName": "Phishing: Spearphishing Voice",
+      "procedure": "Scattered Spider/Octo Tempest affiliates call the IT help desk or employees posing as staff/IT to reset passwords and MFA, or SIM-swap, to gain SSO access.",
+      "tools": [
+        "phone social engineering"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Voice social engineering of the help desk is a human process; no endpoint atomic reproduces it. Validate via IdP MFA-reset and help-desk audit logs."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "UNC4466 exploited Veritas Backup Exec CVE-2021-27876/27877/27878 via the public Metasploit module; other affiliates used unpatched Exchange and stolen VPN credentials.",
+      "tools": [
+        "Metasploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S5",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1190 exploit atomic (and plans never add exploit code); validate with perimeter/WAF/appliance log detections instead."
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Legitimate remote-access tools (AnyDesk, Splashtop, ScreenConnect, TeamViewer) installed for persistence.",
+      "tools": [
+        "AnyDesk",
+        "Splashtop",
+        "ScreenConnect"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "AnyDesk named in AA23-353A."
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "close",
+          "note": "Splashtop execution."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "close",
+          "note": "ScreenConnect install."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "ngrok, Ligolo and REVSOCKS tunnels for remote access to internal hosts.",
+      "tools": [
+        "ngrok",
+        "Ligolo",
+        "REVSOCKS"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "ngrok execution as reported for ALPHV affiliates."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1136.002",
+      "techniqueName": "Create Account: Domain Account",
+      "procedure": "Affiliates create new accounts (on-prem and in identity providers) to retain access.",
+      "tools": [
+        "net user",
+        "AD"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5a3497a4-1568-4663-b12a-d4a5ed70c7d7",
+          "testNumber": 3,
+          "testName": "Create a new Domain Account using PowerShell",
+          "fidelity": "close",
+          "note": "Domain account creation via PowerShell."
+        },
+        {
+          "testGuid": "fcec2963-9951-4173-9bfa-98d8b7834e62",
+          "testNumber": 1,
+          "testName": "Create a new Windows domain admin user",
+          "fidelity": "close",
+          "note": "Domain admin account creation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "ADRecon and Advanced IP Scanner for AD and network reconnaissance.",
+      "tools": [
+        "ADRecon",
+        "Advanced IP Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "95018438-454a-468c-a0fa-59c800149b59",
+          "testNumber": 4,
+          "testName": "Automated AD Recon (ADRecon)",
+          "fidelity": "exact",
+          "note": "ADRecon is named in Mandiant and Microsoft reporting."
+        },
+        {
+          "testGuid": "a889f5be-2d54-4050-bd05-884578748bb4",
+          "testNumber": 10,
+          "testName": "Adfind - Enumerate Active Directory Computer Objects",
+          "fidelity": "proxy",
+          "note": "AdFind computer enumeration as additional AD recon."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz and LaZagne for credentials; Octo Tempest also extracted NTDS.dit.",
+      "tools": [
+        "Mimikatz",
+        "LaZagne",
+        "ntdsutil"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz."
+        },
+        {
+          "testGuid": "079ee2e9-6f16-47ca-a635-14efcd994118",
+          "testNumber": 6,
+          "testName": "WinPwn - Loot local Credentials - lazagne",
+          "fidelity": "close",
+          "note": "LaZagne credential looting."
+        },
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "close",
+          "note": "NTDS.dit dump with ntdsutil."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Signed malicious kernel driver (loaded by a user-mode client) terminates EDR/AV processes; BYOVD tradecraft shared with Scattered Spider affiliates.",
+      "tools": [
+        "malicious signed driver"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S6",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "close",
+          "note": "Scattered Spider (ALPHV affiliate) BYOVD with vulnerable Intel driver."
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "proxy",
+          "note": "Driver-assisted killing of protected AV processes (Backstab)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Disables Microsoft Defender and other security tools before deployment (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "proxy",
+          "note": "Defender tamper via command prompt."
+        },
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "proxy",
+          "note": "Defender tamper via registry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "Payload queries the machine UUID (wmic csproduct get UUID) to build the access token/victim ID.",
+      "tools": [
+        "wmic"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cd6fc00d-ad6e-431c-832c-33e97ab9218f",
+          "testNumber": 41,
+          "testName": "Get System Hardware UUID Via wmic.exe",
+          "fidelity": "exact",
+          "note": "wmic hardware-UUID query, as run by the BlackCat payload."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "Encryptor embeds PsExec and stolen credentials to self-propagate; enables remote-to-local/remote-to-remote symlinks (fsutil) and raises net share limits before encrypting.",
+      "tools": [
+        "PsExec (embedded)",
+        "fsutil"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "31eb7828-97d7-4067-9c1e-c6feb85edc4b",
+          "testNumber": 4,
+          "testName": "BlackCat pre-encryption cmds with Lateral Movement",
+          "fidelity": "exact",
+          "note": "ART 'BlackCat pre-encryption cmds with Lateral Movement'."
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "PsExec copy-and-execute."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "ExMatter custom exfiltration tool (SFTP/WebDAV) used by BlackMatter/ALPHV operators.",
+      "tools": [
+        "ExMatter"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "proxy",
+          "note": "FTP exfiltration via rclone as a non-C2 protocol proxy; ExMatter not in catalogue."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "rclone and MEGA used to exfiltrate data before encryption.",
+      "tools": [
+        "rclone",
+        "MEGA"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone to MEGA."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.001",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "Payload iterates every event log with wevtutil cl.",
+      "tools": [
+        "wevtutil"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "83dac837-5685-45ed-b10b-9f047572100b",
+          "testNumber": 4,
+          "testName": "BlackCat Ransomware Full Log Clear",
+          "fidelity": "exact",
+          "note": "ART 'BlackCat Ransomware Full Log Clear'."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes shadow copies with vssadmin and wmic, disables recovery via bcdedit.",
+      "tools": [
+        "vssadmin",
+        "wmic",
+        "bcdedit"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete."
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recovery disabled."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Kills processes and stops services listed in the JSON config.",
+      "tools": [
+        "BlackCat payload"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "sc stop of a service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Rust encryptor (AES/ChaCha20) with configurable modes; changes desktop wallpaper to the ransom notice.",
+      "tools": [
+        "BlackCat encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "close",
+          "note": "Wallpaper replacement as done by BlackCat."
+        },
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "File encryption with GPG as encryption telemetry proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Linux/ESXi variant stops VMs (esxcli) and deletes snapshots before encrypting datastores.",
+      "tools": [
+        "BlackCat ESXi locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "vim-cmd VM power-off on ESXi."
+        },
+        {
+          "testGuid": "1207ddff-f25b-41b3-aa0e-7c26d2b546d1",
+          "testNumber": 5,
+          "testName": "ESXi - Delete VM Snapshots",
+          "fidelity": "close",
+          "note": "ESXi VM snapshot deletion."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

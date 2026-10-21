@@ -24,6 +24,7 @@
  */
 
 import { decrypt } from "@/lib/crypto/credential-vault";
+import { safeFetch, type OutboundPolicy } from "@/lib/net/ssrf";
 
 export type ProviderKind =
   | "anthropic" | "openai" | "openrouter" | "nvidia" | "ollama"
@@ -112,8 +113,20 @@ function buildHeaders(input: ProviderProbeInput, key: string): Record<string, st
   return h;
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  return fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+/**
+ * SSRF policy for provider probes. Private/LAN targets are legitimate (self-
+ * hosted LM Studio / vLLM / Ollama on the lab network). Loopback is only
+ * allowed for Ollama (fixed /api/* paths) or in dev / LLM_ALLOW_LOOPBACK=1 —
+ * otherwise a caller-chosen baseUrl + modelsPath could read this app's own
+ * internal APIs and co-located services. Metadata/link-local is always blocked.
+ */
+export function llmOutboundPolicy(kind: string): OutboundPolicy {
+  const loopbackOk = kind === "ollama" || process.env.NODE_ENV !== "production" || process.env.LLM_ALLOW_LOOPBACK === "1";
+  return { allowPrivate: true, allowLoopback: loopbackOk };
+}
+
+async function fetchWithTimeout(kind: ProviderKind, url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  return safeFetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) }, llmOutboundPolicy(kind));
 }
 
 // ─── Connectivity test ─────────────────────────────────────────────────────
@@ -133,7 +146,7 @@ export async function testConnection(input: ProviderProbeInput): Promise<TestRes
   // ─── Ollama: just hit /api/tags (cheap, no model needed) ────────────────
   if (input.kind === "ollama") {
     try {
-      const r = await fetchWithTimeout(`${baseUrl}/api/tags`, { method: "GET" }, 10_000);
+      const r = await fetchWithTimeout(input.kind, `${baseUrl}/api/tags`, { method: "GET" }, 10_000);
       const dt = nowMs() - t0;
       if (!r.ok) {
         return { ok: false, latencyMs: dt, message: `Ollama HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`, details: { httpStatus: r.status, endpointUsed: `${baseUrl}/api/tags` } };
@@ -151,7 +164,7 @@ export async function testConnection(input: ProviderProbeInput): Promise<TestRes
     const model = input.testModel || defaultProbeModel("anthropic");
     const url = `${baseUrl}/v1/messages`;
     try {
-      const r = await fetchWithTimeout(url, {
+      const r = await fetchWithTimeout(input.kind, url, {
         method: "POST",
         headers: buildHeaders(input, key),
         body: JSON.stringify({
@@ -177,7 +190,7 @@ export async function testConnection(input: ProviderProbeInput): Promise<TestRes
   const path = input.modelsPath && input.kind === "custom" ? input.modelsPath : "/chat/completions";
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
   try {
-    const r = await fetchWithTimeout(url, {
+    const r = await fetchWithTimeout(input.kind, url, {
       method: "POST",
       headers: buildHeaders(input, key),
       body: JSON.stringify({
@@ -223,7 +236,7 @@ export async function listModels(input: ProviderProbeInput): Promise<ModelListRe
   // Ollama: GET /api/tags
   if (input.kind === "ollama") {
     try {
-      const r = await fetchWithTimeout(`${baseUrl}/api/tags`, { method: "GET" }, 8_000);
+      const r = await fetchWithTimeout(input.kind, `${baseUrl}/api/tags`, { method: "GET" }, 8_000);
       const dt = nowMs() - t0;
       if (!r.ok) return { ok: false, latencyMs: dt, models: [], message: `Ollama HTTP ${r.status}` };
       const j = await r.json().catch(() => ({}));
@@ -238,7 +251,7 @@ export async function listModels(input: ProviderProbeInput): Promise<ModelListRe
   const path = input.modelsPath || "/models";
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
   try {
-    const r = await fetchWithTimeout(url, { method: "GET", headers: buildHeaders(input, key) }, 12_000);
+    const r = await fetchWithTimeout(input.kind, url, { method: "GET", headers: buildHeaders(input, key) }, 12_000);
     const dt = nowMs() - t0;
     if (!r.ok) return { ok: false, latencyMs: dt, models: [], message: `HTTP ${r.status}: ${(await r.text()).slice(0, 200)}` };
     const j = await r.json().catch(() => ({}));

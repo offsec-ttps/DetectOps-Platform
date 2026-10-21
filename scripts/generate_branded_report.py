@@ -542,7 +542,11 @@ def build_html(a, items, cmds):
       <div class="cov-foot" style="text-align:center">Techniques &amp; mitigations: MITRE ATT&amp;CK. Tests: Atomic Red Team. Living-off-the-land: LOLBAS Project. Assessment by {e(company)} on the {PLATFORM} platform, for {e(a['client'])}.</div>
     </div>""")
 
-    return f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body>{''.join(H)}</body></html>"
+    # CSP: the HTML is rendered by headless Chrome from file:// — forbid scripts,
+    # frames and any subresource except inline styles / data: images, so even an
+    # escaping slip can't load local files into the PDF.
+    csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"
+    return f"<!doctype html><html><head><meta charset='utf-8'><meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\"><style>{CSS}</style></head><body>{''.join(H)}</body></html>"
 
 
 def main():

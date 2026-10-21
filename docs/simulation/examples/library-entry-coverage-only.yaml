@@ -1,0 +1,67 @@
+# Example 2 — coverage-only entry (atomics: []). Use this when you have found a new method
+# but there is no vetted local atomic test yet: the entry still documents the telemetry,
+# detections and mitigations, and shows in the library as "coverage only".
+# Note how `group` / `domain` follow the Active Directory library: group = tactic column,
+# domain = facet.
+schema: 1
+kind: technique
+library: detectops.ad-attack
+key: shadow-credentials-key-credential-link
+name: Shadow Credentials (msDS-KeyCredentialLink abuse)
+group: Credential Access
+domain: Active Directory
+attack_id: T1098
+attack_techniques: [T1098]
+tactic: credential-access
+platforms: [windows]
+severity: high
+summary: Writing a key credential to a target account lets an attacker authenticate as it via PKINIT.
+description: >-
+  An identity with write access to a user or computer object's msDS-KeyCredentialLink
+  attribute can add its own key and then request a Kerberos TGT as that account, without
+  knowing or changing its password.
+abuse: >-
+  Gives stealthy account takeover and persistence: no password change occurs and the added
+  key survives password resets.
+lab_setup:
+  - Domain controller (isolated lab) with AD CS or PKINIT-capable KDC
+  - Directory Service Changes auditing enabled (SACL on the attribute)
+chain_narrative:
+  - "Target selection: an account the attacker can write to."
+  - "Directory change: a key credential is added to the account."
+  - "Authentication: a TGT is requested for the account using the added key."
+atomics: []
+simulate_note: No vetted local atomic yet — catalogued for detection engineering and coverage mapping.
+detection:
+  summary: Alert on any write to msDS-KeyCredentialLink by an identity that is not an expected provisioning service.
+  data_sources: [Windows Security 5136 (directory object modified), Windows Security 4768 (TGT request)]
+  queries:
+    - format: spl
+      title: msDS-KeyCredentialLink modified
+      query: index=* source="WinEventLog:Security" EventCode=5136 AttributeLDAPDisplayName="msDS-KeyCredentialLink" | stats count by SubjectUserName, ObjectDN, OperationType
+    - format: sigma
+      title: Key credential attribute modified
+      query: |
+        title: msDS-KeyCredentialLink Modified
+        logsource:
+          product: windows
+          service: security
+        detection:
+          selection:
+            EventID: 5136
+            AttributeLDAPDisplayName: 'msDS-KeyCredentialLink'
+          condition: selection
+        level: high
+mitigations:
+  - title: Restrict write access to msDS-KeyCredentialLink
+    kind: config
+    mitre_id: M1026
+    detail: Remove broad write permissions on the attribute; only the provisioning identities that need it should hold them.
+  - title: Audit directory changes
+    kind: config
+    mitre_id: M1047
+    detail: Enable Directory Service Changes auditing so 5136 events are generated and forwarded to the SIEM.
+references:
+  - title: MITRE ATT&CK T1098
+    url: https://attack.mitre.org/techniques/T1098/
+changelog: Initial entry

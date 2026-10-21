@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { logEvent } from "@/lib/event-log";
+import { manifestWithEntries } from "@/lib/library-entries/store";
 
 async function load(moduleId: string) {
   return prisma.simulationModule.findUnique({
@@ -25,6 +26,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ moduleId: 
 
   let manifest: any = null;
   try { manifest = JSON.parse(row.manifest); } catch {}
+  // Overlay analyst-added library entries (Module Builder → "Add technique to a library").
+  if (manifest) manifest = await manifestWithEntries(moduleId, manifest).catch(() => manifest);
   const latestValidation = row.validations[0] || null;
   return NextResponse.json({
     id: row.id, moduleId: row.moduleId, name: row.name, version: row.version, category: row.category,

@@ -785,6 +785,10 @@ model EmailVerification {
   userId      String
   user        AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
   codeHash    String    // scrypt of 6-digit numeric code
+  // Password staged with THIS code (anti account-pre-hijacking): a signup never
+  // changes the live passwordHash from an unauthenticated request — it is applied
+  // only when this specific code is verified, proving email ownership.
+  pendingPasswordHash String?
   expiresAt   DateTime
   consumedAt  DateTime?
   createdAt   DateTime  @default(now())
@@ -2394,4 +2398,34 @@ model CoverageAssessmentItem {
   @@index([assessmentId, status])
   @@index([assessmentId, order])
   @@map("coverage_assessment_items")
+}
+
+// Library Entry — an atomic-style, declarative technique record an analyst adds to
+// an EXISTING simulation library (AD, Privilege Escalation, Shellcode Injection,
+// LOTL libraries, …) through the Module Builder. Stored as an overlay and merged
+// into the library at read time, so seeded first-party manifests are never edited
+// and keep receiving upstream updates. `doc` is the entry document (schema v1).
+model LibraryEntry {
+  id          String    @id @default(uuid())
+  kind        String    @default("technique")   // technique | lotl
+  moduleId    String                             // target library: simulation moduleId, or "lotl:<sourceId>"
+  entryKey    String                             // slug, unique within the library
+  name        String
+  attackId    String    @default("")
+  status      String    @default("draft")        // draft | pending | published | retired
+  version     Int       @default(1)
+  doc         String                             // JSON entry document (schema v1)
+  contentHash String    @default("")
+  changelog   String    @default("")
+  history     String    @default("[]")           // JSON: prior {version, doc, changelog, at, by} (capped)
+  createdBy   String    @default("")
+  publishedBy String    @default("")
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([moduleId, entryKey])
+  @@index([moduleId, status])
+  @@index([status])
+  @@map("library_entries")
 }

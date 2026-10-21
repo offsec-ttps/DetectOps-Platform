@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth-guard";
 
 function safeJson<T>(s: string | null | undefined, fb: T): T {
   if (!s) return fb;
@@ -11,9 +12,16 @@ function safeJson<T>(s: string | null | undefined, fb: T): T {
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
-  const run = await prisma.sigmaGenRun.findUnique({ where: { id } });
+  const run = await prisma.sigmaGenRun.findUnique({ where: { id }, include: { session: { select: { createdBy: true } } } });
   if (!run) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // IDOR guard: same ownership rule as the session routes (owner = creator email; admins bypass).
+  const owner = run.session?.createdBy || "";
+  if (auth.enforced && auth.user.role !== "admin" && owner && owner !== auth.user.email) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
 
   let packSummary: { ruleCount: number; simulationCount: number; hasIrPlaybook: boolean } | null = null;
   if (run.detectionPackId) {

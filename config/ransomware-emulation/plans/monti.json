@@ -1,0 +1,400 @@
+{
+  "gang": "monti",
+  "displayName": "Monti",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2022",
+  "lineage": "Windows locker reuses leaked Conti v2/v3 code; 2023 Linux/ESXi encryptor largely rewritten (~29% similarity)",
+  "summary": "Monti emerged in mid-2022 as a near 'doppelganger' of Conti, reusing leaked Conti code and tradecraft. BlackBerry's IR case showed initial access via Log4Shell against an internet-facing VMware Horizon server, tools pulled down with Chrome, Action1 and AnyDesk RMM for persistence, LSASS dumping/Mimikatz, a Veeam credential dumper, RDP and PsExec lateral movement and exfiltration to MEGA, before encrypting desktops and an ESXi cluster (.PUUUK). Trend Micro reported a reworked Linux/ESXi encryptor in 2023 focused on legal and government sectors.",
+  "uniqueTraits": [
+    "Log4Shell (CVE-2021-44228) against VMware Horizon Connection Broker for initial access",
+    "Action1 cloud RMM abuse (first reported in a ransomware intrusion) alongside AnyDesk",
+    "Dedicated Veeam backup credential dumper",
+    "Exfiltration of the LSASS dump to DropMeFiles and bulk data to MEGA/MEGASync",
+    "Conti-clone Windows locker (.PUUUK) plus ESXi encryptor with soft VM shutdown, --whitelist option and /etc/motd ransom note"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "The Curious Case of 'Monti' Ransomware: A Real-World Doppelganger",
+      "publisher": "BlackBerry",
+      "date": "2022-09",
+      "url": "https://blogs.blackberry.com/en/2022/09/the-curious-case-of-monti-ransomware-a-real-world-doppelganger"
+    },
+    {
+      "id": "S2",
+      "title": "Monti ransomware infiltrates networks via the well-known Log4Shell (TA2022202)",
+      "publisher": "HivePro",
+      "date": "2022-09",
+      "url": "https://hivepro.com/wp-content/uploads/2022/09/Monti-ransomware-infiltrates-networks-via-the-well-known-Log4Shell_TA2022202.pdf"
+    },
+    {
+      "id": "S3",
+      "title": "Monti Ransomware Unleashes a New Encryptor for Linux",
+      "publisher": "Trend Micro",
+      "date": "2023-08",
+      "url": "https://www.trendmicro.com/en_us/research/23/h/monti-ransomware-unleashes-a-new-encryptor-for-linux.html"
+    },
+    {
+      "id": "S4",
+      "title": "Monti, the New Conti: Ransomware Gang Uses Recycled Code",
+      "publisher": "Dark Reading",
+      "date": "2022-09",
+      "url": "https://www.darkreading.com/vulnerabilities-threats/monti-conti-ransomware-recycled-code"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploited Log4Shell (CVE-2021-44228) on an internet-facing VMware Horizon Connection Broker.",
+      "tools": [
+        "Log4Shell exploit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test exploits Log4Shell/VMware Horizon; detect via Horizon (ws_TomcatService) child-process and JNDI lookup telemetry."
+    },
+    {
+      "order": 2,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Used Google Chrome on the compromised server to download attack tooling; the locker (locker.exe) was fetched from temp.sh.",
+      "tools": [
+        "Chrome",
+        "temp.sh"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "proxy",
+          "note": "[T1105] PowerShell download as a stand-in for browser-based tool download."
+        },
+        {
+          "testGuid": "2b080b99-0deb-4d51-af0f-833d37c4ca6a",
+          "testNumber": 18,
+          "testName": "Curl Download File",
+          "fidelity": "proxy",
+          "note": "[T1105] curl download of a remote file."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installed Action1 cloud RMM (renamed agents such as action1_agent.exe/action1_remote.exe) and AnyDesk for persistent remote access.",
+      "tools": [
+        "Action1",
+        "AnyDesk"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "[T1219] AnyDesk deployment/execution on Windows."
+        },
+        {
+          "testGuid": "b1b8128b-c5d4-4de9-bf70-e60419274562",
+          "testNumber": 11,
+          "testName": "MSP360 Connect Execution",
+          "fidelity": "proxy",
+          "note": "[T1219] Other cloud RMM agent execution (no Action1-specific atomic exists)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Dumped LSASS memory on the Connection Broker to lsass.DMP and ran Mimikatz to extract credentials.",
+      "tools": [
+        "Mimikatz",
+        "lsass.DMP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "close",
+          "note": "[T1003.001] LSASS dump via comsvcs.dll MiniDump."
+        },
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "close",
+          "note": "[T1003.001] Mimikatz detonation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "credential-access",
+      "techniqueId": "T1555",
+      "techniqueName": "Credentials from Password Stores",
+      "procedure": "Deployed a Veeam credential-dumping tool to recover credentials stored by Veeam Backup & Replication.",
+      "tools": [
+        "Veeam credential dumper"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c89becbe-1758-4e7d-a0f4-97d2188a23e3",
+          "testNumber": 2,
+          "testName": "Dump credentials from Windows Credential Manager With PowerShell [windows Credentials]",
+          "fidelity": "proxy",
+          "note": "[T1555] Credential Manager dump via PowerShell; no Veeam-specific credential atomic exists locally."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567",
+      "techniqueName": "Exfiltration Over Web Service",
+      "procedure": "Uploaded the LSASS dump to the DropMeFiles file-sharing site.",
+      "tools": [
+        "DropMeFiles"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c2e8ab6e-431e-460a-a2aa-3bc6a32022e3",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with HTTP POST to text storage sites - pastebin.com (Windows)",
+          "fidelity": "proxy",
+          "note": "[T1567.003] HTTP POST of data to a public text/file-sharing service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Used RDP with harvested credentials to reach other servers and network shares.",
+      "tools": [
+        "mstsc.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "[T1021.001] RDP to a remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "execution",
+      "techniqueId": "T1569.002",
+      "techniqueName": "System Services: Service Execution",
+      "procedure": "Used PsExec for remote process execution and lateral movement.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "exact",
+          "note": "[T1569.002] PsExec remote command execution."
+        },
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "close",
+          "note": "[T1021.002] Copy and execute a file with PsExec."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "collection",
+      "techniqueId": "T1039",
+      "techniqueName": "Data from Network Shared Drive",
+      "procedure": "Accessed files on network shares over RDP sessions ahead of exfiltration.",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6ed67921-1774-44ba-bac6-adb51ed60660",
+          "testNumber": 1,
+          "testName": "Copy a sensitive File over Administrative share with copy",
+          "fidelity": "close",
+          "note": "[T1039] Copies a sensitive file over an administrative share."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Moved stolen data to MEGA cloud storage using MEGASync.",
+      "tools": [
+        "MEGASync"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "close",
+          "note": "[T1567.002] rclone exfiltration to MEGA."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "The 2023 Linux/ESXi encryptor uses a soft VM shutdown option (with a --whitelist to skip chosen VMs) before encrypting.",
+      "tools": [
+        "Monti ESXi locker"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "[T1529] Powers off ESXi VMs with vim-cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Conti-derived Windows locker encrypted 18 desktops and a 3-host ESXi cluster (21 servers), appending .PUUUK with a Conti-style note; the 2023 Linux variant uses AES-256-CTR with size-based partial encryption.",
+      "tools": [
+        "locker.exe",
+        "Monti Linux encryptor"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1491.001",
+      "techniqueName": "Defacement: Internal Defacement",
+      "procedure": "Linux variant replaces /etc/motd and index.html contents with the ransom note.",
+      "tools": [
+        "Monti Linux encryptor"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30905f21-34f3-4504-8b4c-f7a5e314b810",
+          "testNumber": 3,
+          "testName": "ESXi - Change Welcome Message on Direct Console User Interface (DCUI)",
+          "fidelity": "close",
+          "note": "[T1491.001] Changes the ESXi login (DCUI) welcome message."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

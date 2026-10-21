@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { requireRole } from "@/lib/auth-guard";
+import { labFetch } from "@/lib/net/lab-https";
 
 const exec = promisify(execFile);
 
@@ -32,6 +34,7 @@ async function ping(ip: string): Promise<boolean> {
 }
 
 async function checkPort(ip: string, port: number): Promise<boolean> {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || !Number.isInteger(port)) return false;
   try {
     await exec("bash", ["-c", `echo >/dev/tcp/${ip}/${port}`], { timeout: 5000 });
     return true;
@@ -43,11 +46,13 @@ async function checkWinRM(ip: string): Promise<boolean> {
 }
 
 async function querySplunkForHost(host: string): Promise<{ hasData: boolean; eventCount: number }> {
-  const origTLS = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   try {
-    const auth = "Basic " + Buffer.from("admin:I-l1ke-Attack-Range!").toString("base64");
-    const res = await fetch("https://10.0.1.12:8089/services/search/jobs/export", {
+    // SAR default Splunk credentials unless overridden (never ship a real secret here).
+    const user = process.env.SAR_SPLUNK_USER || "admin";
+    const pass = process.env.SAR_SPLUNK_PASSWORD || "I-l1ke-Attack-Range!";
+    const auth = "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
+    const splunk = process.env.SAR_SPLUNK_URL || "https://10.0.1.12:8089";
+    const res = await labFetch(`${splunk}/services/search/jobs/export`, {
       method: "POST",
       headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
       body: `search=${encodeURIComponent(`search index=win host=${host}* | stats count`)}&output_mode=json&earliest_time=-15m`,
@@ -57,10 +62,6 @@ async function querySplunkForHost(host: string): Promise<{ hasData: boolean; eve
     const match = text.match(/"count"\s*:\s*"(\d+)"/);
     return { hasData: !!match && parseInt(match[1]) > 0, eventCount: match ? parseInt(match[1]) : 0 };
   } catch { return { hasData: false, eventCount: 0 }; }
-  finally {
-    if (origTLS === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = origTLS;
-  }
 }
 
 export async function GET() {
@@ -159,6 +160,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Runs an ansible playbook against lab hosts from the server.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const { action, target } = body;
 

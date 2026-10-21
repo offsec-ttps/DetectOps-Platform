@@ -1,0 +1,62 @@
+# Example 1 — technique entry that LINKS a vetted local atomic test.
+# Target: Shellcode Injection library. Validate it in Module Builder, or run:
+#   npm run docs:check-entries
+schema: 1
+kind: technique
+library: detectops.shellcode-injection-sim
+key: dirty-vanity-fork-injection
+name: Dirty Vanity (fork-based process injection)
+group: Windows                                  # catalog group (here: OS)
+domain: Process Lifecycle & Syscall Evasion     # facet — pick one the library already has, or a new one
+attack_id: T1055
+attack_techniques: [T1055]
+tactic: defense-evasion
+platforms: [windows]
+severity: high
+summary: Injection that abuses process forking so no remote thread is created in the victim.
+description: >-
+  The injector uses Windows process-cloning primitives so the payload runs in a forked
+  copy of the target, avoiding the usual remote-thread and cross-process write telemetry.
+abuse: >-
+  Sidesteps CreateRemoteThread-centric detections by executing inside a clone of the
+  victim process.
+lab_setup:
+  - Windows endpoint (isolated VM)
+  - Sysmon EID 1, 8, 10
+chain_narrative:
+  - "Target selection: a long-lived host process."
+  - "Memory operation: the process is cloned instead of written to directly."
+  - "Execution trigger: the clone runs the staged code; no remote thread appears."
+atomics:
+  - technique: T1055
+    name_includes: [Dirty Vanity]               # narrows to this one test
+    why: Vetted Atomic Red Team test for Dirty Vanity injection.
+simulate_note: Run only in an isolated lab VM.
+detection:
+  summary: Look for process cloning without a remote thread; correlate parent and child.
+  data_sources: [Sysmon EID 1, ETW process-clone events]
+  queries:
+    - format: spl
+      title: Cloned process from a non-system parent
+      query: index=* sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=1 | stats count by ParentImage, Image
+    - format: sigma
+      title: Process created as a clone of a sensitive host process
+      query: |
+        title: Process Created Via Reflection Clone
+        logsource:
+          product: windows
+          category: process_creation
+        detection:
+          selection:
+            ParentImage|endswith: '\svchost.exe'
+          condition: selection
+        level: medium
+mitigations:
+  - title: Behavioural EDR
+    kind: edr
+    mitre_id: M1040
+    detail: Use an EDR that inspects process-cloning APIs, not only remote-thread creation.
+references:
+  - title: MITRE ATT&CK T1055
+    url: https://attack.mitre.org/techniques/T1055/
+changelog: Initial entry

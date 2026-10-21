@@ -35,7 +35,7 @@ export function validateManifest(input: unknown): ManifestValidation {
   if (typeof m.id !== "string" || !ID_RE.test(m.id)) errors.push("id must match publisher.name (e.g. acme.ransomware-sim)");
   if (typeof m.name !== "string" || !m.name.trim()) errors.push("name is required");
   if (typeof m.version !== "string" || !isValidSemver(m.version)) errors.push("version must be valid semver (e.g. 1.0.0)");
-  if (typeof m.category !== "string" || !MODULE_CATEGORIES.includes(m.category)) errors.push(`category must be one of: ${MODULE_CATEGORIES.join(", ")}`);
+  if (typeof m.category !== "string" || !(MODULE_CATEGORIES as readonly string[]).includes(m.category)) errors.push(`category must be one of: ${MODULE_CATEGORIES.join(", ")}`);
   if (typeof m.description !== "string" || !m.description.trim()) warnings.push("description is recommended for the marketplace listing");
   if (typeof m.author !== "string" || !m.author.trim()) errors.push("author is required");
   if (typeof m.compatibleCoreVersion !== "string" || !m.compatibleCoreVersion.trim()) errors.push("compatibleCoreVersion is required (e.g. ^1.0.0)");

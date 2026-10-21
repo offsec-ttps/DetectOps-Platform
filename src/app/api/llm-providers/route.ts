@@ -14,6 +14,7 @@ import { PROVIDERS, PROVIDER_IDS, defaultProviderId } from "@/lib/llm";
 import { smartDefaultProvider } from "@/lib/llm/providers/registry";
 import { listConfiguredKinds, getConfigByKind } from "@/lib/llm/db-config";
 import { listMcpServers } from "@/lib/llm/mcp/client";
+import { redactUrl } from "@/lib/net/ssrf";
 
 const ENV_HINTS: Record<string, { keys: string[]; baseUrl?: string }> = {
   anthropic:  { keys: ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL_DEFAULT"] },
@@ -58,7 +59,9 @@ export async function GET() {
   const mcpServers = (await listMcpServers()).map((s) => ({
     name: s.name,
     transport: s.transport,
-    address: s.address,
+    // Engineer-visible: never echo a stdio command line (may carry secrets as
+    // args) or an http query string (may carry tokens).
+    address: s.transport === "http" ? redactUrl(s.address) : (s.address.split(/\s+/)[0] || "").split("/").pop() || "",
     hasToken: !!s.options.token,
   }));
 

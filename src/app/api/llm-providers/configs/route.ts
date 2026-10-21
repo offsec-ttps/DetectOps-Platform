@@ -16,6 +16,8 @@ import { encrypt } from "@/lib/crypto/credential-vault";
 import { invalidateConfigCache } from "@/lib/llm/db-config";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
 
 const KINDS = new Set([
   "anthropic", "openai", "openrouter", "nvidia", "ollama",
@@ -51,6 +53,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Provider configs are global (shared by every user's generation calls) → admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const label = String(body.label || "").trim();
   const kind = String(body.kind || "").trim();
@@ -61,6 +66,8 @@ export async function POST(req: NextRequest) {
   if ((kind === "openai-compatible" || kind === "custom") && !body.baseUrl) {
     return NextResponse.json({ error: `baseUrl is required for kind="${kind}"` }, { status: 400 });
   }
+  const badUrl = invalidHttpUrl(body.baseUrl, "baseUrl");
+  if (badUrl) return NextResponse.json({ error: badUrl }, { status: 400 });
 
   let apiKeyEnc = "";
   if (typeof body.apiKey === "string" && body.apiKey.trim()) {

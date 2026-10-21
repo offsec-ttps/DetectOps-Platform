@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, stat } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { requireRole } from "@/lib/auth-guard";
 
 const LABS_DIR = path.join(process.cwd(), "labs");
 const REGISTRY_FILE = path.join(LABS_DIR, "registry", "sources.json");
@@ -89,11 +90,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Registers arbitrary host paths (probed with stat on every GET).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const { id, name, type, path: srcPath, description } = body;
 
   if (!id || !srcPath) {
     return NextResponse.json({ error: "id and path are required" }, { status: 400 });
+  }
+  // `id` becomes a directory name under labs/.blueprints (blueprint scan).
+  if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id) || typeof srcPath !== "string") {
+    return NextResponse.json({ error: "id may contain only letters, digits, . _ -" }, { status: 400 });
   }
 
   if (!existsSync(srcPath)) {

@@ -1,0 +1,461 @@
+{
+  "gang": "ransomhouse",
+  "displayName": "RansomHouse",
+  "aliases": [
+    "Jolly Scorpius"
+  ],
+  "status": "active",
+  "activeSince": "2021",
+  "lineage": "Mario ESXi encryptor shares code with leaked Babuk source",
+  "summary": "RansomHouse (tracked by Unit 42 as Jolly Scorpius) is a RaaS/double-extortion operation active since December 2021 with 120+ leak-site victims across healthcare, finance, transportation and government. Affiliates gain access via spear-phishing or exploitation of vulnerable systems, use third-party tooling for recon and lateral movement, exfiltrate with compression and file-transfer utilities, then deploy the MrAgent management binary on VMware ESXi hypervisors to automate mass deployment of the Mario encryptor. Unit 42 reported a multi-layer encryption upgrade to Mario in December 2025.",
+  "uniqueTraits": [
+    "MrAgent: purpose-built ESXi deployment agent with persistent C2, host profiling via esxcli and remote 'Run'/'Exec' commands",
+    "MrAgent disables the ESXi firewall (esxcli network firewall set --enabled false), changes the root password and stops vpxa to cut vCenter management",
+    "Changes the ESXi DCUI welcome message as part of the deployment",
+    "Mario encryptor targets VM disks and Veeam backup files (.vmdk, .vmem, .vmsn, .vbk, .vbm) to defeat recovery; .emario extension",
+    "Hypervisor-first impact: encrypts many VMs at once rather than individual Windows hosts"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "From Linear to Complex: An Upgrade in RansomHouse Encryption",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2025-12-17",
+      "url": "https://unit42.paloaltonetworks.com/ransomhouse-encryption-upgrade/"
+    },
+    {
+      "id": "S2",
+      "title": "RansomHouse am See (MrAgent analysis)",
+      "publisher": "Trellix",
+      "date": "2024-02",
+      "url": "https://www.trellix.com/blogs/research/ransomhouse-am-see/"
+    },
+    {
+      "id": "S3",
+      "title": "MrAgent ransomware tool from RansomHouse group targets ESXi servers",
+      "publisher": "SC Media",
+      "date": "2024-02",
+      "url": "https://www.scworld.com/news/mragent-ransomware-tool-from-ransomhouse-group-targets-esxi-servers"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Affiliates gain initial access through spear-phishing and other social engineering.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "proxy",
+          "note": "[T1566.001] Macro-enabled phishing attachment download; the exact RansomHouse lure format is not published."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Affiliates exploit vulnerable systems in the victim environment, including zero-day and n-day exploits.",
+      "tools": [],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test performs public-facing application exploitation; specific CVEs are not named in reporting."
+    },
+    {
+      "order": 3,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Third-party tools and frameworks are used to map the environment and locate hypervisors and valuable data.",
+      "tools": [
+        "third-party scanners"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "proxy",
+          "note": "[T1046] Nmap port scan as representative third-party network mapping."
+        },
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "proxy",
+          "note": "[T1018] SoftPerfect NetScan remote host enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Affiliates escalate privileges and move laterally using third-party tooling before reaching the hypervisors (specific protocols not detailed).",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "proxy",
+          "note": "[T1021.001] RDP to remote host as a common lateral movement path."
+        },
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "proxy",
+          "note": "[T1021.002] Admin share mapping as an alternative lateral movement path."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Stolen data is compressed with file compression utilities prior to exfiltration.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "close",
+          "note": "[T1560.001] Password-protected 7-Zip archive for exfiltration."
+        },
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "close",
+          "note": "[T1560.001] RAR compression for exfiltration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "File transfer utilities send data to attacker-controlled servers (Trellix also notes CDN-based exfiltration infrastructure).",
+      "tools": [
+        "file transfer utilities"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "proxy",
+          "note": "[T1048.003] Rclone over FTP to an external server."
+        },
+        {
+          "testGuid": "1cdf2fb0-51b6-4fd8-96af-77020d5f1bf0",
+          "testNumber": 1,
+          "testName": "Exfiltrate data HTTPS using curl windows",
+          "fidelity": "proxy",
+          "note": "[T1048.002] HTTPS exfiltration with curl."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "execution",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "MrAgent is deployed on ESXi hosts, keeps a persistent connection to C2, pulls configuration and later downloads the Mario encryptor directly onto the hypervisor.",
+      "tools": [
+        "MrAgent"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2b080b99-0deb-4d51-af0f-833d37c4ca6a",
+          "testNumber": 18,
+          "testName": "Curl Download File",
+          "fidelity": "proxy",
+          "note": "[T1105] curl download of a remote payload, representative of MrAgent pulling the encryptor."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "MrAgent profiles the hypervisor: uname -a, esxcli --formatter=csv network nic list (MAC) and esxcli network ip interface ipv4 get (IP).",
+      "tools": [
+        "MrAgent",
+        "esxcli"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2040405c-eea6-4c1c-aef3-c2acc430fac9",
+          "testNumber": 31,
+          "testName": "ESXi - VM Discovery using ESXCLI",
+          "fidelity": "close",
+          "note": "[T1082] ESXi VM/host discovery using ESXCLI."
+        },
+        {
+          "testGuid": "f89812e5-67d1-4f49-86fa-cbc6609ea86a",
+          "testNumber": 32,
+          "testName": "ESXi - Darkside system information discovery",
+          "fidelity": "close",
+          "note": "[T1082] ESXi system information discovery (Darkside-style esxcli usage)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "Mario searches datastores for VM and backup files by extension (.vmdk, .vmem, .vmsd, .vmsn, .vswp, .ova, .ovf, .vbk, .vbm, .vib).",
+      "tools": [
+        "Mario"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a233a40-caf7-4cf1-890a-c6331bbc72cf",
+          "testNumber": 7,
+          "testName": "ESXi - Enumerate VMDKs available on an ESXi Host",
+          "fidelity": "exact",
+          "note": "[T1083] Enumerates VMDKs available on an ESXi host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1686",
+      "techniqueName": "Impair Defenses: Disable or Modify System Firewall",
+      "procedure": "MrAgent disables the ESXi firewall with esxcli network firewall set --enabled false.",
+      "tools": [
+        "MrAgent",
+        "esxcli"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "bac8a340-be64-4491-a0cc-0985cb227f5a",
+          "testNumber": 23,
+          "testName": "ESXi - Disable Firewall via Esxcli",
+          "fidelity": "exact",
+          "note": "[T1686] ESXi firewall disabled via esxcli."
+        },
+        {
+          "testGuid": "a67e8aea-ea7c-4c3b-9b1b-8c2957c3091d",
+          "testNumber": 25,
+          "testName": "ESXi - Set Firewall to PASS Traffic",
+          "fidelity": "close",
+          "note": "[T1686] ESXi firewall set to pass traffic."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "impact",
+      "techniqueId": "T1531",
+      "techniqueName": "Account Access Removal",
+      "procedure": "The MrAgent 'Exec' instruction changes the ESXi root password to lock administrators out during deployment.",
+      "tools": [
+        "MrAgent"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b99ef28-f83c-4ec5-8a08-1a56263a5bb2",
+          "testNumber": 1,
+          "testName": "Change User Password - Windows",
+          "fidelity": "proxy",
+          "note": "[T1531] Changes a user password to remove access; Windows stand-in for the ESXi root password change."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops vCenter remote management on the host (/etc/init.d/vpxa stop) before encryption.",
+      "tools": [
+        "MrAgent"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "proxy",
+          "note": "[T1489] Service stop via net.exe; Windows analogue of stopping vpxa."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1491.001",
+      "techniqueName": "Defacement: Internal Defacement",
+      "procedure": "MrAgent's 'Welcome' instruction changes the ESXi DCUI welcome message.",
+      "tools": [
+        "MrAgent"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30905f21-34f3-4504-8b4c-f7a5e314b810",
+          "testNumber": 3,
+          "testName": "ESXi - Change Welcome Message on Direct Console User Interface (DCUI)",
+          "fidelity": "exact",
+          "note": "[T1491.001] Changes the ESXi DCUI welcome message."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Mario deliberately encrypts Veeam backup files (.vbk/.vbm) and VM snapshot/state files to prevent recovery.",
+      "tools": [
+        "Mario"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b1dbaf6-cc8a-4ea6-891f-6058569653bf",
+          "testNumber": 6,
+          "testName": "Windows - Delete Backup Files",
+          "fidelity": "proxy",
+          "note": "[T1490] Deletes backup files; models loss of backup artefacts."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Mario (Babuk-derived) encrypts VM disks with a multi-layer scheme (Dec 2025 upgrade), appends a 'mario' extension (e.g. .emario) and drops 'How To Restore Your Files.txt'; victims are pressured via Telegram and the leak site.",
+      "tools": [
+        "Mario ESXi"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        },
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "proxy",
+          "note": "[T1529] vim-cmd VM power-off that precedes hypervisor-level encryption."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

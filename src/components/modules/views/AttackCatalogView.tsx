@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { purpleSharpSupports } from "@/config/attack-libraries/purplesharp";
 
 type Engine = "art" | "purplesharp";
-interface Tech { id: string; name: string; tactic?: string }
+interface Tech { id: string; name: string; tactic?: string; uid?: string; match?: string[] }
 interface Group { name: string; domain?: string; description?: string; techniques: Tech[] }
 interface Atomic {
   id: string; techniqueId: string; requestedId: string; techniqueName: string;
@@ -84,17 +84,24 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
   const inScope = (a: Atomic) => !platformScope || !(a.platforms?.length) || a.platforms.some((p) => platformScope.includes(p));
 
   // technique id → {domain, tactic, name} from the manifest (first group wins).
+  // Keyed by `uid` (defaults to the ATT&CK id, so existing modules are unchanged).
+  // A module may list several named entries under one ATT&CK id by giving each a
+  // distinct `uid`; `match` then narrows that id's atomic tests to the ones whose
+  // name contains any term ([] = coverage-only, no runnable atomic).
   const techMeta = useMemo(() => {
-    const m = new Map<string, { domain: string; tactic: string; name: string }>();
+    const m = new Map<string, { tid: string; domain: string; tactic: string; name: string; match?: string[] }>();
     for (const g of catalog) for (const t of g.techniques) {
-      if (!m.has(t.id)) m.set(t.id, { domain: g.domain || "General", tactic: g.name || t.tactic || "other", name: t.name });
+      const uid = t.uid || t.id;
+      if (!m.has(uid)) m.set(uid, { tid: t.id, domain: g.domain || "General", tactic: g.name || t.tactic || "other", name: t.name, match: t.match });
     }
     return m;
   }, [catalog]);
 
   // Resolve ALL techniques in the module to their real atomic tests in one call.
   useEffect(() => {
-    const ids = [...techMeta.keys()];
+    // Unique ATT&CK ids, most specific first, so a sub-technique's atomics are
+    // attributed to it rather than to a parent id listed in the same module.
+    const ids = [...new Set([...techMeta.values()].map((v) => v.tid))].sort((a, b) => b.length - a.length);
     if (!ids.length) return;
     setResolving(true);
     (async () => {
@@ -112,17 +119,29 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
   // row. PurpleSharp runs on a Windows fleet node.
   const allRows: Row[] = useMemo(() => {
     const rows: Row[] = [];
-    for (const [id, meta] of techMeta) {
-      const atoms = (atomicsByTech[id] || []).filter(inScope);
+    const claimed = new Set<string>();
+    for (const [uid, meta] of techMeta) {
+      const id = meta.tid;
+      let atoms = (atomicsByTech[id] || []).filter(inScope);
+      // Named-entry narrowing (see techMeta): keep only tests whose name contains
+      // any `match` term; `[]` keeps none (coverage-only entry).
+      if (meta.match) {
+        const terms = meta.match.map((s) => s.toLowerCase());
+        atoms = atoms.filter((a) => terms.some((s) => (a.testName || "").toLowerCase().includes(s)));
+      }
+      atoms = atoms.filter((a) => !claimed.has(a.id));
+      for (const a of atoms) claimed.add(a.id);
       for (const a of atoms) rows.push({
-        key: a.id, engine: "art", runnable: !!a.command, selKey: a.command ? a.id : undefined, atomic: a,
-        techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
+        key: `${uid}:${a.id}`, engine: "art", runnable: !!a.command, selKey: a.command ? a.id : undefined, atomic: a,
+        techniqueId: a.techniqueId || id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
         testNumber: a.testNumber, testName: a.testName, executor: a.executor || "—", platforms: a.platforms || [],
         command: a.command, cleanupCommand: a.cleanupCommand, elevationRequired: a.elevationRequired, description: a.description,
       });
-      if (purpleSharpSupports(id)) {
+      // PurpleSharp row only for un-narrowed entries (a `match` entry is one named
+      // variant, not the whole ATT&CK technique PurpleSharp simulates).
+      if (meta.match === undefined && purpleSharpSupports(id)) {
         rows.push({
-          key: `ps:${id}`, engine: "purplesharp", runnable: true, selKey: `ps:${id}`,
+          key: `ps:${uid}`, engine: "purplesharp", runnable: true, selKey: `ps:${uid}`,
           techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
           testNumber: 0, testName: "PurpleSharp technique simulation (native AD)", executor: "PurpleSharp", platforms: ["windows"],
           command: `PurpleSharp.exe /t ${id}`,
@@ -130,7 +149,7 @@ export default function AttackCatalogView({ moduleId }: { moduleId: string; sub:
         });
       } else if (!atoms.length) {
         rows.push({
-          key: `none:${id}`, engine: null, runnable: false,
+          key: `none:${uid}`, engine: null, runnable: false,
           techniqueId: id, techniqueName: meta.name, domain: meta.domain, tactic: meta.tactic,
           testName: "No ART atomic or PurpleSharp coverage", executor: "—", platforms: [],
         });

@@ -82,7 +82,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ nodeId: str
     }
 
     // Claim + sign.
-    await prisma.fleetOperation.update({ where: { id: op.id }, data: { status: "running", claimedBy: nodeId } });
+    // Atomic claim (queued → running): concurrent polls can't both receive the
+    // same op, and an op halted/cancelled meanwhile is never handed out.
+    const claimed = await prisma.fleetOperation.updateMany({ where: { id: op.id, nodeId, status: "queued" }, data: { status: "running", claimedBy: nodeId } });
+    if (claimed.count !== 1) continue;
     await prisma.fleetNode.update({ where: { id: nodeId }, data: { currentRunId: op.id } });
 
     const notAfter = Math.floor(Date.now() / 1000) + JOB_TTL_S;

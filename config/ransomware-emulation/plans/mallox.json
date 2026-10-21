@@ -1,0 +1,547 @@
+{
+  "gang": "mallox",
+  "displayName": "Mallox",
+  "aliases": [
+    "TargetCompany",
+    "Fargo",
+    "Tohnichi",
+    "Xollam"
+  ],
+  "status": "active",
+  "activeSince": "2021",
+  "lineage": "Same operation as TargetCompany/Fargo/Tohnichi (2021); RaaS with affiliates since 2023; a 2024 affiliate rebranded leaked Kryptina code as 'Mallox Linux 1.0'",
+  "summary": "Mallox (TargetCompany) is a long-running double-extortion operation that overwhelmingly gets in through internet-exposed Microsoft SQL Servers, by dictionary brute-forcing the 'sa' account or exploiting MS-SQL/SSRS RCE bugs. sqlservr.exe is then used to run xp_cmdshell / OLE Automation, which pulls PowerShell and batch stagers (and in 2024 the PureCrypter loader) that kill SQL/backup services and security tools, change file ownership, clear logs and delete shadow copies before ChaCha20 encryption. Leak-site victim postings were reported through mid-2024 (Gen Digital); current tempo is not confirmed by 2025-2026 reporting.",
+  "uniqueTraits": [
+    "Near-exclusive focus on exposed MS-SQL: 'sa' dictionary brute force, xp_cmdshell and OLE Automation Procedures spawning the payload from sqlservr.exe",
+    "Exploitation of MS-SQL/SSRS RCE bugs CVE-2019-1068 and CVE-2020-0618",
+    "Commodity crypters/loaders (PureCrypter, BatCloak) and Remcos RAT wrapped around the encryptor",
+    "takeown/icacls permission tampering and deletion of the Raccine anti-ransomware registry key",
+    "Affiliate tooling seen in 2024 included a CVE-2024-21338 LPE exploit, a Kaspersky password-reset batch (KLAPR.BAT) and a Kryptina-based Linux locker"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Threat Group Assessment: Mallox Ransomware",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2023-07-20",
+      "url": "https://unit42.paloaltonetworks.com/mallox-ransomware/"
+    },
+    {
+      "id": "S2",
+      "title": "Mallox ransomware affiliate leverages PureCrypter in Microsoft SQL exploitation campaigns",
+      "publisher": "Sekoia TDR",
+      "date": "2024-05-13",
+      "url": "https://blog.sekoia.io/mallox-ransomware-affiliate-leverages-purecrypter-in-microsoft-sql-exploitation-campaigns/"
+    },
+    {
+      "id": "S3",
+      "title": "Kryptina RaaS | From Unsellable Cast-Off to Enterprise Ransomware",
+      "publisher": "SentinelLabs",
+      "date": "2024-09-23",
+      "url": "https://www.sentinelone.com/labs/kryptina-raas-from-unsellable-cast-off-to-enterprise-ransomware/"
+    },
+    {
+      "id": "S4",
+      "title": "Mallox Ransomware Group Revamps Malware Variants, Evasion Tactics (Trend Micro research)",
+      "publisher": "Dark Reading",
+      "date": "2023-09-21",
+      "url": "https://www.darkreading.com/ics-ot/mallox-ransomware-group-steams-ahead-with-new-variant-evasion-tactics"
+    },
+    {
+      "id": "S5",
+      "title": "Decrypted: Mallox Ransomware",
+      "publisher": "Gen Digital (Avast)",
+      "date": "2024-10-31",
+      "url": "https://www.gendigital.com/blog/news/innovation/decrypted-mallox-ransomware"
+    },
+    {
+      "id": "S6",
+      "title": "Emulating the Extortionist Mallox Ransomware",
+      "publisher": "AttackIQ",
+      "date": "2024-08-30",
+      "url": "https://www.attackiq.com/2024/08/30/emulating-mallox-ransomware/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Brute Force: Password Guessing",
+      "procedure": "Dictionary brute force of the MS-SQL 'sa' account on internet-exposed SQL Servers; a Sekoia honeypot was compromised within an hour and brute forcing continued afterwards.",
+      "tools": [
+        "MS-SQL brute forcer"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "proxy",
+          "note": "No MS-SQL brute-force atomic exists; SMB password guessing produces the same burst-of-failed-logons pattern to tune brute-force detections (local ART T1110.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits MS-SQL/SSRS remote code execution vulnerabilities CVE-2019-1068 and CVE-2020-0618 to get a first-stage foothold on SQL servers.",
+      "tools": [],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; validate with vulnerability scanning / patch-state checks or a purple-team exploit range, not ART."
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.003",
+      "techniqueName": "Command and Scripting Interpreter: Windows Command Shell",
+      "procedure": "Enables xp_cmdshell / OLE Automation Procedures and creates assemblies, then runs commands so sqlservr.exe spawns cmd.exe to drop and run batch stagers (system.bat saved as tzt.bat).",
+      "tools": [
+        "xp_cmdshell",
+        "OLE Automation Procedures",
+        "cmd.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9e8894c0-50bd-4525-a96c-d4ac78ece388",
+          "testNumber": 1,
+          "testName": "Create and Execute Batch Script",
+          "fidelity": "proxy",
+          "note": "Creates and runs a batch script; reproduces the batch-stager behaviour but not the sqlservr.exe parent (local ART T1059.003 #1)"
+        },
+        {
+          "testGuid": "d0eb3597-a1b3-4d65-b33b-2cda8d397f20",
+          "testNumber": 3,
+          "testName": "Suspicious Execution via Windows Command Shell",
+          "fidelity": "proxy",
+          "note": "Suspicious cmd.exe execution pattern for command-shell detections (local ART T1059.003 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "PowerShell with -ExecutionPolicy Bypass (updt.ps1) uses System.Net.WebClient.DownloadFile to fetch the payload (saved as tzt.exe) from attacker infrastructure.",
+      "tools": [
+        "PowerShell",
+        "System.Net.WebClient"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "exact",
+          "note": "PowerShell WebClient file download, as used by updt.ps1 (local ART T1105 #10)"
+        },
+        {
+          "testGuid": "6934c16e-0b3a-4e7f-ab8c-c414acd32181",
+          "testNumber": 32,
+          "testName": "File Download with Sqlcmd.exe",
+          "fidelity": "proxy",
+          "note": "File download through SQL tooling (sqlcmd), useful to cover SQL-originated downloads (local ART T1105 #32)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1047",
+      "techniqueName": "Windows Management Instrumentation",
+      "procedure": "Launches the downloaded payload with 'wmic process call create'.",
+      "tools": [
+        "wmic.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b3bdfc91-b33e-4c6d-a5c8-d64bee0276b3",
+          "testNumber": 5,
+          "testName": "WMI Execute Local Process",
+          "fidelity": "exact",
+          "note": "WMIC process call create of a local process (local ART T1047 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1027",
+      "techniqueName": "Obfuscated Files or Information",
+      "procedure": "Payload wrapped in the PureCrypter .NET loader (2024) or BatCloak-obfuscated batch files (2023) that decrypt and run the Mallox encryptor; Remcos RAT also deployed alongside.",
+      "tools": [
+        "PureCrypter",
+        "BatCloak",
+        "Remcos"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8b3f4ed6-077b-4bdd-891c-2d237f19410f",
+          "testNumber": 7,
+          "testName": "Obfuscated Command in PowerShell",
+          "fidelity": "proxy",
+          "note": "Obfuscated PowerShell command; exercises script-obfuscation detection rather than the .NET crypter itself (local ART T1027 #7)"
+        },
+        {
+          "testGuid": "a50d5a97-2531-499e-a1de-5544c74432c6",
+          "testNumber": 2,
+          "testName": "Execute base64-encoded PowerShell",
+          "fidelity": "proxy",
+          "note": "Base64-encoded PowerShell execution (local ART T1027 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1136.001",
+      "techniqueName": "Create Account: Local Account",
+      "procedure": "Creates a local account named 'SystemHelp' for continued access.",
+      "tools": [
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fda74566-a604-4581-a4cc-fbbe21d66559",
+          "testNumber": 8,
+          "testName": "Create a new Windows admin user",
+          "fidelity": "exact",
+          "note": "Creates a new local admin user from the command line (local ART T1136.001 #8)"
+        },
+        {
+          "testGuid": "6657864e-0323-4206-9344-ac9cd7265a4f",
+          "testNumber": 4,
+          "testName": "Create a new user in a command prompt",
+          "fidelity": "close",
+          "note": "net user account creation (local ART T1136.001 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Enables Remote Desktop and changes registry values to remove RDP session time limits so the new account can be used interactively.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "16bdbe52-371c-4ccf-b708-79fba61f1db4",
+          "testNumber": 70,
+          "testName": "Enable RDP via Registry (fDenyTSConnections)",
+          "fidelity": "close",
+          "note": "Enables RDP through the fDenyTSConnections registry value (local ART T1112 #70)"
+        },
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "proxy",
+          "note": "Opens RDP/SMB in Windows Firewall, the usual companion to enabling RDP (local ART T1686 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Affiliate server held an exploit for CVE-2024-21338 (Windows appid.sys LPE, based on a public PoC) plus PowerShell privilege-escalation templates (s.ps1).",
+      "tools": [
+        "CVE-2024-21338 exploit",
+        "s.ps1"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The local T1068 tests are BYOVD/driver-specific; no atomic exercises CVE-2024-21338. Validate patch state instead."
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Kills security and SQL processes with taskkill, deletes the Raccine anti-ransomware registry key, and (2024 affiliate) resets Kaspersky's stored password with KLAPR.BAT; s.ps1 checks installed AV via WMI.",
+      "tools": [
+        "taskkill.exe",
+        "reg.exe",
+        "KLAPR.BAT"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disables a security service, same goal as the Mallox kill lists (local ART T1685 #18)"
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Stops and removes a security service (local ART T1685 #24)"
+        },
+        {
+          "testGuid": "7f566051-f033-49fb-89de-b6bacab730f0",
+          "testNumber": 2,
+          "testName": "Security Software Discovery - powershell",
+          "fidelity": "proxy",
+          "note": "PowerShell/WMI security software discovery, as in the affiliate s.ps1 AV check (local ART T1518.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1222.001",
+      "techniqueName": "File and Directory Permissions Modification: Windows",
+      "procedure": "Uses takeown.exe and permission changes to take ownership of files and deny access to cmd.exe and key system processes.",
+      "tools": [
+        "takeown.exe",
+        "icacls/cacls"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "98d34bb4-6e75-42ad-9c41-1dae7dc6a001",
+          "testNumber": 1,
+          "testName": "Take ownership using takeown utility",
+          "fidelity": "exact",
+          "note": "Takes ownership with takeown (local ART T1222.001 #1)"
+        },
+        {
+          "testGuid": "a8206bcc-f282-40a9-a389-05d9c0263485",
+          "testNumber": 2,
+          "testName": "cacls - Grant permission to specified user or group recursively",
+          "fidelity": "close",
+          "note": "Recursive permission grant with cacls (local ART T1222.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops and deletes SQL- and backup-related services with sc.exe and net.exe so database files can be encrypted.",
+      "tools": [
+        "sc.exe",
+        "net.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "exact",
+          "note": "Stops a service with sc.exe (local ART T1489 #1)"
+        },
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "exact",
+          "note": "Stops a service with net.exe (local ART T1489 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685.005",
+      "techniqueName": "Indicator Removal: Clear Windows Event Logs",
+      "procedure": "Clears the Application, Security, Setup and System event logs with wevtutil.",
+      "tools": [
+        "wevtutil.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e6abb60e-26b8-41da-8aae-0c35174b0967",
+          "testNumber": 1,
+          "testName": "Clear Logs",
+          "fidelity": "exact",
+          "note": "wevtutil cl of Windows event logs (local ART T1685.005 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes volume shadow copies and disables System Image Recovery with bcdedit.",
+      "tools": [
+        "vssadmin.exe",
+        "bcdedit.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recoveryenabled No / ignore boot failures (local ART T1490 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "ChaCha20 encryption with extensions such as .mallox, .malox, .xollam, .FARGO3 or the victim's name and a ransom note in every directory; 2024 'Mallox Linux 1.0' (Kryptina-based AES-256-CBC, .lmallox) for Linux hosts. Data is stolen first for double extortion.",
+      "tools": [
+        "Mallox encryptor",
+        "Mallox Linux 1.0"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        },
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "proxy",
+          "note": "Mass file rename with ransom note, a stand-in for Mallox extension changes (local ART T1486 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "The encryptor deletes itself after execution.",
+      "tools": [
+        "cmd.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Deletes a file from cmd (local ART T1070.004 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

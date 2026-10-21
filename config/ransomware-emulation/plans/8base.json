@@ -1,0 +1,536 @@
+{
+  "gang": "8base",
+  "displayName": "8Base",
+  "aliases": [
+    "8Base",
+    "Phobos affiliate"
+  ],
+  "status": "disrupted",
+  "activeSince": "2022",
+  "lineage": "Phobos RaaS affiliate (Phobos 2.9.x with .8base extension); overlaps with RansomHouse leak-site wording; infrastructure seized and leaders arrested in Europol-led operation, February 2025",
+  "summary": "8Base surged in mid-2023 as one of the most active double-extortion operations, deploying a customised Phobos encryptor (.8base). Initial access came via phishing that delivered SmokeLoader, which decrypts and loads Phobos in memory, alongside RDP brute-force and purchased access typical of the Phobos ecosystem. Operators used SystemBC for proxied C2, IP scanners and common credential tools (Mimikatz, LaZagne, NirSoft), disabled the firewall, and ran an extensive recovery-inhibition sequence (vssadmin, wmic, wbadmin, bcdedit) before encrypting. Its leak sites were seized and four alleged leaders arrested in February 2025.",
+  "uniqueTraits": [
+    "SmokeLoader-delivered Phobos payload decrypted and loaded in memory",
+    "SystemBC used to proxy and conceal C2",
+    "Full Phobos recovery-inhibition chain (wmic, wbadmin delete catalog, vssadmin, bcdedit recoveryenabled no / ignoreallfailures)",
+    "Partial encryption of files above ~1.5 MB for speed"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "8Base Ransomware: A Heavy Hitting Player",
+      "publisher": "VMware Carbon Black TAU",
+      "date": "2023-06-28",
+      "url": "https://blogs.vmware.com/security/2023/06/8base-ransomware-a-heavy-hitting-player.html"
+    },
+    {
+      "id": "S2",
+      "title": "8Base group deploying new Phobos ransomware variant via SmokeLoader (reporting Cisco Talos)",
+      "publisher": "The Hacker News",
+      "date": "2023-11",
+      "url": "https://thehackernews.com/2023/11/8base-group-deploying-new-phobos.html"
+    },
+    {
+      "id": "S3",
+      "title": "#StopRansomware: Phobos Ransomware (AA24-060A)",
+      "publisher": "CISA/FBI/MS-ISAC",
+      "date": "2024-02-29",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-060a"
+    },
+    {
+      "id": "S4",
+      "title": "8Base ransomware group leaders arrested, leak site seized",
+      "publisher": "Help Net Security",
+      "date": "2025-02-11",
+      "url": "https://www.helpnetsecurity.com/2025/02/11/8base-ransomware-group-leaders-arrested-leak-site-seized-phobos/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Phishing emails deliver SmokeLoader, which acts as the downloader for the Phobos payload.",
+      "tools": [
+        "SmokeLoader"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Download of a macro-enabled phishing attachment."
+        },
+        {
+          "testGuid": "5202ee05-c420-4148-bf5e-fd7f7d24850c",
+          "testNumber": 9,
+          "testName": "Office Generic Payload Download",
+          "fidelity": "close",
+          "note": "Office document generic payload download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "credential-access",
+      "techniqueId": "T1110.001",
+      "techniqueName": "Brute Force: Password Guessing",
+      "procedure": "Phobos-ecosystem affiliates brute-force exposed RDP to gain access.",
+      "tools": [
+        "RDP brute force"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "proxy",
+          "note": "SMB brute force against a domain user; same failed-logon burst detection surface as RDP guessing."
+        },
+        {
+          "testGuid": "90bc2e54-6c84-47a5-9439-0a2a92b4b175",
+          "testNumber": 1,
+          "testName": "Password Spray all Domain Users",
+          "fidelity": "proxy",
+          "note": "Password spray against domain users."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1620",
+      "techniqueName": "Reflective Code Loading",
+      "procedure": "SmokeLoader decrypts the embedded Phobos payload and loads it into memory (packing/obfuscation).",
+      "tools": [
+        "SmokeLoader"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114c2b95-d992-4c03-8c38-fc58420a3eb5",
+          "testNumber": 2,
+          "testName": "Reflective PE Injection via PowerSploit",
+          "fidelity": "close",
+          "note": "Reflective PE injection via PowerSploit."
+        },
+        {
+          "testGuid": "578025d5-faa9-4f6d-8390-aae739d503e1",
+          "testNumber": 1,
+          "testName": "Portable Executable Injection",
+          "fidelity": "proxy",
+          "note": "Portable executable injection."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1090",
+      "techniqueName": "Proxy",
+      "procedure": "SystemBC proxies and encrypts C2 traffic to conceal attacker infrastructure.",
+      "tools": [
+        "SystemBC"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dc7767b-30c1-4cc4-b999-50cab5e27891",
+          "testNumber": 9,
+          "testName": "SystemBC Malware-as-a-Service Registry",
+          "fidelity": "close",
+          "note": "SystemBC MaaS registry persistence artefact."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "Phobos copies itself into AppData and Startup locations and sets Run-key persistence.",
+      "tools": [
+        "Phobos"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "exact",
+          "note": "Run-key persistence."
+        },
+        {
+          "testGuid": "24e55612-85f6-4bd6-ae74-a73d02e3441d",
+          "testNumber": 7,
+          "testName": "Add Executable Shortcut Link to User Startup Folder",
+          "fidelity": "close",
+          "note": "Executable shortcut in Startup folder."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1134.001",
+      "techniqueName": "Access Token Manipulation: Token Impersonation/Theft",
+      "procedure": "Uses DuplicateToken() to adjust token privileges.",
+      "tools": [
+        "Phobos"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "34f0a430-9d04-4d98-bcb5-1989f14719f0",
+          "testNumber": 2,
+          "testName": "`SeDebugPrivilege` token duplication",
+          "fidelity": "exact",
+          "note": "SeDebugPrivilege token duplication."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.004",
+      "techniqueName": "Impair Defenses: Disable or Modify System Firewall",
+      "procedure": "Phobos disables the Windows firewall (netsh firewall set opmode mode=disable).",
+      "tools": [
+        "netsh"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "91f348e6-3760-4997-a93b-2ceee7f254ee",
+          "testNumber": 22,
+          "testName": "Blackbit - Disable Windows Firewall using netsh firewall",
+          "fidelity": "exact",
+          "note": "netsh firewall disable (catalogue ID T1686)."
+        },
+        {
+          "testGuid": "88d05800-a5e4-407e-9b53-ece4174f197f",
+          "testNumber": 1,
+          "testName": "Disable Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "Disable Microsoft Defender Firewall."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "IP/port scanners (e.g. Angry IP Scanner) map the network.",
+      "tools": [
+        "Angry IP Scanner"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "close",
+          "note": "nmap port scan."
+        },
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "close",
+          "note": "Netscan host enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz plus NirSoft and LaZagne utilities harvest OS and browser credentials.",
+      "tools": [
+        "Mimikatz",
+        "LaZagne",
+        "NirSoft"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "exact",
+          "note": "Mimikatz detonation."
+        },
+        {
+          "testGuid": "9a2915b3-3954-4cce-8c76-00fbf4dbd014",
+          "testNumber": 3,
+          "testName": "LaZagne - Credentials from Browser",
+          "fidelity": "exact",
+          "note": "LaZagne browser credential theft."
+        },
+        {
+          "testGuid": "e359627f-2d90-4320-ba5e-b0f878155bbe",
+          "testNumber": 15,
+          "testName": "WebBrowserPassView - Credentials from Browser",
+          "fidelity": "exact",
+          "note": "NirSoft WebBrowserPassView."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Crawls network resources with WNetEnumResource() to find shares to encrypt.",
+      "tools": [
+        "Phobos"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "Network share discovery via cmd."
+        },
+        {
+          "testGuid": "1b0814d1-bb24-402d-9615-1b20c50733fb",
+          "testNumber": 5,
+          "testName": "Network Share Discovery PowerShell",
+          "fidelity": "close",
+          "note": "Network share discovery via PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "PsExec and admin shares used to run tooling on remote hosts.",
+      "tools": [
+        "PsExec"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copy and execute with PsExec."
+        },
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "close",
+          "note": "Map admin share."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Exfiltrates data with WinSCP and MEGA before encryption (double extortion).",
+      "tools": [
+        "WinSCP",
+        "MEGA"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone upload to MEGA."
+        },
+        {
+          "testGuid": "205e676e-0401-4bae-83a5-94b8c5daeb22",
+          "testNumber": 36,
+          "testName": "Windows push file using sftp.exe",
+          "fidelity": "close",
+          "note": "sftp.exe file push, the protocol WinSCP uses."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Terminates processes (Office, databases, security software) that may lock target files.",
+      "tools": [
+        "Phobos"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "exact",
+          "note": "Stop service by killing its process."
+        },
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "Stop a service with net.exe."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "wmic shadowcopy delete; wbadmin delete catalog -quiet; vssadmin delete shadows /all /quiet; bcdedit recoveryenabled no and bootstatuspolicy ignoreallfailures.",
+      "tools": [
+        "wmic",
+        "wbadmin",
+        "vssadmin",
+        "bcdedit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete."
+        },
+        {
+          "testGuid": "263ba6cb-ea2b-41c9-9d4e-b652dadd002c",
+          "testNumber": 3,
+          "testName": "Windows - wbadmin Delete Windows Backup Catalog",
+          "fidelity": "exact",
+          "note": "wbadmin delete catalog."
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "bcdedit recoveryenabled no / ignoreallfailures."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Phobos variant (AES) appends .8base; small files fully encrypted, larger ones partially.",
+      "tools": [
+        "Phobos (8Base build)"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

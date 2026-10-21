@@ -88,3 +88,10 @@ Thumbs.db
 /research/
 labs/winrm.config.json
 reports/coverage-assessments/
+
+# Client assessment data — never publish
+reports/unicornsecrets-*
+# Generated coverage-assessment run outputs (per-run, large)
+reports/coverage-assessments/
+# Working source documents (not platform content)
+/*.docx

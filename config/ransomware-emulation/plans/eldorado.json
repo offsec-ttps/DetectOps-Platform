@@ -1,0 +1,243 @@
+{
+  "gang": "eldorado",
+  "displayName": "Eldorado (BlackLock)",
+  "aliases": [
+    "BlackLock",
+    "El Dorado"
+  ],
+  "status": "rebranded",
+  "activeSince": "2024",
+  "lineage": "Eldorado RaaS (March 2024) is tracked as the same operation as BlackLock (aka El Dorado), which grew sharply in late 2024 per ReliaQuest",
+  "summary": "Eldorado is a Go-based RaaS advertised on RAMP from March 2024, with Windows and ESXi/Linux lockers built by its own custom builder (not leaked LockBit/Babuk code). Affiliates embed a domain-admin password or NTLM hash in the build, so the locker can encrypt SMB network shares, delete shadow copies and wipe itself. Reporting on the BlackLock name (2025) adds broker- and traffer-supplied access, pass-the-hash lateral movement and abuse of the ESXi 'vpxuser' account. Public intrusion-level reporting is thin; most detail comes from malware analysis.",
+  "uniqueTraits": [
+    "Affiliate build embeds domain-admin password or NTLM hash ('DA' config field) so the locker can authenticate to SMB shares",
+    "Custom Go builder with Windows (win/win_64) and ESXi (esxi/esxi_64) lockers",
+    "Self-deletion by overwriting the EXE with random bytes from PowerShell before deleting it",
+    "BlackLock-era abuse of the privileged ESXi service account 'vpxuser' and pass-the-hash movement"
+  ],
+  "insufficientReporting": true,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Eldorado Ransomware: The New Golden Empire of Cybercrime?",
+      "publisher": "Group-IB",
+      "date": "2024-07-03",
+      "url": "https://www.group-ib.com/blog/eldorado-ransomware/"
+    },
+    {
+      "id": "S2",
+      "title": "New Eldorado ransomware targets Windows, VMware ESXi VMs",
+      "publisher": "BleepingComputer",
+      "date": "2024-07-05",
+      "url": "https://www.bleepingcomputer.com/news/security/new-eldorado-ransomware-targets-windows-vmware-esxi-vms/"
+    },
+    {
+      "id": "S3",
+      "title": "BlackLock ransomware onslaught: What to expect and how to fight it (ReliaQuest research)",
+      "publisher": "Help Net Security",
+      "date": "2025-02-18",
+      "url": "https://www.helpnetsecurity.com/2025/02/18/blacklock-ransomware-what-to-expect-how-to-fight-it/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Access bought from initial access brokers or supplied by 'traffers' recruited on RAMP; the operator also sometimes compromises victims directly.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Purchased/brokered access has no ART equivalent; validate with identity analytics and external-exposure reviews."
+    },
+    {
+      "order": 2,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1550.002",
+      "techniqueName": "Use Alternate Authentication Material: Pass the Hash",
+      "procedure": "Moves between hosts with pass-the-NTLM-hash; the Windows locker itself accepts a domain-admin NTLM hash (or password) baked into the build.",
+      "tools": [],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ec23cef9-27d9-46e4-a68d-6f75f7b86908",
+          "testNumber": 1,
+          "testName": "Mimikatz Pass the Hash",
+          "fidelity": "exact",
+          "note": "Mimikatz pass-the-hash (local ART T1550.002 #1)"
+        },
+        {
+          "testGuid": "f8757545-b00a-4e4e-8cfb-8cfb961ee713",
+          "testNumber": 3,
+          "testName": "Invoke-WMIExec Pass the Hash",
+          "fidelity": "close",
+          "note": "Invoke-WMIExec pass-the-hash (local ART T1550.002 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1078.003",
+      "techniqueName": "Valid Accounts: Local Accounts",
+      "procedure": "Compromises the highly privileged ESXi service account 'vpxuser' to reach hypervisors.",
+      "tools": [],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local T1078.003 atomics create Windows local accounts; none simulate vpxuser abuse on ESXi. Validate with vCenter/ESXi auth logging."
+    },
+    {
+      "order": 4,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Windows locker discovers network shares (optionally limited to specific subnets with -n, or skipped with -skip-net).",
+      "tools": [
+        "Eldorado locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "Network share discovery from the command prompt (local ART T1135 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "Authenticates to SMB shares with the embedded domain-admin credentials and encrypts the remote files.",
+      "tools": [
+        "Eldorado locker"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3386975b-367a-4fbb-9d77-4dcf3639ffd3",
+          "testNumber": 1,
+          "testName": "Map admin share",
+          "fidelity": "close",
+          "note": "Maps an admin share with credentials (local ART T1021.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Runs 'vssadmin delete shadows /all /quiet' at the end of execution.",
+      "tools": [
+        "vssadmin.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows (local ART T1490 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "ChaCha20 per-file keys protected with RSA-OAEP; skips system folders and executable/driver extensions; adds .00000001 and drops HOW_RETURN_YOUR_DATA.TXT to Documents and Desktop. ESXi builds (esxi/esxi_64) target hypervisors.",
+      "tools": [
+        "Eldorado locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        },
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "proxy",
+          "note": "Mass file rename with a ransom note, standing in for the .00000001 extension (local ART T1486 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Unless -keep is set, overwrites its own EXE with random bytes in a PowerShell loop and deletes it.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dee89bd-9a98-4c4f-9e2d-4256690b0e72",
+          "testNumber": 6,
+          "testName": "Delete a single file - Windows PowerShell",
+          "fidelity": "close",
+          "note": "Deletes a single file from PowerShell (local ART T1070.004 #6)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

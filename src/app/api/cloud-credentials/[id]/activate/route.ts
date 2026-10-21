@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto/credential-vault";
-import { requireUser, ownsOr404 } from "@/lib/auth-guard";
+import { requireRole, ownsOr404 } from "@/lib/auth-guard";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { writeFile, mkdir } from "fs/promises";
@@ -24,7 +24,9 @@ const exec = promisify(execFile);
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  // Overwrites the HOST-WIDE ~/.aws used by the shared cloud controller for
+  // every user's builds — admin only.
+  const auth = await requireRole("admin");
   if (!auth.ok) return auth.response;
 
   const cred = await prisma.cloudCredential.findUnique({ where: { id } });
@@ -48,6 +50,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!region) region = "us-east-1";
   if (!accessKeyId || !secretKey) {
     return NextResponse.json({ error: "credential is missing an access key or secret" }, { status: 400 });
+  }
+  // SECURITY: these are written into INI files the AWS CLI parses. A newline in
+  // any value would inject e.g. `credential_process = <cmd>` → command execution
+  // on this host the next time aws/terraform runs. Enforce AWS's real formats.
+  if (!/^[A-Z0-9]{16,128}$/.test(accessKeyId) || !/^[A-Za-z0-9/+=]{16,128}$/.test(secretKey) ||
+      (sessionToken && !/^[A-Za-z0-9/+=]{16,4096}$/.test(sessionToken)) || !/^[a-z]{2}(-[a-z]+)+-\d{1,2}$/.test(region)) {
+    return NextResponse.json({ error: "credential has an invalid access key / secret / session token / region format" }, { status: 400 });
   }
 
   // Write ~/.aws/credentials + config (default profile), 0600.

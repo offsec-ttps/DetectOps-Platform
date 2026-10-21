@@ -1,0 +1,466 @@
+{
+  "gang": "hellcat",
+  "displayName": "HellCat",
+  "aliases": [
+    "Hellcat"
+  ],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Encryptor shares an identical codebase/builder with Morpheus (SentinelOne); ransom-note template resembles Underground Team",
+  "summary": "HellCat is a small, high-profile double-extortion crew (personas Rey, Pryx, Grep and others) active since late 2024. Its signature access path is logging into corporate Atlassian Jira with credentials that infostealers (Lumma, RedLine, Raccoon, StealC) took from employees or third parties; this hit Schneider Electric, Telefonica, Orange, Ascom and Jaguar Land Rover. Exploits against exposed applications (Jira, PAN-OS CVE-2024-0012/9474) and phishing are also reported. On hosts, a multi-stage PowerShell chain with an AMSI bypass reflectively loads a Sliver stager; data goes out over SFTP or to cloud drops before the Morpheus-shared encryptor runs.",
+  "uniqueTraits": [
+    "Access to Atlassian Jira with infostealer-harvested (sometimes years-old, third-party) credentials",
+    "Staged PowerShell chain s1.ps1 > Payload.ps1 > Isma.ps1 (AMSI bypass) > Shellcode.ps1 that reflectively loads the Sliver shellcode 'Stager.woff'",
+    "HKCU Run value named 'maintenance' for persistence",
+    "Exfiltration over SFTP and to the actor-run site waifu[.]cat; bulk theft often without encryption",
+    "Encryptor identical to Morpheus: no extension change, _README_.txt in C:\\Users\\Public, self-deleting '_-_.bat'"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "HellCat Ransomware: Exposing the TTPs of a Rising Ransomware Threat in 2025",
+      "publisher": "Picus Security",
+      "date": "2025-03-13",
+      "url": "https://www.picussecurity.com/resource/blog/hellcat-ransomware"
+    },
+    {
+      "id": "S2",
+      "title": "Who are Hellcat Ransomware Group?",
+      "publisher": "Bridewell",
+      "date": "2025-02-28",
+      "url": "https://www.bridewell.com/insights/blogs/detail/who-are-hellcat-ransomware-group"
+    },
+    {
+      "id": "S3",
+      "title": "HellCat hackers go on a worldwide Jira hacking spree (Hudson Rock research)",
+      "publisher": "BleepingComputer",
+      "date": "2025-05",
+      "url": "https://www.bleepingcomputer.com/news/security/hellcat-hackers-go-on-a-worldwide-jira-hacking-spree/"
+    },
+    {
+      "id": "S4",
+      "title": "HellCat and Morpheus | Two Brands, One Payload as Ransomware Affiliates Drop Identical Code",
+      "publisher": "SentinelOne",
+      "date": "2025-01",
+      "url": "https://www.sentinelone.com/blog/hellcat-and-morpheus-two-brands-one-payload-as-ransomware-affiliates-drop-identical-code/"
+    },
+    {
+      "id": "S5",
+      "title": "Ransomware Group Claims Attacks on Ascom, Jaguar Land Rover",
+      "publisher": "SecurityWeek",
+      "date": "2025-03",
+      "url": "https://www.securityweek.com/ransomware-group-claims-attacks-on-ascom-jaguar-land-rover/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "credential-access",
+      "techniqueId": "T1555.003",
+      "techniqueName": "Credentials from Password Stores: Credentials from Web Browsers",
+      "procedure": "Upstream stage: infostealers (Lumma, RedLine, Raccoon, StealC) on employee or third-party machines harvest browser-saved Jira credentials that HellCat later reuses.",
+      "tools": [
+        "Lumma Stealer",
+        "RedLine",
+        "Raccoon",
+        "StealC"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S5",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6f2c5c87-a4d5-4898-9bd1-47a55ecaf1dd",
+          "testNumber": 16,
+          "testName": "BrowserStealer (Chrome / Firefox / Microsoft Edge)",
+          "fidelity": "close",
+          "note": "Browser credential theft across Chrome/Firefox/Edge, matching infostealer behaviour (local ART T1555.003 #16)"
+        },
+        {
+          "testGuid": "3d111226-d09a-4911-8715-fe11664f960d",
+          "testNumber": 4,
+          "testName": "Simulating access to Chrome Login Data",
+          "fidelity": "close",
+          "note": "Access to Chrome Login Data (local ART T1555.003 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Logs in to the victim's Atlassian Jira with the stolen credentials, sometimes a supplier's account (e.g. JLR via LG Electronics staff credentials dating back years).",
+      "tools": [
+        "Atlassian Jira"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Logging in to SaaS/on-prem Jira with stolen credentials has no ART equivalent; validate with Jira audit-log analytics (new geography/device, dormant accounts) and credential-exposure monitoring."
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits exposed systems such as Atlassian Jira; a related actor discussed PAN-OS CVE-2024-0012 / CVE-2024-9474 against US victims.",
+      "tools": [],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; validate with vulnerability scanning / patch-state checks or a purple-team exploit range, not ART."
+    },
+    {
+      "order": 4,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Spearphishing emails with malicious attachments.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Downloads a macro-enabled phishing attachment (local ART T1566.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "Multi-stage PowerShell chain from an open directory (s1.ps1 disguised as an executable > Payload.ps1 > Isma.ps1 > Shellcode.ps1), each stage downloading and running the next.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "PowerShell download cradles, as used to chain the stages (local ART T1059.001 #9)"
+        },
+        {
+          "testGuid": "fa050f5e-bc75-4230-af73-b6fd7852cd73",
+          "testNumber": 10,
+          "testName": "PowerShell Fileless Script Execution",
+          "fidelity": "close",
+          "note": "Fileless PowerShell script execution (local ART T1059.001 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run value 'maintenance' points to the malicious script.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "exact",
+          "note": "Adds a Run key value (local ART T1547.001 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Isma.ps1 bypasses the Antimalware Scan Interface before shellcode is loaded.",
+      "tools": [
+        "Isma.ps1"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "695eed40-e949-40e5-b306-b4031e4154bd",
+          "testNumber": 16,
+          "testName": "AMSI Bypass - AMSI InitFailed",
+          "fidelity": "close",
+          "note": "AMSI bypass via amsiInitFailed (local ART T1685 #16)"
+        },
+        {
+          "testGuid": "ff543dd9-4537-458c-b297-c85ae1939e34",
+          "testNumber": 78,
+          "testName": "AMSI Bypass - Patching AmsiScanBuffer",
+          "fidelity": "close",
+          "note": "AMSI bypass by patching AmsiScanBuffer (local ART T1685 #78)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1620",
+      "techniqueName": "Reflective Code Loading",
+      "procedure": "Shellcode.ps1 downloads Stager.woff (Sliver shellcode) and runs it in memory without touching disk.",
+      "tools": [
+        "Shellcode.ps1",
+        "Stager.woff"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114c2b95-d992-4c03-8c38-fc58420a3eb5",
+          "testNumber": 2,
+          "testName": "Reflective PE Injection via PowerSploit",
+          "fidelity": "proxy",
+          "note": "Reflective PE injection from PowerShell (PowerSploit) (local ART T1620 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Sliver C2 implant establishes the command-and-control channel (Bridewell tracks thousands of linked Sliver connections).",
+      "tools": [
+        "Sliver"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The local catalogue has no Sliver implant atomic; generic user-agent tests do not reproduce Sliver traffic. Validate with network detections for Sliver C2 profiles in a C2 lab."
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Netscan maps the internal network.",
+      "tools": [
+        "Netscan"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "Runs SoftPerfect NetScan (local ART T1018 #22)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "command-and-control",
+      "techniqueId": "T1095",
+      "techniqueName": "Non-Application Layer Protocol",
+      "procedure": "Netcat used for communication and lateral movement between hosts.",
+      "tools": [
+        "Netcat"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "bcf0d1c1-3f6a-4847-b1c9-7ed4ea321f37",
+          "testNumber": 2,
+          "testName": "Netcat C2",
+          "fidelity": "exact",
+          "note": "Netcat C2 channel (local ART T1095 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "persistence",
+      "techniqueId": "T1098.004",
+      "techniqueName": "Account Manipulation: SSH Authorized Keys",
+      "procedure": "Creates new SSH users with admin rights and unique SSH keys on Linux systems, with backdoor malware as a fallback.",
+      "tools": [
+        "OpenSSH"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue is Windows-focused and has no SSH authorized-keys/account atomic; validate on Linux with auditd rules for useradd and authorized_keys writes."
+    },
+    {
+      "order": 13,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Stages and compresses bulk data before theft (about 40 GB of compressed data reported in the Schneider Electric case).",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "proxy",
+          "note": "Password-protected 7-Zip archive of staged data (local ART T1560.001 #4)"
+        },
+        {
+          "testGuid": "8dd61a55-44c6-43cc-af0c-8bdda276860c",
+          "testNumber": 2,
+          "testName": "Compress Data and lock with password for Exfiltration with winrar",
+          "fidelity": "proxy",
+          "note": "Password-protected WinRAR archive of staged data (local ART T1560.001 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "Exfiltrates over SFTP (described by Pryx as common) and to the actor-run site waifu[.]cat or other cloud/TOR drops.",
+      "tools": [
+        "SFTP",
+        "waifu[.]cat"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "205e676e-0401-4bae-83a5-94b8c5daeb22",
+          "testNumber": 36,
+          "testName": "Windows push file using sftp.exe",
+          "fidelity": "close",
+          "note": "Pushes a file out with the built-in sftp.exe client (local ART T1105 #36)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Custom 64-bit encryptor (code identical to Morpheus) takes a path argument, uses Windows CNG/BCrypt, does not change file extensions and drops _README_.txt in C:\\Users\\Public.",
+      "tools": [
+        "HellCat/Morpheus encryptor"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Self-deleting batch file '_-_.bat' removes the payload after encryption.",
+      "tools": [
+        "_-_.bat"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Deletes a file from cmd (local ART T1070.004 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

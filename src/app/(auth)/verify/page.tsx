@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, Suspense } from "react";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, MailCheck, RefreshCw } from "lucide-react";
 
@@ -56,7 +57,7 @@ function VerifyPanel() {
       });
       const data = await res.json();
       if (res.ok) {
-        router.push(data.redirect || "/overview");
+        router.push(safeRedirectPath(data.redirect));
         router.refresh();
         return;
       }

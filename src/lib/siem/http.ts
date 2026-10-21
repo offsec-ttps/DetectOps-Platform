@@ -3,7 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import type { SiemConnection } from "@/generated/prisma/client";
 
 /** Public shape — NEVER includes secretsEnc. */
@@ -24,8 +24,9 @@ export async function loadOwnedSiem(id: string): Promise<
   if (!auth.ok) return { ok: false, response: auth.response };
   const row = await prisma.siemConnection.findUnique({ where: { id } });
   if (!row) return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
-  if (auth.enforced && row.ownerId && row.ownerId !== auth.user.id) {
-    return { ok: false, response: NextResponse.json({ error: "not found" }, { status: 404 }) };
-  }
+  // Enforced mode: owner or admin only. Unowned (legacy) rows are admin-only —
+  // they hold decrypted-on-use credentials, so "no owner" must not mean "anyone".
+  const own = ownsOr404({ user: auth.user, enforced: auth.enforced }, row.ownerId);
+  if (!own.ok) return { ok: false, response: own.response };
   return { ok: true, server: row, auth: { user: auth.user, enforced: auth.enforced } };
 }

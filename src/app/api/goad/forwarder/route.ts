@@ -12,6 +12,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { readFile, writeFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
+import { requireRole } from "@/lib/auth-guard";
 
 const exec = promisify(execFile);
 
@@ -19,12 +20,29 @@ const GOAD_PATH = process.env.GOAD_PATH || "/media/nested/SamsungEvo/Projects/GO
 const GOAD_INSTANCE_ID = process.env.GOAD_INSTANCE_ID || "d86a4c-minilab-virtualbox";
 const DEFAULT_SPLUNK_IP = process.env.SPLUNK_IP || "10.0.1.12";
 
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+const PORT = /^\d{1,5}$/;
+// No whitespace (k=v splitting), no Jinja/template metachars ({ } %), no quotes.
+const SAFE_SECRET = /^[A-Za-z0-9!@^*()_+\-=.,:;?~\[\]]{1,128}$/;
+
 export async function POST(req: NextRequest) {
+  // Runs ansible-playbook from the server against the GOAD hosts.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
-  const splunkIp = body.splunkIp || DEFAULT_SPLUNK_IP;
-  const splunkPort = body.splunkPort || "9997";
-  const splunkMgmtPort = body.splunkMgmtPort || "8089";
-  const splunkPassword = body.splunkPassword || "I-l1ke-Attack-Range!";
+  const splunkIp = String(body.splunkIp || DEFAULT_SPLUNK_IP);
+  const splunkPort = String(body.splunkPort || "9997");
+  const splunkMgmtPort = String(body.splunkMgmtPort || "8089");
+  const splunkPassword = String(body.splunkPassword || "I-l1ke-Attack-Range!");
+  // SECURITY: these become ansible --extra-vars. Free text there allows extra
+  // variable injection (ansible_connection=local …) and Jinja `{{ lookup('pipe',…) }}`
+  // execution on this host — so validate strictly and pass as JSON.
+  if (!IPV4.test(splunkIp) || !PORT.test(splunkPort) || !PORT.test(splunkMgmtPort) || !SAFE_SECRET.test(splunkPassword)) {
+    return NextResponse.json(
+      { success: false, error: "splunkIp must be IPv4, ports numeric, splunkPassword 1-128 chars without spaces/quotes/{}%" },
+      { status: 400 }
+    );
+  }
 
   const instanceDir = `${GOAD_PATH}/workspace/${GOAD_INSTANCE_ID}`;
   const inventory = `${instanceDir}/inventory_disable_vagrant`;
@@ -69,7 +87,13 @@ export async function POST(req: NextRequest) {
         "-i", mergedInvPath,
         extensionPlaybook,
         "--extra-vars",
-        `splunk_server_ip=${splunkIp} splunk_server_port=${splunkPort} splunk_server_mgmt_port=${splunkMgmtPort} splunk_uf_password=${splunkPassword} sysmon_download_url=https://download.sysinternals.com/files/Sysmon.zip`,
+        JSON.stringify({
+          splunk_server_ip: splunkIp,
+          splunk_server_port: splunkPort,
+          splunk_server_mgmt_port: splunkMgmtPort,
+          splunk_uf_password: splunkPassword,
+          sysmon_download_url: "https://download.sysinternals.com/files/Sysmon.zip",
+        }),
         "-v",
       ],
       {

@@ -9,9 +9,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth-guard";
 import { buildSshCommand, createSession } from "@/lib/terminal-sessions";
 
 export async function POST(req: NextRequest) {
+  // Privileged: this opens an SSH shell onto a cloud-range host using the shared
+  // SAR controller keys. Cloud ranges have no per-user owner in the DB, so this
+  // is admin-only (requireRole gates it). serverIp is validated for shape in
+  // buildSshCommand; a strict range-membership check would need a range->hosts
+  // model the platform does not currently persist.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => ({}));
   const rangeId: string | undefined = body?.rangeId;
   const serverName: string | undefined = body?.serverName;
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest) {
       message: `Cannot prepare SSH session: ${e?.message || e}`,
     }, { status: 500 });
   }
-  const session = createSession({ rangeId, serverName, command: fullCmd });
+  const session = createSession({ ownerId: auth.user.id, rangeId, serverName, command: fullCmd });
 
   return NextResponse.json({
     status: "ok",

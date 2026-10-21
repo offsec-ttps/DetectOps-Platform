@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 
 function safeJson<T>(s: string | null | undefined, fb: T): T {
@@ -14,6 +15,8 @@ function safeJson<T>(s: string | null | undefined, fb: T): T {
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string; runId: string }> }) {
   const { id, runId } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const run = await prisma.enterpriseUseCaseRun.findUnique({ where: { id: runId } });
   if (!run || run.useCaseId !== id) return NextResponse.json({ error: "not found" }, { status: 404 });
 

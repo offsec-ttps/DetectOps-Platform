@@ -4,6 +4,7 @@ import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
 import { runSplunkDetection } from "@/lib/siem/providers/splunk";
 import type { SplunkConfig } from "@/lib/siem/types";
+import { assertSafeOutboundUrl } from "@/lib/net/ssrf";
 
 const SAR_PATH = "/media/nested/SamsungEvo/Simulation/attack_range_local";
 const CONF_PATH = `${SAR_PATH}/attack_range_local.conf`;
@@ -49,8 +50,19 @@ export async function POST(req: NextRequest) {
   const sarSplunkIp = sarConfig["splunk_server.splunk_server_private_ip"] || "10.0.1.12";
   const sarSplunkPassword = sarConfig["splunk_settings.splunk_admin_password"] || "";
 
-  const baseUrl = (splunkUrl || `https://${sarSplunkIp}:8089`).replace(/\/$/, "");
-  const password = splunkPassword || sarSplunkPassword;
+  const sarBase = `https://${sarSplunkIp}:8089`;
+  const baseUrl = (typeof splunkUrl === "string" && splunkUrl ? splunkUrl : sarBase).replace(/\/$/, "");
+  // SECURITY: never send the stored SAR admin password to a caller-chosen host
+  // (credential exfiltration). Fallback creds only apply to the SAR Splunk itself.
+  let sameAsSar = false;
+  try { sameAsSar = new URL(baseUrl).host === new URL(sarBase).host; } catch { /* invalid → checked below */ }
+  const password = splunkPassword || (sameAsSar ? sarSplunkPassword : "");
+  // SSRF: lab Splunk lives on private ranges, but cloud metadata / link-local /
+  // loopback (this app's own internal APIs) are blocked.
+  const urlCheck = await assertSafeOutboundUrl(baseUrl, { allowPrivate: true });
+  if (!urlCheck.ok) {
+    return NextResponse.json({ error: `splunkUrl not allowed: ${urlCheck.error}`, resultCount: 0, detected: false }, { status: 400 });
+  }
 
   if (!password && !splunkToken) {
     return NextResponse.json({ error: "No Splunk credentials provided and none found in SAR config", resultCount: 0, detected: false }, { status: 400 });

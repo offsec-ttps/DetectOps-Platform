@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-guard";
 import { getLibraryByModule } from "@/lib/attack-sim/registry";
 import { contributionAtomics, type ContributionRow } from "@/lib/ti-watcher/contribution-to-technique";
+import { publishedTechniqueEntries, entryAtomics } from "@/lib/library-entries/store";
 
 export async function GET(req: NextRequest) {
   const auth = await requireUser();
@@ -27,11 +28,14 @@ export async function GET(req: NextRequest) {
   let curated = technique?.atomics || [];
   if (!technique) {
     if (!library) return NextResponse.json({ error: "technique not found" }, { status: 404 });
-    const contrib = await prisma.simLibraryContribution.findFirst({
+    // Analyst-added library entry (Module Builder) → its linked, vetted atomics.
+    const analyst = (await publishedTechniqueEntries(library.moduleId).catch(() => [])).find((e) => e.doc.key === techniqueKey);
+    if (analyst) curated = entryAtomics(analyst.doc);
+    const contrib = analyst ? null : await prisma.simLibraryContribution.findFirst({
       where: { libraryKey: library.key, status: "approved", techniqueKey },
     }).catch(() => null);
-    if (!contrib) return NextResponse.json({ error: "technique not found" }, { status: 404 });
-    curated = contributionAtomics(contrib as ContributionRow);
+    if (!contrib && !analyst) return NextResponse.json({ error: "technique not found" }, { status: 404 });
+    if (contrib) curated = contributionAtomics(contrib as ContributionRow);
   }
   const tids = [...new Set(curated.map((c: any) => c.techniqueId))];
   const rows = tids.length ? await prisma.atomicTest.findMany({ where: { techniqueId: { in: tids } }, orderBy: [{ techniqueId: "asc" }, { testNumber: "asc" }] }) : [];

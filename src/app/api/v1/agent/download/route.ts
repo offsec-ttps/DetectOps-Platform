@@ -1,10 +1,13 @@
 /**
  * GET /api/v1/agent/download?os=&arch=   (AGENT-FACING — installer download)
  *
- * Streams the published agent binary for an OS/arch. Public, like any agent
- * installer (Caldera serves Sandcat the same way) — joining the fleet still
- * requires a valid enrollment token. The install one-liner verifies the
- * sha256 from the manifest before running the binary.
+ * Streams the published agent binary for an OS/arch. Intentionally PUBLIC and
+ * UNAUTHENTICATED (no enrollment token is checked here — the binary is not a
+ * secret, like Caldera serving Sandcat). Possessing the binary grants nothing:
+ * joining a fleet requires a valid enrollment token at /api/v1/enroll-node, and
+ * every later call requires the per-node API key. The install one-liner
+ * verifies the sha256 from the manifest before running the binary. The file
+ * name is built only from normalised os/arch allow-list values (no traversal).
  *
  * 404 when no binary is published for that OS/arch (the caller then falls back
  * to build-from-source).

@@ -11,6 +11,7 @@
  */
 
 import type { RunToolInput, RunToolResult } from "@/lib/llm/anthropic";
+import { safeFetch } from "@/lib/net/ssrf";
 
 export interface OpenAiCompatibleConfig {
   /** e.g. https://api.openai.com/v1 — without trailing slash */
@@ -229,7 +230,8 @@ async function postWithRetry(url: string, headers: Record<string, string>, body:
   let lastErr: Error | null = null;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+      // baseUrl is admin-configured; still never let it (or a redirect) reach cloud metadata.
+      const res = await safeFetch(url, { method: "POST", headers, body: JSON.stringify(body) }, { allowPrivate: true, allowLoopback: true });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         const transient = res.status === 429 || res.status >= 500;

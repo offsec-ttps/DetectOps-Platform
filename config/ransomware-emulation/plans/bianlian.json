@@ -1,0 +1,577 @@
+{
+  "gang": "BianLian",
+  "displayName": "BianLian",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2022",
+  "lineage": "",
+  "summary": "BianLian is a likely Russia-based ransomware developer/deployer and data-extortion group active against US and Australian critical infrastructure since June 2022. It enters with RDP credentials bought from IABs, phishing or ProxyShell, implants a per-victim Go backdoor, and relies on PowerShell/cmd one-liners for defense impairment, discovery and credential theft. Since January 2024 it has run exfiltration-only extortion (no encryption), exfiltrating via FTP, Rclone and Mega.",
+  "uniqueTraits": [
+    "Custom Go backdoor compiled per victim; Ngrok and modified Rsocks SOCKS5 tunnels",
+    "Registry edits disabling Sophos tamper protection (SAVEnabled/SEDEnabled/SAVService) and DISM removal of Defender",
+    "TightVNC service copied into SafeBoot\\Network so it survives Safe Mode",
+    "Scheduled task as SYSTEM running rundll32 c:\\programdata\\netsh.dll,Entry; binaries/tasks named after Windows or security services",
+    "Exfiltration-only extortion since 2024, Rclone staged in programdata\\vmware and Music folders"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: BianLian Data Extortion Group (AA23-136A, updated Nov. 20, 2024)",
+      "publisher": "CISA / FBI / ASD's ACSC",
+      "date": "2024-11-20",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-136a"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Logs in over RDP with compromised credentials likely bought from initial access brokers; phishing also used.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no atomic that reproduces an external logon with stolen VPN/RDP credentials; validate with authentication-log analytics (impossible travel, no-MFA VPN logons)."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Targets public-facing Windows and ESXi infrastructure, possibly using the Exchange ProxyShell chain (CVE-2021-34473, CVE-2021-34523, CVE-2021-31207).",
+      "tools": [
+        "ProxyShell"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no Windows atomic for exploiting this public-facing product/CVE; validate via perimeter/WAF and product logs instead."
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Downloads a custom Go backdoor built for each victim plus scanners and RMM software onto the foothold.",
+      "tools": [
+        "Go backdoor"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "proxy",
+          "note": "PowerShell download of a tool; backdoor itself is not reproduced"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Uses Ngrok and/or a modified Rsocks to build SOCKS5 tunnels from victim networks and mask C2 destinations.",
+      "tools": [
+        "Ngrok",
+        "Rsocks"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "Runs ngrok"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "persistence",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Copies the TightVNC tvnserver service key into HKLM\\...\\SafeBoot\\Network so remote access survives Safe Mode with Networking.",
+      "tools": [
+        "TightVNC",
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c173c948-65e5-499c-afbe-433722ed5bd4",
+          "testNumber": 35,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode with Network",
+          "fidelity": "exact",
+          "note": "Registers a service to load in Safe Mode with Network"
+        },
+        {
+          "testGuid": "42e51815-a6cc-4c75-b970-3f0ff54b610e",
+          "testNumber": 10,
+          "testName": "UltraVNC Execution",
+          "fidelity": "close",
+          "note": "VNC remote-access server execution (UltraVNC)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1136.002",
+      "techniqueName": "Domain Account",
+      "procedure": "Activates the local Administrator (net user <admin> /active:yes), resets its password, and creates multiple domain admin (and Azure AD) accounts for persistence and lateral movement.",
+      "tools": [
+        "net"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fcec2963-9951-4173-9bfa-98d8b7834e62",
+          "testNumber": 1,
+          "testName": "Create a new Windows domain admin user",
+          "fidelity": "exact",
+          "note": "Create a new domain admin user"
+        },
+        {
+          "testGuid": "5598f7cb-cf43-455e-883a-f6008c5d46af",
+          "testNumber": 1,
+          "testName": "Admin Account Manipulate",
+          "fidelity": "close",
+          "note": "Admin account password manipulation"
+        },
+        {
+          "testGuid": "aa6cb8c4-b582-4f8e-b677-37733914abda",
+          "testNumber": 2,
+          "testName": "Activate Guest Account",
+          "fidelity": "close",
+          "note": "Activating a disabled built-in account"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Exploits CVE-2022-37969 (Windows CLFS driver) and likely Zerologon (exp.exe) to escalate.",
+      "tools": [
+        "exp.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Catalogue has no CLFS (CVE-2022-37969) or Zerologon exploitation atomic; the only T1068 tests are BYOVD driver loads, which do not represent this procedure."
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Disables AMSI (amsiInitFailed), removes Defender with dism /Disable-Feature /FeatureName:Windows-Defender, and sets Sophos TamperProtection SAVEnabled/SEDEnabled/SAVService to 0 so Sophos can be uninstalled.",
+      "tools": [
+        "PowerShell",
+        "dism.exe",
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "695eed40-e949-40e5-b306-b4031e4154bd",
+          "testNumber": 16,
+          "testName": "AMSI Bypass - AMSI InitFailed",
+          "fidelity": "exact",
+          "note": "AMSI bypass via amsiInitFailed"
+        },
+        {
+          "testGuid": "871438ac-7d6e-432a-b27d-3e7db69faf58",
+          "testNumber": 30,
+          "testName": "Disable Windows Defender with DISM",
+          "fidelity": "exact",
+          "note": "Disable Windows Defender with DISM"
+        },
+        {
+          "testGuid": "1f6743da-6ecc-4a93-b03f-dc357e4b313f",
+          "testNumber": 51,
+          "testName": "Tamper with Windows Defender Registry - Reg.exe",
+          "fidelity": "close",
+          "note": "reg.exe tampering of AV registry configuration"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1036.004",
+      "techniqueName": "Masquerade Task or Service",
+      "procedure": "Renames binaries and scheduled tasks after legitimate Windows services/security products, e.g. a SYSTEM task running rundll32 c:\\programdata\\netsh.dll,Entry; UPX packing.",
+      "tools": [
+        "schtasks",
+        "rundll32",
+        "UPX"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f9f2fe59-96f7-4a7d-ba9f-a9783200d4c9",
+          "testNumber": 1,
+          "testName": "Creating W32Time similar named service using schtasks",
+          "fidelity": "close",
+          "note": "Scheduled task named like a Windows service"
+        },
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "close",
+          "note": "schtasks /create running as SYSTEM"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Runs Advanced Port Scanner, SoftPerfect Network Scanner, SharpShares (s.exe /ldap:all) and PingCastle; ping.exe -4 -n 1 sweeps.",
+      "tools": [
+        "Advanced Port Scanner",
+        "SoftPerfect NetScan",
+        "SharpShares",
+        "PingCastle"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1fa2a69-b0a2-4e8a-9112-529b00c19a41",
+          "testNumber": 11,
+          "testName": "Enumerate All Network Shares with SharpShares",
+          "fidelity": "exact",
+          "note": "SharpShares enumeration of all network shares"
+        },
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect Network Scanner execution"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Domain Account",
+      "procedure": "One-liner combining quser, [adsisearcher] computer/user counts, net user /domain, net group \"domain admins\" /domain, nltest /dclist and /domain_trusts; PowerShell lists processes, software and drives.",
+      "tools": [
+        "net",
+        "nltest",
+        "quser",
+        "adsisearcher"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02e8be5a-3065-4e54-8cc8-a14d138834d3",
+          "testNumber": 12,
+          "testName": "Enumerate Active Directory Users with ADSISearcher",
+          "fidelity": "exact",
+          "note": "ADSISearcher user enumeration"
+        },
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "exact",
+          "note": "nltest /domain_trusts"
+        },
+        {
+          "testGuid": "6fbc9e68-5ad7-444a-bd11-8bf3136c477e",
+          "testNumber": 1,
+          "testName": "Enumerate all accounts (Domain)",
+          "fidelity": "exact",
+          "note": "net user /domain"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "LSASS Memory",
+      "procedure": "Loops tasklist to find lsass.exe and runs rundll32 comsvcs.dll MiniDump to \\Windows\\Temp\\<file>.csv.",
+      "tools": [
+        "comsvcs.dll"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "exact",
+          "note": "comsvcs.dll MiniDump of LSASS"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.006",
+      "techniqueName": "DCSync",
+      "procedure": "Runs a PE build of Impacket secretsdump (dump.exe -no-pass -just-dc) against the domain controller and attempts NTDS.dit access.",
+      "tools": [
+        "secretsdump (dump.exe)"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "129efd28-8497-4c87-a1b0-73b9a870ca3e",
+          "testNumber": 1,
+          "testName": "DCSync (Active Directory)",
+          "fidelity": "exact",
+          "note": "DRSUAPI replication (DCSync) - what secretsdump -just-dc performs"
+        },
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "proxy",
+          "note": "NTDS.dit extraction"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "credential-access",
+      "techniqueId": "T1552.001",
+      "techniqueName": "Credentials In Files",
+      "procedure": "findstr /spin \"password\" *.* to a file in the Music folder; SessionGopher to extract saved remote-access session credentials.",
+      "tools": [
+        "findstr",
+        "SessionGopher"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0e56bf29-ff49-4ea5-9af4-3b81283fd513",
+          "testNumber": 4,
+          "testName": "Extracting passwords with findstr",
+          "fidelity": "exact",
+          "note": "findstr password search"
+        },
+        {
+          "testGuid": "c9dc9de3-f961-4284-bd2d-f959c9f9fda5",
+          "testNumber": 11,
+          "testName": "WinPwn - SessionGopher",
+          "fidelity": "exact",
+          "note": "SessionGopher"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Desktop Protocol",
+      "procedure": "Before RDP, adds accounts to Remote Desktop Users, adds 'allow RemoteDesktop' netsh rules / enables the Remote Desktop rule group, sets RDP-Tcp UserAuthentication=0 and fAllowToGetHelp=1; then RDP and PsExec with valid accounts, SMB type-3 logons.",
+      "tools": [
+        "netsh",
+        "reg.exe",
+        "PsExec",
+        "mstsc"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "01d1c6c0-faf0-408e-b368-752a02285cb2",
+          "testNumber": 4,
+          "testName": "Disable NLA for RDP via Command Prompt",
+          "fidelity": "exact",
+          "note": "Disable NLA (UserAuthentication=0) via command prompt"
+        },
+        {
+          "testGuid": "86677d0e-0b5e-4a2b-b302-454175f9aa9e",
+          "testNumber": 39,
+          "testName": "Allow RDP Remote Assistance Feature",
+          "fidelity": "exact",
+          "note": "Allow RDP Remote Assistance (fAllowToGetHelp)"
+        },
+        {
+          "testGuid": "d9841bf8-f161-4c73-81e9-fd773a5ff8c1",
+          "testNumber": 3,
+          "testName": "Allow SMB and RDP on Microsoft Defender Firewall",
+          "fidelity": "close",
+          "note": "Firewall rule allowing inbound RDP"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "collection",
+      "techniqueId": "T1560",
+      "techniqueName": "Archive Collected Data",
+      "procedure": "PowerShell scripts search for sensitive files and compress/encrypt them before exfiltration.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a57fbe4b-3440-452a-88a7-943531ac872a",
+          "testNumber": 3,
+          "testName": "Zip a Folder with PowerShell for Staging in Temp",
+          "fidelity": "close",
+          "note": "PowerShell zip of a folder for staging"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "Exfiltrates over FTP and with Rclone (installed in programdata\\vmware and Music folders) and to Mega.",
+      "tools": [
+        "Rclone",
+        "FTP",
+        "Mega"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "exact",
+          "note": "Rclone over FTP"
+        },
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Rclone to Mega"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Before January 2024, encryptor.exe appended .bianlian and dropped 'Look at this instruction.txt'; since then extortion is exfiltration-only with notes threatening leaks, printed notes and phone calls.",
+      "tools": [
+        "encryptor.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop telemetry"
+        },
+        {
+          "testGuid": "6b2903ac-8f36-450d-9ad5-b220e8a2dcb9",
+          "testNumber": 4,
+          "testName": "Simulate BlackByte Ransomware Print Bombing",
+          "fidelity": "proxy",
+          "note": "Network printer ransom-note printing (BlackByte-style) mirrors BianLian's printed notes"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

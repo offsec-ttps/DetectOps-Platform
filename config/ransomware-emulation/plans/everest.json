@@ -1,0 +1,460 @@
+{
+  "gang": "everest",
+  "displayName": "Everest",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2020",
+  "lineage": "NCC Group assesses a medium-confidence relationship with Black-Byte ransomware",
+  "summary": "Everest has operated since late 2020 as a data-extortion/ransomware group that increasingly acts as an initial access broker, with a strong focus on healthcare. NCC Group's incident response showed access through an insecure external remote service, a hidden PowerShell cradle launching Cobalt Strike, SoftPerfect NetScan discovery, ProcDump LSASS dumps and NTDS.dit theft, RDP lateral movement with compromised accounts, AnyDesk/Splashtop/Atera installed as services, WinRAR staging and exfiltration via Splashtop file transfer, with routine deletion of tools. Later reporting notes Everest openly recruits corporate insiders for network access.",
+  "uniqueTraits": [
+    "Hybrid model: data extortion plus initial-access brokering; solicits paid corporate insiders for remote access",
+    "Triad of commercial RMMs (AnyDesk, Splashtop, Atera) installed as services, with Splashtop file transfer used for exfiltration",
+    "SoftPerfect NetScan output staged as subnets.txt / trustdumps.txt in C:\\Users\\Public\\Downloads",
+    "ProcDump LSASS dumps and zipped NTDS.dit copies",
+    "Disciplined clean-up: tooling, recon output and archives routinely deleted"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Climbing Mount Everest: Black-Byte Bytes Back?",
+      "publisher": "NCC Group",
+      "date": "2022-07-13",
+      "url": "https://www.nccgroup.com/research/climbing-mount-everest-black-byte-bytes-back/"
+    },
+    {
+      "id": "S2",
+      "title": "Everest Ransomware: Data Extortionist Turned Initial Access Broker",
+      "publisher": "Daily Security Review",
+      "date": "2025-04-09",
+      "url": "https://dailysecurityreview.com/resources/threat-actors-resources/everest-ransomware-data-extortionist-turned-initial-access-broker/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Gains entry through an insecure external remote service (e.g. exposed RDP/remote access) using weak or stolen credentials.",
+      "tools": [
+        "RDP",
+        "remote access services"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1133 test for inbound VPN/RDP access with valid credentials (only a Chrome VPN-extension test); validate with VPN/RDP authentication telemetry."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Purchases access and offers financial incentives to corporate insiders to provide remote network access.",
+      "tools": [
+        "insider access"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Insider-provided or purchased credentials cannot be emulated with an atomic test; validate with UEBA/impossible-travel and access-review controls."
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "A hidden PowerShell download cradle launches the Cobalt Strike beacon.",
+      "tools": [
+        "PowerShell",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cc50fa2a-a4be-42af-a88f-e347ba0bf4d7",
+          "testNumber": 9,
+          "testName": "Powershell Invoke-DownloadCradle",
+          "fidelity": "close",
+          "note": "[T1059.001] PowerShell download cradle."
+        },
+        {
+          "testGuid": "f151ee37-9e2b-47e6-80e4-550b9f999b7a",
+          "testNumber": 1,
+          "testName": "Hidden Window",
+          "fidelity": "close",
+          "note": "[T1564.003] Hidden-window PowerShell execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Cobalt Strike beacons over HTTPS, plus a Metasploit/Meterpreter payload (l.exe).",
+      "tools": [
+        "Cobalt Strike",
+        "Meterpreter"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "[T1071.001] HTTP beaconing with suspicious user agent."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Deploys AnyDesk, Splashtop Remote Desktop and Atera as secondary access channels.",
+      "tools": [
+        "AnyDesk",
+        "Splashtop",
+        "Atera"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "[T1219] AnyDesk on Windows."
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "[T1219] Splashtop execution."
+        },
+        {
+          "testGuid": "3e1858ee-3550-401c-86ec-5e70ed79295b",
+          "testNumber": 14,
+          "testName": "Splashtop Streamer Execution",
+          "fidelity": "close",
+          "note": "[T1219] Splashtop Streamer execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1543.003",
+      "techniqueName": "Create or Modify System Process: Windows Service",
+      "procedure": "Remote-access tools are installed as Windows services for persistence.",
+      "tools": [
+        "sc.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "981e2942-e433-44e9-afc1-8c957a1496b6",
+          "testNumber": 2,
+          "testName": "Service Installation CMD",
+          "fidelity": "close",
+          "note": "[T1543.003] Service installation via cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Runs netscan.exe / netscanpack.exe / SoftPerfectNetworkScannerPortable.exe; results saved to subnets.txt in C:\\Users\\Public\\Downloads.",
+      "tools": [
+        "SoftPerfect NetScan"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "[T1018] SoftPerfect NetScan host enumeration."
+        },
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "[T1046] PowerShell /24 port scan."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "discovery",
+      "techniqueId": "T1482",
+      "techniqueName": "Domain Trust Discovery",
+      "procedure": "Domain trust enumeration output was saved as trustdumps.txt alongside the scan results (tool not named).",
+      "tools": [],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2e22641d-0498-48d2-b9ff-c71e496ccdbe",
+          "testNumber": 2,
+          "testName": "Windows - Discover domain trusts with nltest",
+          "fidelity": "close",
+          "note": "[T1482] nltest domain trust discovery."
+        },
+        {
+          "testGuid": "4700a710-c821-4e17-a3ec-9e4c81d6845f",
+          "testNumber": 1,
+          "testName": "Windows - Discover domain trusts with dsquery",
+          "fidelity": "close",
+          "note": "[T1482] dsquery domain trust discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "procdump64.exe -ma lsass.exe to dump LSASS for further credentials.",
+      "tools": [
+        "ProcDump"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+          "testNumber": 1,
+          "testName": "Dump LSASS.exe Memory using ProcDump",
+          "fidelity": "exact",
+          "note": "[T1003.001] LSASS dump with ProcDump."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "Copies NTDS.dit and archives it as ntds.dit.zip.",
+      "tools": [
+        "ntdsutil/shadow copy"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c6237146-9ea6-4711-85c9-c56d263a6b03",
+          "testNumber": 2,
+          "testName": "Copy NTDS.dit from Volume Shadow Copy",
+          "fidelity": "close",
+          "note": "[T1003.003] Copies NTDS.dit from a volume shadow copy."
+        },
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "close",
+          "note": "[T1003.003] Dumps AD database with ntdsutil."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "Moves laterally over RDP using legitimate compromised accounts.",
+      "tools": [
+        "mstsc.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "[T1021.001] RDP to a remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Installs WinRAR on a file server to archive data for theft.",
+      "tools": [
+        "WinRAR"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02ea31cb-3b4c-4a2d-9bf1-e4e70ebcf5d0",
+          "testNumber": 1,
+          "testName": "Compress Data for Exfiltration With Rar",
+          "fidelity": "exact",
+          "note": "[T1560.001] Compress data with RAR."
+        },
+        {
+          "testGuid": "8dd61a55-44c6-43cc-af0c-8bdda276860c",
+          "testNumber": 2,
+          "testName": "Compress Data and lock with password for Exfiltration with winrar",
+          "fidelity": "exact",
+          "note": "[T1560.001] Password-protected WinRAR archive."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "Stolen data moved out using Splashtop's built-in file-transfer feature.",
+      "tools": [
+        "Splashtop"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "proxy",
+          "note": "[T1041] Data exfiltration over an established C2/remote channel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Routinely deletes tools, recon output and collection archives from hosts.",
+      "tools": [
+        "cmd.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "[T1070.004] Deletes a single file via cmd."
+        },
+        {
+          "testGuid": "9dee89bd-9a98-4c4f-9e2d-4256690b0e72",
+          "testNumber": 6,
+          "testName": "Delete a single file - Windows PowerShell",
+          "fidelity": "close",
+          "note": "[T1070.004] Deletes a file via PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encryption combined with data theft for double extortion; recent operations favour pure data extortion and leak-site publication.",
+      "tools": [
+        "Everest locker"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

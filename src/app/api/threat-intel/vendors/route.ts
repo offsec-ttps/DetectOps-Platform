@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-guard";
+import { invalidHttpUrl } from "@/lib/net/ssrf";
+
+const MASK = "••••••••";
+/** Never echo vendor secrets back to the client. */
+function publicVendor(v: Record<string, any>) {
+  return { ...v, apiKey: v.apiKey ? MASK : "", clientSecret: v.clientSecret ? MASK : "" };
+}
+/** undefined / mask → keep stored value. */
+const keep = (v: unknown, existing: string) => (typeof v === "string" && v !== MASK ? v : existing);
 
 // Vendor catalog — the full list of supported third-party TI vendors
 const VENDOR_CATALOG = [
@@ -48,38 +58,56 @@ export async function GET() {
 
 /** POST — configure/update a vendor */
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  // Vendor credentials are global → admin only.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
+  const body = await req.json().catch(() => ({}));
   const { name, apiUrl, apiKey, authMethod, clientId, clientSecret, enabled } = body;
 
-  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (!name || typeof name !== "string") return NextResponse.json({ error: "name is required" }, { status: 400 });
+  const badUrl = invalidHttpUrl(apiUrl, "apiUrl");
+  if (badUrl) return NextResponse.json({ error: badUrl }, { status: 400 });
 
   const existing = await prisma.tiVendor.findUnique({ where: { name } });
   if (existing) {
+    // Key-exfil guard (parity with the integrations route): moving the vendor to
+    // a new apiUrl while a key/secret is stored would send that stored secret to
+    // the new host on the next call. Require the secrets to be re-entered when
+    // the URL changes; stored secrets not re-entered are cleared.
+    const norm = (u: unknown) => String(u ?? "").trim().replace(/\/+$/, "");
+    const urlMoved = typeof apiUrl === "string" && norm(apiUrl) !== norm(existing.apiUrl);
+    const hasStored = !!existing.apiKey || !!existing.clientSecret;
+    const freshKey = typeof apiKey === "string" && apiKey !== MASK && apiKey !== "";
+    const freshSecret = typeof clientSecret === "string" && clientSecret !== MASK && clientSecret !== "";
+    if (urlMoved && hasStored && !freshKey && !freshSecret) {
+      return NextResponse.json({ error: "Changing the vendor URL requires re-entering its API key / client secret." }, { status: 400 });
+    }
     const updated = await prisma.tiVendor.update({
       where: { name },
       data: {
-        apiUrl: apiUrl ?? existing.apiUrl,
-        apiKey: apiKey ?? existing.apiKey,
-        authMethod: authMethod ?? existing.authMethod,
-        clientId: clientId ?? existing.clientId,
-        clientSecret: clientSecret ?? existing.clientSecret,
-        enabled: enabled ?? existing.enabled,
+        apiUrl: typeof apiUrl === "string" ? apiUrl.slice(0, 1024) : existing.apiUrl,
+        // On a URL move, a stored secret that was NOT re-entered is cleared (not carried to the new host).
+        apiKey: urlMoved && !freshKey ? "" : keep(apiKey, existing.apiKey),
+        authMethod: typeof authMethod === "string" ? authMethod.slice(0, 40) : existing.authMethod,
+        clientId: typeof clientId === "string" ? clientId.slice(0, 240) : existing.clientId,
+        clientSecret: urlMoved && !freshSecret ? "" : keep(clientSecret, existing.clientSecret),
+        enabled: typeof enabled === "boolean" ? enabled : existing.enabled,
       },
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(publicVendor(updated));
   }
 
   const vendor = await prisma.tiVendor.create({
     data: {
-      name,
+      name: name.slice(0, 240),
       description: VENDOR_CATALOG.find((v) => v.name === name)?.description || "",
-      apiUrl: apiUrl || VENDOR_CATALOG.find((v) => v.name === name)?.apiUrl || "",
-      apiKey: apiKey || "",
-      authMethod: authMethod || "api_key",
-      clientId: clientId || "",
-      clientSecret: clientSecret || "",
-      enabled: enabled ?? true,
+      apiUrl: (typeof apiUrl === "string" && apiUrl) || VENDOR_CATALOG.find((v) => v.name === name)?.apiUrl || "",
+      apiKey: typeof apiKey === "string" && apiKey !== MASK ? apiKey : "",
+      authMethod: typeof authMethod === "string" ? authMethod.slice(0, 40) : "api_key",
+      clientId: typeof clientId === "string" ? clientId.slice(0, 240) : "",
+      clientSecret: typeof clientSecret === "string" && clientSecret !== MASK ? clientSecret : "",
+      enabled: typeof enabled === "boolean" ? enabled : true,
     },
   });
-  return NextResponse.json(vendor, { status: 201 });
+  return NextResponse.json(publicVendor(vendor), { status: 201 });
 }

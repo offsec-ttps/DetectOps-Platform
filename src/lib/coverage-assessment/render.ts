@@ -23,6 +23,11 @@ export interface RenderInput {
 export type ReportSet = { md?: string; docx?: string; pdf?: string; pptx?: string };
 export interface RenderOutput { executive: ReportSet; technical: ReportSet; markdown: string; log: string }
 
+/** Single-line, bounded argv value (no NUL/control chars). */
+function argVal(s: string): string {
+  return String(s).replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 200);
+}
+
 export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   const root = process.cwd();
   const outDir = join(root, "reports", "coverage-assessments", input.assessmentId);
@@ -36,17 +41,19 @@ export async function renderReport(input: RenderInput): Promise<RenderOutput> {
   if (input.detectionNote.trim()) {
     const nf = join(tmp, "note.md");
     writeFileSync(nf, input.detectionNote);
-    noteArg.push("--detection-note", `@${nf}`);
+    noteArg.push(`--detection-note=@${nf}`);
   }
 
   const args = [
     join(root, "scripts", "generate_assessment_report.py"),
     "--results", jsonl, "--out", outBase,
-    "--brand", input.brand || "DetectOps",
-    "--assessor", input.assessor || "RuSecure",
-    "--client", input.client || "Client",
-    "--lab", input.lab || "Lab",
-    "--siem", input.siem || "splunk",
+    // `--opt=value` form so a user-supplied value beginning with "-" can never be
+    // parsed by argparse as another option (argument injection).
+    `--brand=${argVal(input.brand || "DetectOps")}`,
+    `--assessor=${argVal(input.assessor || "RuSecure")}`,
+    `--client=${argVal(input.client || "Client")}`,
+    `--lab=${argVal(input.lab || "Lab")}`,
+    `--siem=${argVal(input.siem || "splunk")}`,
     "--report-type", "both",
     ...noteArg,
   ];
@@ -95,4 +102,26 @@ export async function renderBrandedReport(assessmentId: string): Promise<{ pdf?:
   });
   const pdf = outBase + ".pdf", html = outBase + ".html";
   return { pdf: existsSync(pdf) ? pdf : undefined, html: existsSync(html) ? html : undefined, log: log.slice(-2000) };
+}
+
+// Per-ransomware-group coverage (scripts/ransomware_emulation_report.py): maps a
+// "ransomware" scope sweep back onto each group's emulation-plan chain. Reads
+// the assessment + items from the DB, so it runs after they are persisted.
+export async function renderRansomwareReport(assessmentId: string, siem = "splunk"): Promise<{ set: ReportSet; log: string }> {
+  const root = process.cwd();
+  const py = process.env.REPORT_PYTHON || process.env.WINRM_PYTHON || "python3";
+  const args = [join(root, "scripts", "ransomware_emulation_report.py"), assessmentId, `--siem=${argVal(siem)}`];
+  const log: string = await new Promise((resolve) => {
+    const child = spawn(py, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d.toString(); });
+    child.stderr.on("data", (d) => { out += d.toString(); });
+    const killer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 180_000);
+    child.on("close", () => { clearTimeout(killer); resolve(out); });
+    child.on("error", (ee) => { clearTimeout(killer); resolve(`spawn error: ${ee.message}`); });
+  });
+  const base = join(root, "reports", "coverage-assessments", assessmentId, "ransomware-emulation");
+  const set: ReportSet = {};
+  for (const f of ["md", "docx", "pdf", "pptx"] as const) if (existsSync(`${base}.${f}`)) set[f] = `${base}.${f}`;
+  return { set, log: log.slice(-2000) };
 }

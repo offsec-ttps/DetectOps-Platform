@@ -1,0 +1,377 @@
+{
+  "gang": "karakurt",
+  "displayName": "Karakurt",
+  "aliases": [
+    "Karakurt Team",
+    "Karakurt Lair"
+  ],
+  "status": "active",
+  "activeSince": "2021",
+  "lineage": "Reported as a Conti-linked side operation/spinoff; a member (Deniss Zolotarjovs) was extradited to the US in August 2024",
+  "summary": "Karakurt is a pure data-theft extortion group that does not encrypt; it steals large volumes of data (often >1 TB of shared drives) and pressures victims with harassment of employees, partners and clients. CISA/FBI advisory AA22-152A (updated December 2023) describes access via purchased VPN/RDP credentials, intrusion brokers, compromised Cisco AnyConnect accounts without MFA, outdated SonicWall/FortiGate appliances, Log4Shell and macro phishing, followed by Cobalt Strike enumeration, Mimikatz, AnyDesk persistence, Ngrok/SSH tunnelling, 7-Zip staging and exfiltration with FileZilla, rclone and Mega.nz.",
+  "uniqueTraits": [
+    "Extortion without encryption: proof-of-life screenshots, proof-of-deletion videos, readme.txt notes and emails to employees",
+    "Heavy reliance on purchased credentials and intrusion brokers, including re-extorting victims of other ransomware",
+    "Compromised Cisco AnyConnect VPN accounts without MFA as a recurring entry vector",
+    "Ngrok and SSH tunnelling for access",
+    "Bulk exfiltration (entire shared drives, >1 TB) via rclone to Mega.nz and FileZilla FTP"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Karakurt Data Extortion Group (AA22-152A)",
+      "publisher": "CISA / FBI / Treasury / FinCEN",
+      "date": "2022-06-01",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-152a"
+    },
+    {
+      "id": "S2",
+      "title": "Latvian hacker extradited to US for role in Karakurt cybercrime gang",
+      "publisher": "The Hacker News",
+      "date": "2024-08",
+      "url": "https://thehackernews.com/2024/08/latvian-hacker-extradited-to-us-for.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Uses purchased VPN/RDP and email credentials, access from intrusion brokers and partners, and compromised Cisco AnyConnect accounts where MFA was not enforced.",
+      "tools": [
+        "purchased credentials",
+        "Cisco AnyConnect"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Purchased/brokered credential use cannot be reproduced with a local atomic; validate VPN authentication anomalies and MFA enforcement."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits Log4Shell (CVE-2021-44228), outdated SonicWall SSL VPN and FortiGate SSL VPN/firewall appliances, and unsupported Windows Server instances.",
+      "tools": [
+        "Log4Shell",
+        "SonicWall/FortiGate exploits"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test exploits VPN appliances or Log4Shell; detect via perimeter and appliance logs."
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Phishing and spear-phishing with malicious macros in email attachments.",
+      "tools": [
+        "macro documents"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "exact",
+          "note": "[T1566.001] Macro-enabled phishing attachment download."
+        },
+        {
+          "testGuid": "cbb6799a-425c-4f83-9194-5447a909d67f",
+          "testNumber": 2,
+          "testName": "Word spawned a command shell and used an IP address in the command line",
+          "fidelity": "close",
+          "note": "[T1566.001] Word spawning a command shell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "command-and-control",
+      "techniqueId": "T1071.001",
+      "techniqueName": "Application Layer Protocol: Web Protocols",
+      "procedure": "Deploys Cobalt Strike beacons for C2 and network enumeration.",
+      "tools": [
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "[T1071.001] HTTP beaconing with suspicious user agent."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1083",
+      "techniqueName": "File and Directory Discovery",
+      "procedure": "Cobalt Strike beacons enumerate the network and file systems to locate shared drives for theft.",
+      "tools": [
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0e36303b-6762-4500-b003-127743b80ba6",
+          "testNumber": 1,
+          "testName": "File and Directory Discovery (cmd.exe)",
+          "fidelity": "close",
+          "note": "[T1083] File and directory discovery via cmd."
+        },
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "[T1135] Network share discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Runs Mimikatz to pull plain-text credentials.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66fb0bc1-3c3f-47e9-a298-550ecfefacbc",
+          "testNumber": 10,
+          "testName": "Powershell Mimikatz",
+          "fidelity": "exact",
+          "note": "[T1003.001] PowerShell Mimikatz."
+        },
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "close",
+          "note": "[T1003.001] Mimikatz detonation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk for persistent remote control.",
+      "tools": [
+        "AnyDesk"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "[T1219] AnyDesk on Windows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Uses Ngrok and an SSH tunnelling application to maintain access.",
+      "tools": [
+        "Ngrok",
+        "SSH tunnel"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "exact",
+          "note": "[T1572] Runs ngrok."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "collection",
+      "techniqueId": "T1039",
+      "techniqueName": "Data from Network Shared Drive",
+      "procedure": "Collects large volumes of data, often entire network-connected shared drives, sometimes exceeding 1 TB.",
+      "tools": [],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6ed67921-1774-44ba-bac6-adb51ed60660",
+          "testNumber": 1,
+          "testName": "Copy a sensitive File over Administrative share with copy",
+          "fidelity": "close",
+          "note": "[T1039] Copies files over an administrative share."
+        },
+        {
+          "testGuid": "7762e120-5879-44ff-97f8-008b401b9a98",
+          "testNumber": 2,
+          "testName": "Copy a sensitive File over Administrative share with Powershell",
+          "fidelity": "close",
+          "note": "[T1039] Copies files over an admin share with PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "collection",
+      "techniqueId": "T1560.001",
+      "techniqueName": "Archive Collected Data: Archive via Utility",
+      "procedure": "Compresses data with 7-Zip before exfiltration.",
+      "tools": [
+        "7-Zip"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "exact",
+          "note": "[T1560.001] 7-Zip archive for exfiltration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "Exfiltrates via FTP using FileZilla.",
+      "tools": [
+        "FileZilla"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "close",
+          "note": "[T1048.003] FTP exfiltration (rclone FTP client)."
+        },
+        {
+          "testGuid": "5b380e96-b0ef-4072-8a8e-f194cb9eb9ac",
+          "testNumber": 2,
+          "testName": "Exfiltration via Encrypted FTP",
+          "fidelity": "proxy",
+          "note": "[T1020] Automated exfiltration over encrypted FTP."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Exfiltrates with rclone to Mega.nz cloud storage.",
+      "tools": [
+        "rclone",
+        "Mega.nz"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "[T1567.002] rclone exfiltration to MEGA."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1657",
+      "techniqueName": "Financial Theft",
+      "procedure": "Extortion without encryption: readme.txt notes, emails to employees, Tor chat negotiation, harassment of staff/partners/clients, demands of $25k-$13M in Bitcoin; member arrested/extradited 2024.",
+      "tools": [
+        "extortion"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Data-extortion and harassment activity is off-host; no atomic applies. Note there is no encryption step to emulate."
+    }
+  ]
+}

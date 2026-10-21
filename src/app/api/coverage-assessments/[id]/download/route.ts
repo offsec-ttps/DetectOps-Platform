@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, existsSync } from "node:fs";
 import { prisma } from "@/lib/prisma";
 import { requireUser, ownsOr404 } from "@/lib/auth-guard";
+import { join } from "node:path";
+import { confinedFile } from "../../../_shared/safe-file";
 
 const TYPES: Record<string, string> = {
   md: "text/markdown; charset=utf-8",
@@ -10,7 +12,7 @@ const TYPES: Record<string, string> = {
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   html: "text/html; charset=utf-8",
 };
-const REPORT_TYPES = new Set(["executive", "technical", "branded"]);
+const REPORT_TYPES = new Set(["executive", "technical", "branded", "ransomware"]);
 
 // GET /api/coverage-assessments/:id/download?format=md|docx|pdf&type=executive|technical
 // Serves a rendered report file. Paths come from the assessment's own stored
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const format = (sp.get("format") || "md").toLowerCase();
   const type = (sp.get("type") || "technical").toLowerCase();
   if (!TYPES[format]) return NextResponse.json({ error: "format must be md, docx, pdf, pptx or html" }, { status: 400 });
-  if (!REPORT_TYPES.has(type)) return NextResponse.json({ error: "type must be executive, technical or branded" }, { status: 400 });
+  if (!REPORT_TYPES.has(type)) return NextResponse.json({ error: "type must be executive, technical, branded or ransomware" }, { status: 400 });
 
   const a = await prisma.coverageAssessment.findUnique({ where: { id }, select: { reportPaths: true, client: true, ownerId: true } });
   if (!a) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -33,7 +35,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   let paths: Record<string, any> = {};
   try { paths = JSON.parse(a.reportPaths || "{}"); } catch { /* */ }
   // Prefer the nested {type:{format}} shape; fall back to the flat (technical) shape.
-  const path: string | undefined = paths?.[type]?.[format] || (type === "technical" ? paths[format] : undefined);
+  const stored: string | undefined = paths?.[type]?.[format] || (type === "technical" ? paths[format] : undefined);
+  // Defence in depth: only serve files under this assessment's own report dir.
+  const path = confinedFile(stored, [join(process.cwd(), "reports", "coverage-assessments", id)]);
   if (!path || !existsSync(path)) return NextResponse.json({ error: `no ${type} ${format} report available` }, { status: 404 });
 
   const buf = readFileSync(path);

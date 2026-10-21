@@ -69,6 +69,7 @@ async function pingHost(ip: string): Promise<boolean> {
 }
 
 async function checkPort(ip: string, port: number): Promise<boolean> {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || !Number.isInteger(port)) return false;
   try {
     await exec("bash", ["-c", `echo >/dev/tcp/${ip}/${port}`], { timeout: 5000 });
     return true;

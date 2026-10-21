@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { syncAtomicRedTeam } from "@/lib/atomic-red-team/sync";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-guard";
 
 export const maxDuration = 300; // 5 minutes for large sync
 
 export async function POST() {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   // Check if a sync is already running
   const running = await prisma.atomicSyncMeta.findFirst({
     where: { status: "running" },

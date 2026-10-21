@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { analyzeProject } from "@/lib/docs-agent/analyzer";
 import { generateDocs } from "@/lib/docs-agent/generator";
+import { requireRole } from "@/lib/auth-guard";
 
 export async function POST() {
+  // Internet-fetching / bulk-rewriting maintenance op: admin only (dev: open).
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   try {
     const analysis = analyzeProject();
     const files = generateDocs(analysis);

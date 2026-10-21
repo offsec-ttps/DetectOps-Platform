@@ -1,0 +1,512 @@
+{
+  "gang": "ragnarlocker",
+  "displayName": "Ragnar Locker",
+  "aliases": [
+    "RagnarLocker",
+    "RAGNAR_LOCKER"
+  ],
+  "status": "disrupted",
+  "activeSince": "2019",
+  "lineage": "",
+  "summary": "Ragnar Locker was a targeted double-extortion operation active from late 2019 until an international takedown in October 2023, which seized its leak site and servers and arrested a suspected developer in Paris. The FBI linked it to at least 52 critical-infrastructure victims. Operators got in through exposed RDP (brute-forced or purchased credentials) and, per FBI IOCs, internet-facing Confluence servers. They deployed the locker through Group Policy and msiexec inside a stripped-down Windows XP VirtualBox guest so that host security tools could not see the encryption. The malware stopped MSP remote-administration services and deleted shadow copies first.",
+  "uniqueTraits": [
+    "Ran the encryptor inside a MicroXP (Windows XP SP3) VirtualBox 3.0.4 guest and encrypted host drives through shared folders",
+    "Deployed through a GPO task that ran msiexec to silently install an unsigned MSI fetched from a remote server, then registered VirtualBox components with regsvr32/rundll32 and created the VBoxDrv service with sc.exe",
+    "Stopped services used by managed service providers to remotely administer networks before encryption",
+    "Mounted unassigned volumes (SetVolumeMountPointA) so they would be encrypted too; extension .RGNR_<hash of NetBIOS name>"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "FBI FLASH CU-000163-MW: RagnarLocker Ransomware Indicators of Compromise",
+      "publisher": "FBI",
+      "date": "2022-03-07",
+      "url": "https://www.ic3.gov/CSA/2022/220307.pdf"
+    },
+    {
+      "id": "S2",
+      "title": "Ragnar Locker ransomware deploys virtual machine to dodge security",
+      "publisher": "Sophos",
+      "date": "2020-05-21",
+      "url": "https://www.sophos.com/en-us/blog/ragnar-locker-ransomware-deploys-virtual-machine-to-dodge-security"
+    },
+    {
+      "id": "S3",
+      "title": "Ragnar Locker (S0481)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024",
+      "url": "https://attack.mitre.org/software/S0481/"
+    },
+    {
+      "id": "S4",
+      "title": "Analysis and protections for RagnarLocker ransomware",
+      "publisher": "Trellix",
+      "date": "undated",
+      "url": "https://trellix.com/blogs/research/analysis-and-protections-for-ragnarlocker-ransomware"
+    },
+    {
+      "id": "S5",
+      "title": "Police arrests Ragnar Locker ransomware developer in France",
+      "publisher": "BleepingComputer",
+      "date": "2023-10-20",
+      "url": "https://www.bleepingcomputer.com/news/security/police-arrests-ragnar-locker-ransomware-developer-in-france/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1133",
+      "techniqueName": "External Remote Services",
+      "procedure": "Gets in through exposed RDP, using brute-forced or purchased credentials.",
+      "tools": [
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "09480053-2f98-4854-be6e-71ae5f672224",
+          "testNumber": 1,
+          "testName": "Brute Force Credentials of single Active Directory domain users via SMB",
+          "fidelity": "proxy",
+          "note": "Brute-forces a single domain account over SMB. It exercises password-guessing detections; internet-facing RDP brute force has to be tested at the perimeter."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "FBI IOCs include actor IPs that were accessing victims' Confluence servers (2021), which points to internet-facing Confluence as an entry point. No CVE is named.",
+      "tools": [
+        "Atlassian Confluence"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic exploits Confluence, and the CVE is not identified. Cover this with web-server and Confluence process-ancestry analytics (java.exe/tomcat spawning shells)."
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "Moves tooling with PuTTY's PSCP (FBI IOC 'IP involved in PSCP activity') and uses an updt32.exe proxy implant.",
+      "tools": [
+        "PSCP",
+        "updt32.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c82b1e60-c549-406f-9b00-0a8ae31c9cfe",
+          "testNumber": 33,
+          "testName": "Remote File Copy using PSCP",
+          "fidelity": "exact",
+          "note": "Copies files with PuTTY PSCP, the tool named in the FBI IOCs."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "discovery",
+      "techniqueId": "T1614",
+      "techniqueName": "System Location Discovery",
+      "procedure": "Calls GetLocaleInfoW and terminates if the locale is Russian, Ukrainian, Belarusian, Kazakh or another CIS language.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e39b99e9-ce7f-4b24-9c88-0fbad069e6c6",
+          "testNumber": 8,
+          "testName": "Discover System Language by Windows API Query",
+          "fidelity": "close",
+          "note": "Queries the system language through the Windows API, like the GetLocaleInfoW check."
+        },
+        {
+          "testGuid": "631d4cf1-42c9-4209-8fe9-6bd4de9421be",
+          "testNumber": 1,
+          "testName": "Discover System Language by Registry Query",
+          "fidelity": "proxy",
+          "note": "Language discovery through a registry query."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "Reads the MachineGuid, the OS product name and the user and computer names, then hashes them into a unique victim identifier.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "224b4daf-db44-404e-b6b2-f4d1f0126ef8",
+          "testNumber": 9,
+          "testName": "Windows MachineGUID Discovery",
+          "fidelity": "exact",
+          "note": "Reads the MachineGuid from the registry."
+        },
+        {
+          "testGuid": "be3b5fe3-a575-4fb8-83f6-ad4a68dd5ce7",
+          "testNumber": 39,
+          "testName": "Discover OS Product Name via Registry",
+          "fidelity": "exact",
+          "note": "Reads the OS ProductName from the registry."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1120",
+      "techniqueName": "Peripheral Device Discovery",
+      "procedure": "Enumerates attached disks with GetLogicalDrives/DeviceIoControl and mounts unassigned volumes with SetVolumeMountPointA so they are encrypted too.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "424e18fd-48b8-4201-8d3a-bf591523a686",
+          "testNumber": 3,
+          "testName": "Peripheral Device Discovery via fsutil",
+          "fidelity": "proxy",
+          "note": "Discovers drives and volumes with fsutil."
+        },
+        {
+          "testGuid": "3a4d51bd-b0f5-4249-821c-ba8997c42c00",
+          "testNumber": 1,
+          "testName": "Local Storage Discovery via PSDrive",
+          "fidelity": "proxy",
+          "note": "Discovers local storage with Get-PSDrive."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Domain or Tenant Policy Modification: Group Policy Modification",
+      "procedure": "Pushes the payload out with a Group Policy task that runs msiexec on target machines.",
+      "tools": [
+        "Group Policy"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "proxy",
+          "note": "Modifies Group Policy settings from the command line, generating the GPO-change telemetry that malicious GPO deployment produces."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1218.007",
+      "techniqueName": "System Binary Proxy Execution: Msiexec",
+      "procedure": "msiexec silently installs an unsigned ~122 MB MSI downloaded from a remote server. The package bundles Sun xVM VirtualBox 3.0.4 and the micro.vdi disk image.",
+      "tools": [
+        "msiexec",
+        "MSI package"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "44a4bedf-ffe3-452e-bee4-6925ab125662",
+          "testNumber": 11,
+          "testName": "Msiexec.exe - Execute Remote MSI file",
+          "fidelity": "exact",
+          "note": "Runs a remote MSI with msiexec."
+        },
+        {
+          "testGuid": "ed3fa08a-ca18-4009-973e-03d13014d0e8",
+          "testNumber": 4,
+          "testName": "Msiexec.exe - Execute Local MSI file with an embedded EXE",
+          "fidelity": "close",
+          "note": "Runs a local MSI with an embedded EXE."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1218.010",
+      "techniqueName": "System Binary Proxy Execution: Regsvr32",
+      "procedure": "A batch script registers the VirtualBox COM components (VBoxC.dll and others) with regsvr32 and rundll32.",
+      "tools": [
+        "regsvr32",
+        "rundll32",
+        "batch script"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9d71c492-ea2e-4c08-af16-c6994cdf029f",
+          "testNumber": 5,
+          "testName": "Regsvr32 Silent DLL Install Call DllRegisterServer",
+          "fidelity": "close",
+          "note": "Silently registers a DLL with regsvr32 /s through DllRegisterServer."
+        },
+        {
+          "testGuid": "08ffca73-9a3d-471a-aeb0-68b4aa3ab37b",
+          "testNumber": 3,
+          "testName": "Regsvr32 local DLL execution",
+          "fidelity": "close",
+          "note": "Runs a local DLL with regsvr32."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "persistence",
+      "techniqueId": "T1543.003",
+      "techniqueName": "Create or Modify System Process: Windows Service",
+      "procedure": "Creates and starts the VirtualBox driver service (VBoxDrv) with sc.exe.",
+      "tools": [
+        "sc.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "981e2942-e433-44e9-afc1-8c957a1496b6",
+          "testNumber": 2,
+          "testName": "Service Installation CMD",
+          "fidelity": "close",
+          "note": "Installs a service with sc create."
+        },
+        {
+          "testGuid": "2382dee2-a75f-49aa-9378-f52df6ed3fb1",
+          "testNumber": 1,
+          "testName": "Execute a Command as a Service",
+          "fidelity": "close",
+          "note": "Runs a command as a service through sc."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1564.006",
+      "techniqueName": "Hide Artifacts: Run Virtual Instance",
+      "procedure": "Boots a MicroXP v0.82 (Windows XP SP3) VirtualBox guest that holds the 49 KB locker. Host drives are mapped into the guest as shared folders so encryption happens inside the VM, out of sight of host security tools.",
+      "tools": [
+        "VirtualBox 3.0.4",
+        "MicroXP VM"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c59f246a-34f8-4e4d-9276-c295ef9ba0dd",
+          "testNumber": 1,
+          "testName": "Register Portable Virtualbox",
+          "fidelity": "close",
+          "note": "Registers a portable VirtualBox install (drivers and services) as Ragnar Locker did."
+        },
+        {
+          "testGuid": "88b81702-a1c0-49a9-95b2-2dd53d755767",
+          "testNumber": 2,
+          "testName": "Create and start VirtualBox virtual machine",
+          "fidelity": "close",
+          "note": "Creates and starts a VirtualBox VM from the command line."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Tries to terminate or stop processes and services that belong to endpoint security products.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Stops and removes a security service."
+        },
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disables a security service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Iterates through running services and stops the ones MSPs use to remotely administer networks (remote-management agents), along with database and business-application services that would hold file locks.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "Stops a service with net stop."
+        },
+        {
+          "testGuid": "21dfb440-830d-4c86-a3e5-2a491d5a8d04",
+          "testNumber": 1,
+          "testName": "Windows - Stop service using Service Controller",
+          "fidelity": "close",
+          "note": "Stops a service with sc stop."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Silently deletes all volume shadow copies with 'vssadmin delete shadows /all /quiet' and 'wmic shadowcopy delete'.",
+      "tools": [
+        "vssadmin",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows /all /quiet."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "wmic shadowcopy delete."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts files on local and mapped drives using a folder exclusion list, appends .RGNR_<ID> and drops a RAGNAR_LOCKER .txt ransom note. The leak site was seized in October 2023.",
+      "tools": [
+        "Ragnar Locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact. The VM-hosted encryption is not reproduced."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

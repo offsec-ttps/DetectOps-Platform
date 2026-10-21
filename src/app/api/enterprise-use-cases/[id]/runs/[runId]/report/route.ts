@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { prisma } from "@/lib/prisma";
 import { renderRunReport, type UseCaseSnapshot, type RunSnapshot } from "@/lib/enterprise-use-cases/render-report";
 
@@ -21,6 +22,8 @@ function safeJson<T>(s: string | null | undefined, fb: T): T {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string; runId: string }> }) {
   const { id, runId } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const format = sp.get("format") || "md";
 

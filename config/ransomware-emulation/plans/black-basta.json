@@ -1,0 +1,553 @@
+{
+  "gang": "Black Basta",
+  "displayName": "Black Basta",
+  "aliases": [
+    "Storm-1811 (access cluster)",
+    "UNC4393"
+  ],
+  "status": "disrupted",
+  "activeSince": "2022",
+  "lineage": "Conti splinter; EDR-evasion tooling tied to FIN7; internal chats leaked Feb 2025 and leak site inactive since early 2025, members reportedly moved to other brands",
+  "summary": "Black Basta hit 500+ organisations (2022-2024). Early access came via Qakbot malspam; after the 2023 Qakbot takedown affiliates shifted to email bombing followed by phone/Teams help-desk impersonation that talks users into Quick Assist or AnyDesk, plus exploitation of ScreenConnect and other public-facing flaws. Hands-on activity uses BITSAdmin/curl staging, SoftPerfect netscan, Mimikatz, ZeroLogon/NoPac/PrintNightmare, Backstab and custom FIN7-linked EDR killers, PsExec/RDP and rclone before ChaCha20 encryption of Windows and ESXi.",
+  "uniqueTraits": [
+    "Email bombing + Microsoft Teams/phone help-desk impersonation leading to Quick Assist sessions (Storm-1811)",
+    "Qakbot (and later DarkGate/Pikabot) as primary loader",
+    "Custom EDR-impairment tool linked to FIN7 developer; Backstab",
+    "ZeroLogon/NoPac/PrintNightmare for domain escalation",
+    "Early variants reboot into Safe Mode to bypass EDR and set a custom wallpaper"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Black Basta (AA24-131A)",
+      "publisher": "CISA",
+      "date": "2024-05-10",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-131a"
+    },
+    {
+      "id": "S2",
+      "title": "Black Basta (S1070)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2024-10-01",
+      "url": "https://attack.mitre.org/software/S1070/"
+    },
+    {
+      "id": "S3",
+      "title": "Threat actors misusing Quick Assist in social engineering attacks leading to ransomware",
+      "publisher": "Microsoft",
+      "date": "2024-05-15",
+      "url": "https://www.microsoft.com/en-us/security/blog/2024/05/15/threat-actors-misusing-quick-assist-in-social-engineering-attacks-leading-to-ransomware/"
+    },
+    {
+      "id": "S4",
+      "title": "Ongoing Social Engineering Campaign Linked to Black Basta Ransomware Operators",
+      "publisher": "Rapid7",
+      "date": "2024-05-10",
+      "url": "https://www.rapid7.com/blog/post/2024/05/10/ongoing-social-engineering-campaign-linked-to-black-basta-ransomware-operators/"
+    },
+    {
+      "id": "S5",
+      "title": "Black Basta Ransomware | Attacks deploy Custom EDR Evasion Tools tied to FIN7 Threat Actor",
+      "publisher": "SentinelLabs",
+      "date": "2022-11-03",
+      "url": "https://www.sentinelone.com/labs/black-basta-ransomware-attacks-deploy-custom-edr-evasion-tools-tied-to-fin7-threat-actor/"
+    },
+    {
+      "id": "S6",
+      "title": "Black Basta ransomware poses as IT support on Microsoft Teams to breach networks",
+      "publisher": "BleepingComputer",
+      "date": "2024-10-25",
+      "url": "https://www.bleepingcomputer.com/news/security/black-basta-ransomware-poses-as-it-support-on-microsoft-teams-to-breach-networks/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.004",
+      "techniqueName": "Phishing: Spearphishing Voice",
+      "procedure": "Floods the target mailbox with thousands of spam sign-ups, then calls or messages via external Microsoft Teams posing as the help desk offering to fix the spam.",
+      "tools": [
+        "email bombing",
+        "Microsoft Teams"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4",
+        "S6"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Email bombing and voice/Teams social engineering occur off-endpoint; validate via mail-volume and external-Teams-chat detections."
+    },
+    {
+      "order": 2,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Victim is talked into starting a Quick Assist (or AnyDesk) session, giving the operator interactive control.",
+      "tools": [
+        "Quick Assist",
+        "AnyDesk"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S3",
+        "S4",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1aea6d15-70f1-4b4e-8b02-397b5d5ffe75",
+          "testNumber": 15,
+          "testName": "Microsoft App Quick Assist Execution",
+          "fidelity": "exact",
+          "note": "Microsoft Quick Assist execution."
+        },
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "AnyDesk."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Qakbot malspam (2022-2023) delivering the first-stage loader.",
+      "tools": [
+        "Qakbot"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "close",
+          "note": "Macro-enabled attachment download."
+        },
+        {
+          "testGuid": "121de5c6-5818-4868-b8a7-8fd07c455c1b",
+          "testNumber": 7,
+          "testName": "Qakbot Recon",
+          "fidelity": "close",
+          "note": "Qakbot-style recon commands run by the loader."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Exploits public-facing flaws, notably ConnectWise ScreenConnect CVE-2024-1709.",
+      "tools": [
+        "ScreenConnect exploit"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Local catalogue has no T1190 exploit atomic (and plans never add exploit code); validate with perimeter/WAF/appliance log detections instead."
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1105",
+      "techniqueName": "Ingress Tool Transfer",
+      "procedure": "BITSAdmin and curl fetch Cobalt Strike, batch scripts and tooling; scripts run from the Quick Assist session.",
+      "tools": [
+        "BITSAdmin",
+        "curl",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a1921cd3-9a2d-47d5-a891-f1d0f2a7a31b",
+          "testNumber": 9,
+          "testName": "Windows - BITSAdmin BITS Download",
+          "fidelity": "exact",
+          "note": "BITSAdmin download, named in AA24-131A."
+        },
+        {
+          "testGuid": "2b080b99-0deb-4d51-af0f-833d37c4ca6a",
+          "testNumber": 18,
+          "testName": "Curl Download File",
+          "fidelity": "exact",
+          "note": "curl download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs ScreenConnect, Splashtop and NetSupport Manager for durable access.",
+      "tools": [
+        "ScreenConnect",
+        "Splashtop",
+        "NetSupport"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "exact",
+          "note": "ScreenConnect install."
+        },
+        {
+          "testGuid": "b025c580-029e-4023-888d-a42710d76934",
+          "testNumber": 13,
+          "testName": "Splashtop Execution",
+          "fidelity": "exact",
+          "note": "Splashtop."
+        },
+        {
+          "testGuid": "ecca999b-e0c8-40e8-8416-ad320b146a75",
+          "testNumber": 8,
+          "testName": "NetSupport - RAT Execution",
+          "fidelity": "exact",
+          "note": "NetSupport."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1018",
+      "techniqueName": "Remote System Discovery",
+      "procedure": "SoftPerfect netscan.exe and AdFind for network/AD discovery.",
+      "tools": [
+        "SoftPerfect NetScan",
+        "AdFind"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b8147c9a-84db-4ec1-8eee-4e0da75f0de5",
+          "testNumber": 22,
+          "testName": "Enumerate Remote Hosts with Netscan",
+          "fidelity": "exact",
+          "note": "SoftPerfect netscan."
+        },
+        {
+          "testGuid": "e1ec8d20-509a-4b9a-b820-06c9b2da8eb7",
+          "testNumber": 7,
+          "testName": "Adfind - Enumerate Active Directory User Objects",
+          "fidelity": "close",
+          "note": "AdFind user enumeration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "ZeroLogon (CVE-2020-1472), NoPac (CVE-2021-42278/42287) and PrintNightmare (CVE-2021-34527) for domain escalation.",
+      "tools": [
+        "ZeroLogon",
+        "NoPac",
+        "PrintNightmare"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Catalogue has no ZeroLogon/NoPac/PrintNightmare atomics (plans do not add exploit code); validate via DC Netlogon/Kerberos detections."
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Mimikatz for credential harvesting.",
+      "tools": [
+        "Mimikatz"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "453acf13-1dbd-47d7-b28a-172ce9228023",
+          "testNumber": 6,
+          "testName": "Offline Credential Theft With Mimikatz",
+          "fidelity": "exact",
+          "note": "Mimikatz."
+        },
+        {
+          "testGuid": "3a854c64-aebd-44a9-8558-0b23689f0be6",
+          "testNumber": 15,
+          "testName": "Mimikatz detonation (T1003.001)",
+          "fidelity": "close",
+          "note": "Mimikatz detonation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Backstab and a custom FIN7-linked EDR-impairment tool kill security products; batch scripts disable Defender (formerly T1562.001). Catalogue files Impair Defenses tests under T1685 (Disable or Modify Tools).",
+      "tools": [
+        "Backstab",
+        "custom EDR killer"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "exact",
+          "note": "Backstab, named in AA24-131A."
+        },
+        {
+          "testGuid": "aa875ed4-8935-47e2-b2c5-6ec00ab220d2",
+          "testNumber": 20,
+          "testName": "Tamper with Windows Defender Command Prompt",
+          "fidelity": "close",
+          "note": "Defender tamper via command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1562.009",
+      "techniqueName": "Impair Defenses: Safe Mode Boot",
+      "procedure": "Early encryptor builds set bcdedit safeboot and a RunOnce/service entry, then reboot into Safe Mode to encrypt without EDR.",
+      "tools": [
+        "bcdedit"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1dd59fb3-1cb3-4828-805d-cf80b4c3bbb5",
+          "testNumber": 34,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode without Network",
+          "fidelity": "close",
+          "note": "Registry value to load a service in Safe Mode."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "PsExec and RDP used to spread and execute the encryptor.",
+      "tools": [
+        "PsExec",
+        "RDP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "PsExec copy-and-execute."
+        },
+        {
+          "testGuid": "873106b7-cfed-454b-8680-fa9f6400431c",
+          "testNumber": 2,
+          "testName": "Use PsExec to execute a command on a remote host",
+          "fidelity": "close",
+          "note": "PsExec remote execution."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration to Cloud Storage",
+      "procedure": "RClone used to exfiltrate data to cloud storage.",
+      "tools": [
+        "rclone"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "rclone to cloud storage."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "vssadmin deletes shadow copies.",
+      "tools": [
+        "vssadmin"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1491.001",
+      "techniqueName": "Defacement: Internal Defacement",
+      "procedure": "Encryptor replaces the desktop wallpaper with a Black Basta notice and changes file icons.",
+      "tools": [
+        "Black Basta encryptor"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "exact",
+          "note": "Desktop wallpaper replacement."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "ChaCha20 + RSA-4096 encryption with .basta extension and readme.txt notes.",
+      "tools": [
+        "Black Basta encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "File encryption telemetry proxy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1529",
+      "techniqueName": "System Shutdown/Reboot",
+      "procedure": "Linux variant targets VMware ESXi, stopping VMs before encrypting /vmfs/volumes.",
+      "tools": [
+        "Black Basta ESXi locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "622cc1a0-45e7-428c-aed7-c96dd605fbe6",
+          "testNumber": 15,
+          "testName": "ESXi - vim-cmd Used to Power Off VMs",
+          "fidelity": "close",
+          "note": "vim-cmd VM power-off on ESXi."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

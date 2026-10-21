@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const minted = await mintKey({
     label: String(body.label || "MCP key"),
-    scopes: Array.isArray(body.scopes) ? body.scopes.map(String) : undefined,
+    // Only known scopes — unknown strings would silently grant nothing today but
+    // could alias a future privileged scope.
+    scopes: Array.isArray(body.scopes)
+      ? body.scopes.map(String).filter((s: string) => (MCP_SCOPES as readonly string[]).includes(s))
+      : undefined,
     tier: typeof body.tier === "string" ? body.tier : undefined,
     rateLimitPerMin: Number(body.rateLimitPerMin) || undefined,
     dailyQuota: Number(body.dailyQuota) || undefined,

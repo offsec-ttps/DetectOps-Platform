@@ -1,0 +1,627 @@
+{
+  "gang": "vicesociety",
+  "displayName": "Vice Society",
+  "aliases": [
+    "DEV-0832",
+    "Vanilla Tempest",
+    "VICE SPIDER"
+  ],
+  "status": "rebranded",
+  "activeSince": "2021",
+  "lineage": "No in-house locker (used HelloKitty/FiveHands, Zeppelin, BlackCat, Quantum); operators moved to Rhysida RaaS in 2023 and are tracked by Microsoft as Vanilla Tempest",
+  "summary": "Vice Society is an intrusion, exfiltration and extortion crew that first appeared in mid-2021 and focused heavily on the education and healthcare sectors. It gets in with valid VPN credentials (often without MFA) or through exploited internet-facing systems. It then escalates with public exploits such as PrintNightmare, Zerologon and CLFS, persists with SystemBC and PortStarter, and steals large data sets with a custom PowerShell uploader and MegaSync/Rclone before deploying a rented or borrowed encryptor. In 2025 the same operators (Vanilla Tempest) delivered the Oyster backdoor through SEO-poisoned fake Microsoft Teams installers that were signed with fraudulently obtained certificates, then deployed Rhysida.",
+  "uniqueTraits": [
+    "Uses public privilege-escalation exploits very soon after access: PrintNightmare (CVE-2021-1675/34527), CLFS CVE-2022-24521 and Zerologon (CVE-2020-1472)",
+    "SystemBC PowerShell loader persisted through a Run key value named 'socks'; PortStarter Go backdoor persisted through scheduled tasks 'System' and '_SystemCheck_' and opened firewall ports",
+    "Custom PowerShell exfiltration script (w1.ps1) that picks files by keyword and uploads them over HTTP POST, built only from native cmdlets",
+    "Mass password resets of victim accounts (more than 150,000 users in one case) to lock out defenders",
+    "2025: fake MSTeamsSetup.exe installers reached through SEO poisoning, signed with Trusted Signing, SSL.com, DigiCert and GlobalSign certificates, delivering Oyster and then Rhysida"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Vice Society (AA22-249A)",
+      "publisher": "CISA / FBI / MS-ISAC",
+      "date": "2022-09-06",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa22-249a"
+    },
+    {
+      "id": "S2",
+      "title": "DEV-0832 (Vice Society) opportunistic ransomware campaigns impacting US education sector",
+      "publisher": "Microsoft Threat Intelligence",
+      "date": "2022-10-25",
+      "url": "https://www.microsoft.com/en-us/security/blog/2022/10/25/dev-0832-vice-society-opportunistic-ransomware-campaigns-impacting-us-education-sector/"
+    },
+    {
+      "id": "S3",
+      "title": "Vice Society leverages PrintNightmare in ransomware attacks",
+      "publisher": "Cisco Talos",
+      "date": "2021-08-12",
+      "url": "https://blog.talosintelligence.com/vice-society-ransomware-printnightmare/"
+    },
+    {
+      "id": "S4",
+      "title": "Vice Society ransomware group's PowerShell data exfiltration script",
+      "publisher": "Palo Alto Networks Unit 42",
+      "date": "2023-04",
+      "url": "https://unit42.paloaltonetworks.com/vice-society-ransomware-powershell/"
+    },
+    {
+      "id": "S5",
+      "title": "Vice Society and the Rhysida ransomware",
+      "publisher": "Sophos X-Ops",
+      "date": "2023-08-09",
+      "url": "https://www.sophos.com/blog/vice-society-and-rhysida-ransomware"
+    },
+    {
+      "id": "S6",
+      "title": "Microsoft revokes 200 certs used to sign malicious Teams installers (Vanilla Tempest)",
+      "publisher": "Help Net Security (reporting Microsoft Threat Intelligence)",
+      "date": "2025-10-17",
+      "url": "https://www.helpnetsecurity.com/2025/10/17/vanilla-tempest-fake-microsoft-teams/"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1078",
+      "techniqueName": "Valid Accounts",
+      "procedure": "Logs in to the victim VPN with valid credentials, presumed bought from an initial access broker, on accounts that have no MFA.",
+      "tools": [
+        "VPN"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The login happens at the VPN perimeter with purchased credentials. No endpoint atomic reproduces it, so validate it with VPN and IdP logon analytics instead."
+    },
+    {
+      "order": 2,
+      "tactic": "initial-access",
+      "techniqueId": "T1204.002",
+      "techniqueName": "User Execution: Malicious File",
+      "procedure": "2025 Vanilla Tempest campaign: SEO poisoning leads users to lookalike domains (for example teams-download[.]buzz). There they download and run a fake MSTeamsSetup.exe that is signed with a fraudulently obtained certificate and loads the Oyster backdoor.",
+      "tools": [
+        "Oyster",
+        "fake MSTeamsSetup.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "02f35d62-9fdc-4a97-b899-a5d9a876d295",
+          "testNumber": 8,
+          "testName": "Potentially Unwanted Applications (PUA)",
+          "fidelity": "proxy",
+          "note": "Runs a downloaded, potentially unwanted installer-style executable. This exercises the user-launched download telemetry but does not use a signed Teams lookalike."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys",
+      "procedure": "SystemBC is launched by a PowerShell script (svchost.ps1) and kept alive through a Run key value named 'socks'.",
+      "tools": [
+        "SystemBC",
+        "PowerShell"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "close",
+          "note": "Writes a Run key value that launches a payload, matching the SystemBC 'socks' Run-key persistence."
+        },
+        {
+          "testGuid": "eb44f842-0457-4ddc-9b92-c4caa144ac42",
+          "testNumber": 3,
+          "testName": "PowerShell Registry RunOnce",
+          "fidelity": "proxy",
+          "note": "PowerShell-written RunOnce key, a variant of the same autostart location."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task/Job: Scheduled Task",
+      "procedure": "The PortStarter backdoor is persisted with scheduled tasks named 'System' and '_SystemCheck_'.",
+      "tools": [
+        "PortStarter",
+        "schtasks"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "close",
+          "note": "Creates a local scheduled task with schtasks, as PortStarter does."
+        },
+        {
+          "testGuid": "af9fd58f-c4ac-4bf2-a9ba-224b71ff25fd",
+          "testNumber": 4,
+          "testName": "Powershell Cmdlet Scheduled Task",
+          "fidelity": "proxy",
+          "note": "The same task created through the PowerShell cmdlets."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1686",
+      "techniqueName": "Disable or Modify System Firewall",
+      "procedure": "PortStarter changes Windows firewall settings and opens ports so it can reach its C2 servers.",
+      "tools": [
+        "PortStarter"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9636dd6e-7599-40d2-8eee-ac16434f35ed",
+          "testNumber": 5,
+          "testName": "Open a local port through Windows Firewall to any profile",
+          "fidelity": "close",
+          "note": "Opens a local port through Windows Firewall, the same change PortStarter makes."
+        },
+        {
+          "testGuid": "6f5822d2-d38d-4f48-9bfc-916607ff6b8c",
+          "testNumber": 6,
+          "testName": "Allow Executable Through Firewall Located in Non-Standard Location",
+          "fidelity": "proxy",
+          "note": "Allows an executable in a non-standard path through the firewall."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1068",
+      "techniqueName": "Exploitation for Privilege Escalation",
+      "procedure": "Exploits PrintNightmare (CVE-2021-1675 / CVE-2021-34527) and the CLFS driver flaw CVE-2022-24521 locally, and runs Zerologon (CVE-2020-1472) against domain controllers soon after gaining access.",
+      "tools": [
+        "PrintNightmare exploit",
+        "Zerologon exploit",
+        "Mimikatz"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "The local catalogue has no PrintNightmare, CLFS or Zerologon exploitation test, and exploit code is out of scope. Use vulnerability-management data plus Spooler and Netlogon (event 5829) analytics instead."
+    },
+    {
+      "order": 7,
+      "tactic": "discovery",
+      "techniqueId": "T1046",
+      "techniqueName": "Network Service Discovery",
+      "procedure": "Runs Advanced IP Scanner and Advanced Port Scanner, plus custom PowerShell discovery scripts, to map the network.",
+      "tools": [
+        "Advanced IP Scanner",
+        "Advanced Port Scanner"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "05df2a79-dba6-4088-a804-9ca0802ca8e4",
+          "testNumber": 10,
+          "testName": "Port-Scanning /24 Subnet with PowerShell",
+          "fidelity": "proxy",
+          "note": "PowerShell /24 port sweep, which produces the same burst of internal connection attempts as the GUI scanners."
+        },
+        {
+          "testGuid": "d696a3cb-d7a8-4976-8eb5-5af4abf2e3df",
+          "testNumber": 3,
+          "testName": "Port Scan NMap for Windows",
+          "fidelity": "proxy",
+          "note": "Nmap port scan as a scanner-tool stand-in."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.001",
+      "techniqueName": "OS Credential Dumping: LSASS Memory",
+      "procedure": "Dumps LSASS with comsvcs.dll MiniDump through rundll32 instead of Mimikatz.",
+      "tools": [
+        "comsvcs.dll",
+        "rundll32"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2536dee2-12fb-459a-8c37-971844fa73be",
+          "testNumber": 2,
+          "testName": "Dump LSASS.exe Memory using comsvcs.dll",
+          "fidelity": "exact",
+          "note": "Dumps LSASS memory with comsvcs.dll MiniDump, the procedure Microsoft reported."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.003",
+      "techniqueName": "OS Credential Dumping: NTDS",
+      "procedure": "On a domain controller, runs ntdsutil to make a full ntds.dit backup in a folder named temp_l0gs, and uses secretsdump to extract AD hashes.",
+      "tools": [
+        "ntdsutil",
+        "secretsdump"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+          "testNumber": 3,
+          "testName": "Dump Active Directory Database with NTDSUtil",
+          "fidelity": "exact",
+          "note": "Dumps the AD database with ntdsutil IFM, the Sophos-observed procedure."
+        },
+        {
+          "testGuid": "dcebead7-6c28-4b4b-bf3c-79deb1b1fc7f",
+          "testNumber": 1,
+          "testName": "Create Volume Shadow Copy with vssadmin",
+          "fidelity": "close",
+          "note": "Creates a volume shadow copy with vssadmin, the same NTDS-theft goal through a different path."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "credential-access",
+      "techniqueId": "T1558.003",
+      "techniqueName": "Steal or Forge Kerberos Tickets: Kerberoasting",
+      "procedure": "Runs PowerSploit Invoke-Kerberoast to request service tickets for offline cracking.",
+      "tools": [
+        "PowerSploit Invoke-Kerberoast"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3f987809-3681-43c8-bcd8-b3ff3a28533a",
+          "testNumber": 1,
+          "testName": "Request for service tickets",
+          "fidelity": "close",
+          "note": "Requests service tickets with Invoke-Kerberoast from PowerShell."
+        },
+        {
+          "testGuid": "902f4ed2-1aba-4133-90f2-cff6d299d6da",
+          "testNumber": 5,
+          "testName": "Request All Tickets via PowerShell",
+          "fidelity": "close",
+          "note": "Requests all SPN tickets through native PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Disable or Modify Tools",
+      "procedure": "Turns off Microsoft Defender Antivirus with registry commands and removes security programs with WMIC.",
+      "tools": [
+        "reg.exe",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b3e0146-a1e5-4c5c-89fb-1bb2ffe8fc45",
+          "testNumber": 21,
+          "testName": "Tamper with Windows Defender Registry",
+          "fidelity": "exact",
+          "note": "Turns off Defender through registry values."
+        },
+        {
+          "testGuid": "c510d25b-1667-467d-8331-a56d3e9bc4ff",
+          "testNumber": 10,
+          "testName": "Application uninstall using WMIC",
+          "fidelity": "close",
+          "note": "Uninstalls an application with WMIC, the same mechanism used to remove security programs."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.002",
+      "techniqueName": "Remote Services: SMB/Windows Admin Shares",
+      "procedure": "Stages scripts and the ransomware on hidden '$' shares, then runs them remotely with PsExec and Impacket wmiexec/atexec. Ransomware is also pushed out through Group Policy.",
+      "tools": [
+        "PsExec",
+        "Impacket wmiexec",
+        "Impacket atexec"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0eb03d41-79e4-4393-8e57-6344856be1cf",
+          "testNumber": 3,
+          "testName": "Copy and Execute File with PsExec",
+          "fidelity": "exact",
+          "note": "Copies a file to an admin share and runs it with PsExec."
+        },
+        {
+          "testGuid": "a3ddaf15-d1a1-4bc3-8683-84c7c67120fe",
+          "testNumber": 11,
+          "testName": "Impacket wmiexec.py",
+          "fidelity": "exact",
+          "note": "Impacket wmiexec.py remote execution."
+        },
+        {
+          "testGuid": "4a6c0dc4-0f2a-4203-9298-a5a9bdc21ed8",
+          "testNumber": 1,
+          "testName": "At.exe Scheduled task",
+          "fidelity": "proxy",
+          "note": "at.exe task creation, which approximates the scheduled-task telemetry Impacket atexec leaves."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "Installs AnyDesk silently on multiple systems from the command line as the main remote-access channel.",
+      "tools": [
+        "AnyDesk"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "close",
+          "note": "Downloads and runs AnyDesk on the host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1041",
+      "techniqueName": "Exfiltration Over C2 Channel",
+      "procedure": "A custom PowerShell script (w1.ps1) picks directories by keyword with Get-ChildItem/Select-String and uploads files to Vice Society servers over HTTP POST, running up to 10 concurrent jobs.",
+      "tools": [
+        "w1.ps1 PowerShell exfiltration script"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S4",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d1253f6e-c29b-49dc-b466-2147a6191932",
+          "testNumber": 1,
+          "testName": "C2 Data Exfiltration",
+          "fidelity": "close",
+          "note": "PowerShell sends staged data out over HTTP to a C2 endpoint, like the w1.ps1 upload loop."
+        },
+        {
+          "testGuid": "6aa58451-1121-4490-a8e9-1dada3f1c68c",
+          "testNumber": 4,
+          "testName": "Exfiltration Over Alternative Protocol - HTTP",
+          "fidelity": "proxy",
+          "note": "HTTP upload of staged data over an unencrypted channel."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Compresses data with 7-Zip and uploads it to cloud storage with MegaSync and Rclone, sometimes reaching hundreds of GB. WinSCP is also used.",
+      "tools": [
+        "Rclone",
+        "MegaSync",
+        "7-Zip",
+        "WinSCP"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Uploads data to MEGA with rclone."
+        },
+        {
+          "testGuid": "d1334303-59cb-4a03-8313-b3e24d02c198",
+          "testNumber": 4,
+          "testName": "Compress Data and lock with password for Exfiltration with 7zip",
+          "fidelity": "close",
+          "note": "Builds a password-protected 7-Zip archive before exfiltration."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1531",
+      "techniqueName": "Account Access Removal",
+      "procedure": "Scripts reset the passwords of victim accounts, including email accounts and in one case more than 150,000 users, to lock out legitimate users during extortion.",
+      "tools": [
+        "PowerShell scripts"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1b99ef28-f83c-4ec5-8a08-1a56263a5bb2",
+          "testNumber": 1,
+          "testName": "Change User Password - Windows",
+          "fidelity": "close",
+          "note": "Changes a Windows user's password from the command line."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes Windows Server shadow copies with vssadmin, and deletes backups and Mongo databases with WMIC.",
+      "tools": [
+        "vssadmin",
+        "wmic"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+          "testNumber": 1,
+          "testName": "Windows - Delete Volume Shadow Copies",
+          "fidelity": "exact",
+          "note": "vssadmin delete shadows."
+        },
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "close",
+          "note": "Shadow-copy deletion through WMI."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Deploys HelloKitty/FiveHands, Zeppelin (Vice Society-branded .v-society) and later Rhysida (.rhysida, CriticalBreachDetected.pdf), plus a Linux ESXi encryptor. Binaries are pushed with PsExec.",
+      "tools": [
+        "Zeppelin",
+        "HelloKitty/FiveHands",
+        "Rhysida"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S5",
+        "S6"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note artifact. The Vice Society/Rhysida encryptor itself is not reproduced."
+        },
+        {
+          "testGuid": "4541e2c2-33c8-44b1-be79-9161440f1718",
+          "testNumber": 8,
+          "testName": "Data Encrypted with GPG4Win",
+          "fidelity": "proxy",
+          "note": "Encrypts test files with GPG4Win to generate bulk file-encryption telemetry."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

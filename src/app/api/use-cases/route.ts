@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   const techniqueSet = new Set<string>();
   const platforms = uniqStrings(body.platforms);
 
-  const steps: StepDraft[] = Array.isArray(body.steps) ? body.steps : [];
+  const steps: StepDraft[] = Array.isArray(body.steps) ? body.steps.slice(0, 500) : [];
   for (const s of steps) {
     if (s.techniqueId) techniqueSet.add(s.techniqueId);
   }

@@ -28,6 +28,13 @@ export async function registerC2AsEnvironmentTarget(server: C2Server): Promise<s
     ownerId: server.ownerId || "",
     enabled: true,
   };
+  // Never take over someone else's EnvironmentTarget that happens to carry the
+  // same "C2: <name>" (upsert-by-name would otherwise overwrite its target URL,
+  // API key and ownerId with this server's).
+  const existing = await prisma.environmentTarget.findUnique({ where: { name }, select: { id: true, ownerId: true } });
+  if (existing && existing.id !== server.environmentTargetId && (existing.ownerId || "") !== (server.ownerId || "")) {
+    return null;
+  }
   const env = await prisma.environmentTarget.upsert({
     where: { name },
     create: { name, ...data },

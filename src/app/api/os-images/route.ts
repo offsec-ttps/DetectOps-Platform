@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, requireRole } from "@/lib/auth-guard";
 import { OS_IMAGE_CATALOG, getOsImage, priceFor } from "@/config/os-images";
 import { localDeployAvailable } from "@/lib/deploy/mode";
 import { logEvent } from "@/lib/event-log";
@@ -51,7 +51,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireUser();
+  // Runs vagrant (local host), terraform (cloud spend) or SSH provisioning from
+  // this server — admin only.
+  const auth = await requireRole("admin");
   if (!auth.ok) return auth.response;
 
   const body = await req.json().catch(() => ({} as any));

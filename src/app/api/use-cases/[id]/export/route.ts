@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 import { logEvent } from "@/lib/event-log";
 import { getSessionUser } from "@/lib/auth";
 import { exportAtomicYaml } from "@/lib/use-cases/exporters/atomic";
@@ -23,6 +24,8 @@ import type { PlaybookFormat } from "@/lib/use-cases/types";
 const FORMATS: PlaybookFormat[] = ["atomic-yaml", "purplesharp-json", "stratus-sh"];
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
   const format = body.format as PlaybookFormat;
@@ -35,6 +38,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     include: { steps: { orderBy: { orderIndex: "asc" } } },
   });
   if (!useCase) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const owns = ownsOr404(auth, useCase.authorId);
+  if (!owns.ok) return owns.response;
 
   let rendered = "";
   let checksum = "";

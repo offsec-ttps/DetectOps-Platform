@@ -1,0 +1,556 @@
+{
+  "gang": "embargo",
+  "displayName": "Embargo",
+  "aliases": [],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Assessed by TRM Labs (2025) as a possible rebrand or successor of BlackCat/ALPHV (Rust, look-alike leak site, on-chain overlap); Storm-0501 is a known affiliate",
+  "summary": "Embargo is a Rust RaaS seen since April 2024, mostly hitting US healthcare, business services and manufacturing. Affiliates such as Storm-0501 get in through unpatched edge and web applications (ManageEngine, Citrix NetScaler, ColdFusion), dump credentials with Impacket, keep access through RMM tools and exfiltrate with renamed Rclone. The operator's own toolkit is distinctive: the MDeployer loader runs from a scheduled task, decrypts RC4 payloads, reboots hosts into Safe Mode to disable security products, and drops MS4Killer, which loads the vulnerable probmon.sys driver (BYOVD) to kill EDR before encryption.",
+  "uniqueTraits": [
+    "MDeployer forces a Safe Mode reboot (bcdedit safeboot + Safeboot\\Network service registration, WinDefend removed) to disable security tools",
+    "MS4Killer BYOVD EDR killer using the revoked-signed probmon.sys minifilter (dropped as Sysprox.sys / Sysmon64.sys), compiled per victim",
+    "RC4-encrypted payload pair a.cache/b.cache in C:\\Windows\\Debug, launched by scheduled task Perf_sys and service irnagentd",
+    "Storm-0501 affiliate pushes the encryptor domain-wide with a GPO scheduled task 'SysUpdate'",
+    "Possible BlackCat/ALPHV lineage (Rust, leak-site design, wallet overlap)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Embargo ransomware: Rock'n'Rust",
+      "publisher": "ESET Research",
+      "date": "2024-10-23",
+      "url": "https://www.welivesecurity.com/en/eset-research/embargo-ransomware-rocknrust/"
+    },
+    {
+      "id": "S2",
+      "title": "Storm-0501: Ransomware attacks expanding to hybrid cloud environments",
+      "publisher": "Microsoft Threat Intelligence",
+      "date": "2024-09-26",
+      "url": "https://www.microsoft.com/en-us/security/blog/2024/09/26/storm-0501-ransomware-attacks-expanding-to-hybrid-cloud-environments/"
+    },
+    {
+      "id": "S3",
+      "title": "Unmasking Embargo Ransomware: A Deep Dive Into the Group's TTPs and BlackCat Links",
+      "publisher": "TRM Labs",
+      "date": "2025-08-08",
+      "url": "https://www.trmlabs.com/resources/blog/unmasking-embargo-ransomware-a-deep-dive-into-the-groups-ttps-and-blackcat-links"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1190",
+      "techniqueName": "Exploit Public-Facing Application",
+      "procedure": "Affiliate Storm-0501 exploits Zoho ManageEngine CVE-2022-47966, Citrix NetScaler CVE-2023-4966 and ColdFusion 2016 (likely CVE-2023-29300 / CVE-2023-38203); TRM also reports exploitation of unpatched software and phishing/drive-by access.",
+      "tools": [],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic test exploits these CVEs; validate with vulnerability scanning / patch-state checks or a purple-team exploit range, not ART."
+    },
+    {
+      "order": 2,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Software",
+      "procedure": "Installs RMM tools (AnyDesk, Level.io, NinjaOne) for persistent access.",
+      "tools": [
+        "AnyDesk",
+        "Level.io",
+        "NinjaOne"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk installation/execution artefacts (local ART T1219 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "discovery",
+      "techniqueId": "T1087.002",
+      "techniqueName": "Account Discovery: Domain Account",
+      "procedure": "Runs an obfuscated ADRecon.ps1 (obfs.ps1 / recon.ps1) for Active Directory reconnaissance.",
+      "tools": [
+        "ADRecon"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "95018438-454a-468c-a0fa-59c800149b59",
+          "testNumber": 4,
+          "testName": "Automated AD Recon (ADRecon)",
+          "fidelity": "exact",
+          "note": "Automated AD reconnaissance with ADRecon (local ART T1087.002 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "credential-access",
+      "techniqueId": "T1003.002",
+      "techniqueName": "OS Credential Dumping: Security Account Manager",
+      "procedure": "Impacket SecretsDump extracts credentials over the network from many devices.",
+      "tools": [
+        "Impacket secretsdump"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5c2571d0-1572-416d-9676-812e64ca9f44",
+          "testNumber": 1,
+          "testName": "Registry dump of SAM, creds, and secrets",
+          "fidelity": "close",
+          "note": "reg save of SAM/SYSTEM/SECURITY hives, the artefacts secretsdump reads (local ART T1003.002 #1)"
+        },
+        {
+          "testGuid": "21df41be-cdd8-4695-a650-c3981113aa3c",
+          "testNumber": 8,
+          "testName": "Dumping of SAM, creds, and secrets(Reg Export)",
+          "fidelity": "close",
+          "note": "reg export of SAM, credentials and secrets (local ART T1003.002 #8)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "execution",
+      "techniqueId": "T1218.011",
+      "techniqueName": "System Binary Proxy Execution: Rundll32",
+      "procedure": "Cobalt Strike beacons run as DLLs via rundll32.exe (or .ocx via regsvr32.exe) for lateral movement and C2.",
+      "tools": [
+        "Cobalt Strike",
+        "rundll32.exe",
+        "regsvr32.exe"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ae3a8605-b26e-457c-b6b3-2702fd335bac",
+          "testNumber": 10,
+          "testName": "Execution of non-dll using rundll32.exe",
+          "fidelity": "proxy",
+          "note": "Rundll32 loading an unusual module (local ART T1218.011 #10)"
+        },
+        {
+          "testGuid": "08ffca73-9a3d-471a-aeb0-68b4aa3ab37b",
+          "testNumber": 3,
+          "testName": "Regsvr32 local DLL execution",
+          "fidelity": "proxy",
+          "note": "Regsvr32 local DLL execution (the .ocx variant) (local ART T1218.010 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.006",
+      "techniqueName": "Remote Services: Windows Remote Management",
+      "procedure": "A PowerShell script similar to WinRM-fs copies MDeployer from an unprotected machine to targets.",
+      "tools": [
+        "PowerShell",
+        "WinRM"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "5295bd61-bd7e-4744-9d52-85962a4cf2d6",
+          "testNumber": 2,
+          "testName": "Remote Code Execution with PS Credentials Using Invoke-Command",
+          "fidelity": "close",
+          "note": "Invoke-Command over WinRM with supplied credentials (local ART T1021.006 #2)"
+        },
+        {
+          "testGuid": "9059e8de-3d7d-4954-a322-46161880b9cf",
+          "testNumber": 1,
+          "testName": "Enable Windows Remote Management",
+          "fidelity": "proxy",
+          "note": "Enables WinRM, a prerequisite for this delivery path (local ART T1021.006 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task/Job: Scheduled Task",
+      "procedure": "Scheduled task 'Perf_sys' (created by an already elevated admin) runs the MDeployer DLL (rundll32 dtest.dll,Open).",
+      "tools": [
+        "schtasks.exe",
+        "MDeployer"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "exact",
+          "note": "Creates a local scheduled task (local ART T1053.005 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1027.013",
+      "techniqueName": "Obfuscated Files or Information: Encrypted/Encoded File",
+      "procedure": "MDeployer RC4-decrypts a.cache (ransomware) and b.cache (MS4Killer) in C:\\Windows\\Debug to pay.exe and praxisbackup.exe; MS4Killer strings are XOR-encoded.",
+      "tools": [
+        "MDeployer"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b404caaa-12ce-43c7-9214-62a531c044f7",
+          "testNumber": 2,
+          "testName": "Decrypt Eicar File and Write to File",
+          "fidelity": "close",
+          "note": "Decrypts an encrypted file and writes it to disk (local ART T1027.013 #2)"
+        },
+        {
+          "testGuid": "7693ccaa-8d64-4043-92a5-a2eb70359535",
+          "testNumber": 1,
+          "testName": "Decode Eicar File and Write to File",
+          "fidelity": "proxy",
+          "note": "Decodes an encoded file to disk (local ART T1027.013 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "persistence",
+      "techniqueId": "T1543.003",
+      "techniqueName": "Create or Modify System Process: Windows Service",
+      "procedure": "sc create registers auto-start service 'irnagentd' to re-run the loader after the Safe Mode reboot.",
+      "tools": [
+        "sc.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "981e2942-e433-44e9-afc1-8c957a1496b6",
+          "testNumber": 2,
+          "testName": "Service Installation CMD",
+          "fidelity": "exact",
+          "note": "Service installation from cmd (local ART T1543.003 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1112",
+      "techniqueName": "Modify Registry",
+      "procedure": "Adds HKLM\\SYSTEM\\CurrentControlSet\\Control\\Safeboot\\Network\\irnagentd so the loader service starts in Safe Mode, and deletes the Safeboot\\Network\\WinDefend key so Defender does not.",
+      "tools": [
+        "reg.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c173c948-65e5-499c-afbe-433722ed5bd4",
+          "testNumber": 35,
+          "testName": "Windows Add Registry Value to Load Service in Safe Mode with Network",
+          "fidelity": "exact",
+          "note": "Adds a registry value to load a service in Safe Mode with Networking (local ART T1112 #35)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1688",
+      "techniqueName": "Impair Defenses: Safe Mode Boot",
+      "procedure": "bcdedit /set {default} safeboot Minimal, then shutdown -r -f -t 00; in Safe Mode the loader renames security product directories and later removes the safeboot value.",
+      "tools": [
+        "bcdedit.exe",
+        "shutdown.exe"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "2a78362e-b79a-4482-8e24-be397bce4d85",
+          "testNumber": 1,
+          "testName": "Safe Mode Boot",
+          "fidelity": "exact",
+          "note": "Sets the boot configuration to Safe Mode (local ART T1688 #1)"
+        },
+        {
+          "testGuid": "f4648f0d-bf78-483c-bafc-3ec99cd1c302",
+          "testNumber": 2,
+          "testName": "Restart System - Windows",
+          "fidelity": "close",
+          "note": "Forced system restart (local ART T1529 #2)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "MS4Killer (based on the public s4killer PoC) drops probmon.sys v3.0.0.4 (revoked ITM System cert) as Sysprox.sys/Sysmon64.sys, loads it as a minifilter (BYOVD) and kills the victim's specific EDR/AV processes; a BAT script disables another security product.",
+      "tools": [
+        "MS4Killer",
+        "probmon.sys"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "1c9ef3e6-bde6-402c-83bc-d89ea8bfd372",
+          "testNumber": 1,
+          "testName": "Scattered Spider BYOVD (CVE-2015-2291 for Intel Ethernet Diagnostics Driver)",
+          "fidelity": "close",
+          "note": "Loads a known-vulnerable signed driver (BYOVD), the same pattern with a different driver (local ART T1068 #1)"
+        },
+        {
+          "testGuid": "24a12b91-05a7-4deb-8d7f-035fa98591bc",
+          "testNumber": 32,
+          "testName": "Kill antimalware protected processes using Backstab",
+          "fidelity": "proxy",
+          "note": "Kills protected anti-malware processes via a driver (Backstab) (local ART T1685 #32)"
+        },
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "Disables a security service from a script (local ART T1685 #18)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "The ransomware enumerates network shares and files to encrypt.",
+      "tools": [],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "Network share discovery from the command prompt (local ART T1135 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "Rclone renamed to svhost.exe / scvhost.exe uploads data to public cloud storage such as MEGA.",
+      "tools": [
+        "Rclone"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "exact",
+          "note": "Rclone exfiltration to MEGA (local ART T1567.002 #1)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "execution",
+      "techniqueId": "T1484.001",
+      "techniqueName": "Domain or Tenant Policy Modification: Group Policy Modification",
+      "procedure": "With Domain Admin, Storm-0501 registers scheduled task 'SysUpdate' through Group Policy to run the Embargo encryptor across the domain.",
+      "tools": [
+        "Group Policy",
+        "scheduled task SysUpdate"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9ab80952-74ee-43da-a98c-1e740a985f28",
+          "testNumber": 1,
+          "testName": "LockBit Black - Modify Group policy settings -cmd",
+          "fidelity": "close",
+          "note": "Modifies Group Policy settings for domain-wide execution (local ART T1484.001 #1)"
+        },
+        {
+          "testGuid": "2e5eac3e-327b-4a88-a0c0-c4057039a8dd",
+          "testNumber": 3,
+          "testName": "Scheduled task Remote",
+          "fidelity": "close",
+          "note": "Creates a scheduled task on a remote host (local ART T1053.005 #3)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "The ransomware disables automatic Windows recovery before encrypting.",
+      "tools": [
+        "bcdedit.exe"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "Disables Windows recovery with bcdedit (local ART T1490 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Rust encryptor (pay.exe / win.exe / PostalScanImporter.exe) adds a random six-hex-character extension (e.g. .564ba1) and drops HOW_TO_RECOVER_FILES.txt; data is published on the leak site for double extortion.",
+      "tools": [
+        "Embargo encryptor"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Drops a ransom note; exercises note-creation detections without encrypting (local ART T1486 #5)"
+        },
+        {
+          "testGuid": "ab3f793f-2dcc-4da5-9c71-34988307263f",
+          "testNumber": 10,
+          "testName": "Akira Ransomware drop Files with .akira Extension and Ransomnote",
+          "fidelity": "proxy",
+          "note": "Mass file rename with a ransom note, standing in for the random extension (local ART T1486 #10)"
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1070.004",
+      "techniqueName": "Indicator Removal: File Deletion",
+      "procedure": "Cleanup deletes the decrypted payloads, the dropped driver and, in some cases, the tool's own PE; stop.exe marks completion to prevent double encryption.",
+      "tools": [
+        "MDeployer"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Deletes a file from cmd (local ART T1070.004 #4)"
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

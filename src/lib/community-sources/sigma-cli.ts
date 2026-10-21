@@ -193,6 +193,15 @@ export async function convertSigmaRule(
     };
   }
 
+  // These reach sigma-cli argv: plain identifiers only — no leading "-"
+  // (option injection, e.g. -o <file>) and no path separators (a pipeline
+  // value is otherwise accepted as an arbitrary YAML file path).
+  const IDENT = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+  const bad = [targetBackend, outputFormat, pipeline].find((v) => v != null && v !== "" && !IDENT.test(String(v)));
+  if (bad !== undefined || !targetBackend) {
+    return { success: false, query: "", stderr: "", toolVersion: info.version || "", error: "invalid backend / format / pipeline name" };
+  }
+
   const tmp = await mkdtemp(path.join(tmpdir(), "sigma-convert-"));
   const tmpFile = path.join(tmp, "rule.yml");
   await writeFile(tmpFile, yamlContent, "utf-8");

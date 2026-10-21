@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
   const target = String(body.target || "").trim();
 
   if (!sigma) return NextResponse.json({ error: "sigma rule body is required" }, { status: 400 });
+  if (sigma.length > 256 * 1024) return NextResponse.json({ error: "sigma rule too large (max 256 KB)" }, { status: 413 });
   const mapping = TARGET_MAP[target];
   if (!mapping) {
     return NextResponse.json({ error: `unsupported target. Use one of: ${Object.keys(TARGET_MAP).join(", ")}` }, { status: 400 });

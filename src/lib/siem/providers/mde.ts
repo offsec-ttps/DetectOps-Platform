@@ -10,6 +10,7 @@
  * `ThreatHunting.Read.All` (admin-consented) for runHuntingQuery.
  */
 
+import { createHash } from "node:crypto";
 import type { SiemConfig, MdeConfig, DetectionQuery, SiemDetectionResult, SiemTestResult, SiemProvider } from "../types";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -17,7 +18,10 @@ const tokenCache = new Map<string, { token: string; exp: number }>();
 
 async function getGraphToken(cfg: MdeConfig): Promise<string> {
   if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret) throw new Error("MDE tenantId/clientId/clientSecret not set");
-  const key = `${cfg.tenantId}:${cfg.clientId}`;
+  // Key on the secret too: otherwise anyone who knows a tenantId+clientId pair
+  // (non-secret) could create a connection with a bogus secret and ride the
+  // cached Graph token minted with someone else's real secret.
+  const key = `${cfg.tenantId}:${cfg.clientId}:${createHash("sha256").update(cfg.clientSecret).digest("hex")}`;
   const cached = tokenCache.get(key);
   if (cached && cached.exp > Date.now() + 60_000) return cached.token;
 

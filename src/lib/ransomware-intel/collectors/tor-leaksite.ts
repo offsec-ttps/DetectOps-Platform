@@ -32,7 +32,7 @@ async function torFetch(url: string, timeoutMs = 30_000): Promise<{ ok: boolean;
       const { ProxyAgent } = await import("undici");
       dispatcher = new ProxyAgent(proxy);
     }
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0" }, ...(dispatcher ? { dispatcher } : {}) } as any);
+    const res = await fetch(url, { signal: ctrl.signal, redirect: "manual", headers: { "User-Agent": "Mozilla/5.0" }, ...(dispatcher ? { dispatcher } : {}) } as any);
     const text = await res.text().catch(() => "");
     return { ok: res.ok, bytes: text.length, status: res.status };
   } finally { clearTimeout(to); }
@@ -63,8 +63,12 @@ export const torLeaksiteCollector: Collector = {
       let urls: string[] = [];
       try { urls = JSON.parse(r.leakSiteUrls); } catch { /* ignore */ }
       for (const u of urls) {
-        const host = u.includes(".onion") ? u : "";
-        if (host) targets.push({ gang: r.name, url: host.startsWith("http") ? host : `http://${host}` });
+        // URLs come from third-party feed data: only crawl genuine .onion hosts
+        // (a substring check let "http://169.254.169.254/?.onion" through).
+        const candidate = typeof u === "string" ? (/^https?:\/\//i.test(u) ? u : `http://${u}`) : "";
+        let onion = "";
+        try { const p = new URL(candidate); if ((p.protocol === "http:" || p.protocol === "https:") && p.hostname.toLowerCase().endsWith(".onion")) onion = p.toString(); } catch { /* skip */ }
+        if (onion) targets.push({ gang: r.name, url: onion });
       }
     }
     if (!targets.length) return { groups, victims: [], errors: ["no .onion endpoints known yet — run the clearnet collectors first"] };

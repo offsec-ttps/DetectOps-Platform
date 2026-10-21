@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-guard";
+import { requireRole } from "@/lib/auth-guard";
 import { logEvent } from "@/lib/event-log";
 import { getRegistry } from "@/lib/lotl/registry";
 import { syncLotl } from "@/lib/lotl/sync";
@@ -15,7 +15,8 @@ import { syncLotl } from "@/lib/lotl/sync";
 export const maxDuration = 300;
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ library: string }> }) {
-  const auth = await requireUser();
+  // Rewrites a shared LOTL library from upstream — maintenance op, admin only.
+  const auth = await requireRole("admin");
   if (!auth.ok) return auth.response;
   const { library } = await ctx.params;
   if (!getRegistry().get(library)) return NextResponse.json({ error: `unknown library: ${library}` }, { status: 404 });

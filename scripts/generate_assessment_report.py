@@ -61,6 +61,7 @@ LIB_MODULES = {
     "Privilege Escalation": "detectops.privesc", "Lateral Movement": "detectops.lateral-movement",
     "UAC Bypass": "detectops.uac-bypass", "User to Admin": "detectops.user-to-admin",
     "User to SYSTEM": "detectops.user-to-system",
+    "Process Injection": "detectops.process-injection-sim", "Shellcode Injection": "detectops.shellcode-injection-sim",
 }
 
 
@@ -84,6 +85,18 @@ def library_techniques():
             for g in cat:
                 for t in g.get("techniques", []):
                     m[t["id"]].add(lib)
+            # Analyst-added library entries (Module Builder) for this module.
+            try:
+                for (d,) in con.execute("SELECT doc FROM library_entries WHERE moduleId=? AND status='published' AND kind='technique'", (mid,)):
+                    e = json.loads(d)
+                    # Same rule as lib/library-entries/store.ts entryCatalogItems():
+                    # linked atomics contribute their technique ids; a coverage-only
+                    # entry (atomics: []) contributes its attack_id.
+                    linked = [a["technique"] for a in (e.get("atomics") or []) if a.get("technique")]
+                    for tid in (linked or ([e["attack_id"]] if e.get("attack_id") else [])):
+                        m[tid].add(lib)
+            except Exception:
+                pass
         con.close()
     except Exception:
         pass

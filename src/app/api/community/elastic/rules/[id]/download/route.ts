@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { attachmentDisposition } from "../../../../../_shared/safe-file";
 
 export async function GET(
   _req: NextRequest,
@@ -22,7 +23,7 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": "application/toml",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": attachmentDisposition(filename, "elastic-rule.toml"),
     },
   });
 }

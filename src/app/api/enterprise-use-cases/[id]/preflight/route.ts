@@ -11,12 +11,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardUseCase } from "@/lib/enterprise-use-cases/access";
 import { runPreflight } from "@/lib/enterprise-use-cases/preflight";
+import { prisma } from "@/lib/prisma";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
 
 const MODES = new Set(["simulate-only", "simulate-and-validate"]);
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const denied = await guardUseCase(id);   // owner/admin only
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const scenarioId = sp.get("scenarioId") || "";
   const environmentId = sp.get("environmentId") || "";
@@ -25,6 +30,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!scenarioId) return NextResponse.json({ error: "scenarioId is required" }, { status: 400 });
   if (!environmentId) return NextResponse.json({ error: "environmentId is required" }, { status: 400 });
   if (!MODES.has(mode)) return NextResponse.json({ error: `mode must be one of ${[...MODES].join("|")}` }, { status: 400 });
+
+  // Preflight SSH-probes the environment — only for environments the caller owns.
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  const env = await prisma.environmentTarget.findUnique({ where: { id: environmentId }, select: { ownerId: true } });
+  if (!env) return NextResponse.json({ error: "environment not found" }, { status: 404 });
+  const ownsEnv = ownsOr404({ user: auth.user, enforced: auth.enforced }, env.ownerId);
+  if (!ownsEnv.ok) return ownsEnv.response;
 
   const result = await runPreflight({
     useCaseId: id, scenarioId, environmentId, mode: mode as any,

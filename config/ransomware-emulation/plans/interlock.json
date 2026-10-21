@@ -1,0 +1,612 @@
+{
+  "gang": "interlock",
+  "displayName": "Interlock",
+  "aliases": [
+    "Interlock ransomware"
+  ],
+  "status": "active",
+  "activeSince": "2024",
+  "lineage": "Talos assesses with low confidence that operators may derive from Rhysida",
+  "summary": "Interlock appeared in September 2024 and, unusually, gains access itself rather than via brokers: drive-by downloads from compromised websites serving fake browser or security-software updates, and from 2025 ClickFix/FileFix fake-CAPTCHA lures delivering the Interlock (NodeSnake) RAT. Post-access it runs PowerShell recon, Run-key and Startup persistence, credential stealers (cht.exe, Lumma, Berserk) and a keylogger, Kerberoasting, and moves via RDP, AnyDesk and PuTTY. Data is taken with Azure Storage Explorer/AzCopy and WinSCP before Windows, Linux and FreeBSD encryptors (focused on virtual machines) are launched, with the ransom note pushed by GPO.",
+  "uniqueTraits": [
+    "Self-sourced initial access: drive-by fake Chrome/Edge/FortiClient/GlobalProtect updates",
+    "ClickFix and FileFix fake-CAPTCHA paste-and-run PowerShell lures (2025)",
+    "Interlock/NodeSnake RAT (Node.js, later PHP) using Cloudflare Tunnel (trycloudflare) for C2",
+    "Exfiltration to attacker Azure blobs with Azure Storage Explorer / AzCopy",
+    "Encryptor masquerading as conhost.exe and DLL run via rundll32 (tmp41.wasd)"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "#StopRansomware: Interlock (AA25-203A)",
+      "publisher": "CISA/FBI/HHS/MS-ISAC",
+      "date": "2025-07-22",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-203a"
+    },
+    {
+      "id": "S2",
+      "title": "Unwrapping the emerging Interlock ransomware attack",
+      "publisher": "Cisco Talos",
+      "date": "2024-11",
+      "url": "https://blog.talosintelligence.com/emerging-interlock-ransomware/"
+    },
+    {
+      "id": "S3",
+      "title": "Interlock ransomware gang pushes fake IT tools in ClickFix attacks (reporting Sekoia)",
+      "publisher": "BleepingComputer",
+      "date": "2025-04",
+      "url": "https://www.bleepingcomputer.com/news/security/interlock-ransomware-gang-pushes-fake-it-tools-in-clickfix-attacks/"
+    },
+    {
+      "id": "S4",
+      "title": "New PHP-based Interlock RAT variant uses FileFix delivery (reporting The DFIR Report / Proofpoint)",
+      "publisher": "The Hacker News",
+      "date": "2025-07",
+      "url": "https://thehackernews.com/2025/07/new-php-based-interlock-rat-variant.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1189",
+      "techniqueName": "Drive-by Compromise",
+      "procedure": "Compromised legitimate websites (KongTuke-style injected script/TDS) serve fake Chrome/Edge updates or fake FortiClient, GlobalProtect, Webex and Cisco Secure Client installers.",
+      "tools": [
+        "fake updater"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "atomics": [],
+      "noAtomicReason": "Drive-by delivery from a compromised website cannot be reproduced by a local atomic; validate with web-proxy/DNS telemetry. Subsequent user execution is covered in step 2."
+    },
+    {
+      "order": 2,
+      "tactic": "execution",
+      "techniqueId": "T1204.004",
+      "techniqueName": "User Execution: Malicious Copy and Paste",
+      "procedure": "ClickFix / FileFix fake CAPTCHA instructs the user to paste a Base64 PowerShell command into Win+R or File Explorer.",
+      "tools": [
+        "ClickFix",
+        "FileFix"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S3",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "cec8ad4e-0320-4984-a1ae-70ee398c9519",
+          "testNumber": 1,
+          "testName": "Malicious Copy and Paste through Run.exe",
+          "fidelity": "exact",
+          "note": "Malicious copy-and-paste executed through Run.exe."
+        },
+        {
+          "testGuid": "3f3120f0-7e50-4be2-88ae-54c61230cb9f",
+          "testNumber": 12,
+          "testName": "ClickFix Campaign - Abuse RunMRU to Launch mshta via PowerShell",
+          "fidelity": "close",
+          "note": "ClickFix RunMRU-launched mshta via PowerShell."
+        },
+        {
+          "testGuid": "bc177ef9-6a12-4ebc-a2ec-d41e19c2791d",
+          "testNumber": 1,
+          "testName": "Paste and run technique",
+          "fidelity": "close",
+          "note": "Paste-and-run technique."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "execution",
+      "techniqueId": "T1059.001",
+      "techniqueName": "Command and Scripting Interpreter: PowerShell",
+      "procedure": "Encoded PowerShell drops files to Startup, writes run keys and runs reconnaissance.",
+      "tools": [
+        "PowerShell"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "86a43bad-12e3-4e85-b97c-4d5cf25b95c3",
+          "testNumber": 15,
+          "testName": "ATHPowerShellCommandLineParameter -EncodedCommand parameter variations",
+          "fidelity": "close",
+          "note": "PowerShell -EncodedCommand execution."
+        },
+        {
+          "testGuid": "54a4daf1-71df-4383-9ba7-f1a295d8b6d2",
+          "testNumber": 15,
+          "testName": "File Download via PowerShell",
+          "fidelity": "close",
+          "note": "PowerShell file download."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "Startup-folder file launches the RAT at logon; a Run key named 'Chrome Updater' is added.",
+      "tools": [
+        "Interlock RAT"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "exact",
+          "note": "Run-key persistence."
+        },
+        {
+          "testGuid": "24e55612-85f6-4bd6-ae74-a73d02e3441d",
+          "testNumber": 7,
+          "testName": "Add Executable Shortcut Link to User Startup Folder",
+          "fidelity": "close",
+          "note": "Executable shortcut in Startup folder."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "command-and-control",
+      "techniqueId": "T1572",
+      "techniqueName": "Protocol Tunneling",
+      "procedure": "Interlock/NodeSnake RAT (Node.js, later PHP) reaches C2 through Cloudflare Tunnel (trycloudflare.com) subdomains and downloads EXE/DLL payloads.",
+      "tools": [
+        "NodeSnake / Interlock RAT",
+        "Cloudflare Tunnel"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "4cdc9fc7-53fb-4894-9f0c-64836943ea60",
+          "testNumber": 4,
+          "testName": "run ngrok",
+          "fidelity": "proxy",
+          "note": "ngrok tunnel; same reverse-tunnel-to-SaaS-edge pattern as trycloudflare."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "discovery",
+      "techniqueId": "T1082",
+      "techniqueName": "System Information Discovery",
+      "procedure": "systeminfo, Get-PSDrive, tasklist /svc, Get-Service, arp -a and WindowsIdentity.GetCurrent() recon.",
+      "tools": [
+        "systeminfo",
+        "tasklist",
+        "arp"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "66703791-c902-4560-8770-42b8a91f7667",
+          "testNumber": 1,
+          "testName": "System Information Discovery",
+          "fidelity": "exact",
+          "note": "systeminfo-based discovery."
+        },
+        {
+          "testGuid": "89676ba1-b1f8-47ee-b940-2e1a113ebc71",
+          "testNumber": 1,
+          "testName": "System Service Discovery",
+          "fidelity": "exact",
+          "note": "tasklist /svc service discovery."
+        },
+        {
+          "testGuid": "1392bd0f-5d5a-429e-81d9-eb9d4d4d5b3b",
+          "testNumber": 5,
+          "testName": "GetCurrent User with PowerShell Script",
+          "fidelity": "exact",
+          "note": "GetCurrent user via PowerShell."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "credential-access",
+      "techniqueId": "T1555.003",
+      "techniqueName": "Credentials from Password Stores: Credentials from Web Browsers",
+      "procedure": "cht.exe stealer plus Lumma and Berserk stealers harvest browser logins.",
+      "tools": [
+        "cht.exe",
+        "Lumma Stealer",
+        "Berserk Stealer"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6f2c5c87-a4d5-4898-9bd1-47a55ecaf1dd",
+          "testNumber": 16,
+          "testName": "BrowserStealer (Chrome / Firefox / Microsoft Edge)",
+          "fidelity": "close",
+          "note": "BrowserStealer against Chrome/Firefox/Edge."
+        },
+        {
+          "testGuid": "3d111226-d09a-4911-8715-fe11664f960d",
+          "testNumber": 4,
+          "testName": "Simulating access to Chrome Login Data",
+          "fidelity": "close",
+          "note": "Access to Chrome Login Data."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "credential-access",
+      "techniqueId": "T1056.001",
+      "techniqueName": "Input Capture: Keylogging",
+      "procedure": "klg.dll keylogger records keystrokes to conhost.txt.",
+      "tools": [
+        "klg.dll"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "d9b633ca-8efb-45e6-b838-70f595c6ae26",
+          "testNumber": 1,
+          "testName": "Input Capture",
+          "fidelity": "close",
+          "note": "PowerShell keylogger input capture."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "credential-access",
+      "techniqueId": "T1558.003",
+      "techniqueName": "Steal or Forge Kerberos Tickets: Kerberoasting",
+      "procedure": "Kerberoasting assessed as a route to domain-admin credentials.",
+      "tools": [
+        "Kerberoasting"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "14625569-6def-4497-99ac-8e7817105b55",
+          "testNumber": 2,
+          "testName": "Rubeus kerberoast",
+          "fidelity": "exact",
+          "note": "Rubeus kerberoast."
+        },
+        {
+          "testGuid": "3f987809-3681-43c8-bcd8-b3ff3a28533a",
+          "testNumber": 1,
+          "testName": "Request for service tickets",
+          "fidelity": "close",
+          "note": "Request service tickets."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1036.005",
+      "techniqueName": "Masquerading: Match Legitimate Resource Name or Location",
+      "procedure": "Encryptor named conhost.exe, keylog output conhost.txt, run key 'Chrome Updater'.",
+      "tools": [
+        "conhost.exe masquerade"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "35eb8d16-9820-4423-a2a1-90c4f5edd9ca",
+          "testNumber": 2,
+          "testName": "Masquerade as a built-in system executable",
+          "fidelity": "close",
+          "note": "Masquerade as a built-in system executable."
+        },
+        {
+          "testGuid": "c3d24a39-2bfe-4c6a-b064-90cd73896cb0",
+          "testNumber": 7,
+          "testName": "Masquerading - windows exe running as different windows exe",
+          "fidelity": "close",
+          "note": "Renamed Windows binary run as another Windows binary."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "lateral-movement",
+      "techniqueId": "T1021.001",
+      "techniqueName": "Remote Services: Remote Desktop Protocol",
+      "procedure": "RDP with harvested valid credentials.",
+      "tools": [
+        "mstsc"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "355d4632-8cb9-449d-91ce-b566d0253d3e",
+          "testNumber": 1,
+          "testName": "RDP to Remote Host",
+          "fidelity": "exact",
+          "note": "RDP to remote host."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "command-and-control",
+      "techniqueId": "T1219",
+      "techniqueName": "Remote Access Tools",
+      "procedure": "AnyDesk (and a cracked ScreenConnect) for remote access; PuTTY assists lateral movement.",
+      "tools": [
+        "AnyDesk",
+        "ScreenConnect",
+        "PuTTY"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6b8b7391-5c0a-4f8c-baee-78d8ce0ce330",
+          "testNumber": 2,
+          "testName": "AnyDesk Files Detected Test on Windows",
+          "fidelity": "exact",
+          "note": "AnyDesk artefacts."
+        },
+        {
+          "testGuid": "4a18cc4e-416f-4966-9a9d-75731c4684c0",
+          "testNumber": 5,
+          "testName": "ScreenConnect Application Download and Install on Windows",
+          "fidelity": "close",
+          "note": "ScreenConnect install."
+        },
+        {
+          "testGuid": "c82b1e60-c549-406f-9b00-0a8ae31c9cfe",
+          "testNumber": 33,
+          "testName": "Remote File Copy using PSCP",
+          "fidelity": "close",
+          "note": "PuTTY PSCP remote copy."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "command-and-control",
+      "techniqueId": "T1090",
+      "techniqueName": "Proxy",
+      "procedure": "SystemBC and Cobalt Strike provide proxied C2 and payload delivery.",
+      "tools": [
+        "SystemBC",
+        "Cobalt Strike"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "9dc7767b-30c1-4cc4-b999-50cab5e27891",
+          "testNumber": 9,
+          "testName": "SystemBC Malware-as-a-Service Registry",
+          "fidelity": "close",
+          "note": "SystemBC registry persistence artefact."
+        },
+        {
+          "testGuid": "81c13829-f6c9-45b8-85a6-053366d55297",
+          "testNumber": 1,
+          "testName": "Malicious User Agents - Powershell",
+          "fidelity": "proxy",
+          "note": "Web-protocol C2 with suspicious user agents."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "collection",
+      "techniqueId": "T1530",
+      "techniqueName": "Data from Cloud Storage",
+      "procedure": "Azure Storage Explorer (StorageExplorer.exe) used to browse attacker/victim Azure storage accounts.",
+      "tools": [
+        "Azure Storage Explorer"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local atomic covers Azure Storage Explorer; detect StorageExplorer.exe/AzCopy execution on servers and blob endpoints in egress logs."
+    },
+    {
+      "order": 15,
+      "tactic": "exfiltration",
+      "techniqueId": "T1567.002",
+      "techniqueName": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "procedure": "AzCopy uploads data to attacker-controlled Azure blob storage.",
+      "tools": [
+        "AzCopy"
+      ],
+      "signature": true,
+      "observed": "both",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "8529ee44-279a-4a19-80bf-b846a40dda58",
+          "testNumber": 1,
+          "testName": "Exfiltrate data with rclone to cloud Storage - Mega (Windows)",
+          "fidelity": "proxy",
+          "note": "rclone to cloud storage; same exfil-to-cloud pattern, different client."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "exfiltration",
+      "techniqueId": "T1048",
+      "techniqueName": "Exfiltration Over Alternative Protocol",
+      "procedure": "WinSCP used as an additional exfiltration channel.",
+      "tools": [
+        "WinSCP"
+      ],
+      "signature": false,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "205e676e-0401-4bae-83a5-94b8c5daeb22",
+          "testNumber": 36,
+          "testName": "Windows push file using sftp.exe",
+          "fidelity": "close",
+          "note": "sftp.exe file push (WinSCP uses SFTP/SCP)."
+        },
+        {
+          "testGuid": "b854eb97-bf9b-45ab-a1b5-b94e4880c56b",
+          "testNumber": 7,
+          "testName": "Exfiltration Over Alternative Protocol - FTP - Rclone",
+          "fidelity": "proxy",
+          "note": "rclone over FTP."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 17,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1218.011",
+      "techniqueName": "System Binary Proxy Execution: Rundll32",
+      "procedure": "rundll32.exe runs the DLL tmp41.wasd, which deletes the encryptor after completion.",
+      "tools": [
+        "rundll32"
+      ],
+      "signature": true,
+      "observed": "current",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "ae3a8605-b26e-457c-b6b3-2702fd335bac",
+          "testNumber": 10,
+          "testName": "Execution of non-dll using rundll32.exe",
+          "fidelity": "exact",
+          "note": "rundll32 executing a file with a non-DLL extension."
+        },
+        {
+          "testGuid": "861ea0b4-708a-4d17-848d-186c9c7f17e3",
+          "testNumber": 4,
+          "testName": "Delete a single file - Windows cmd",
+          "fidelity": "close",
+          "note": "Single-file deletion from cmd."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 18,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Windows/Linux/FreeBSD encryptors (AES+RSA) focus on virtual machines; .interlock/.1nt3rlock extensions; !__README__!.txt pushed via Group Policy.",
+      "tools": [
+        "Interlock encryptor"
+      ],
+      "signature": false,
+      "observed": "both",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "b51eae65-5441-4789-b8e8-64783c26c1d1",
+          "testNumber": 2,
+          "testName": "LockBit Black - Modify Group policy settings -Powershell",
+          "fidelity": "close",
+          "note": "Group Policy modification, as used to distribute the ransom note."
+        },
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "Ransom-note drop stand-in."
+        }
+      ],
+      "noAtomicReason": ""
+    }
+  ]
+}

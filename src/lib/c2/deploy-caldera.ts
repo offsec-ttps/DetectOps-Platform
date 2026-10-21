@@ -63,6 +63,8 @@ async function pickPython(): Promise<string> {
 }
 
 async function checkPort(ip: string, port: number): Promise<boolean> {
+  // Interpolated into `bash -c` — only ever accept a literal IPv4 + integer port.
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || !Number.isInteger(port)) return false;
   try { await exec("bash", ["-c", `echo >/dev/tcp/${ip}/${port}`], { timeout: 5000 }); return true; } catch { return false; }
 }
 

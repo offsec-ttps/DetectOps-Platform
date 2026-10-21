@@ -27,6 +27,7 @@ interface Subscriber {
 
 export interface Session {
   id: string;
+  ownerId: string;       // user who opened it — only they (or an admin) may stream/type/kill
   rangeId: string;
   serverName: string;
   command: string;
@@ -70,6 +71,7 @@ function emit(session: Session, ev: SessionEvent) {
  * command string; we wrap with `/bin/sh -lc` so pipes/&&/quoting work.
  */
 export function createSession(opts: {
+  ownerId: string;
   rangeId: string;
   serverName: string;
   command: string;
@@ -77,6 +79,7 @@ export function createSession(opts: {
   const id = newId();
   const session: Session = {
     id,
+    ownerId: opts.ownerId,
     rangeId: opts.rangeId,
     serverName: opts.serverName,
     command: opts.command,
@@ -113,6 +116,13 @@ export function createSession(opts: {
   });
 
   return session;
+}
+
+/** Ownership gate: a terminal is a live shell on a lab host — only its opener or an admin may use it. */
+export function canAccessSession(id: string, user: { id: string; role: string }): boolean {
+  const s = sessions.get(id);
+  if (!s) return false;
+  return user.role === "admin" || s.ownerId === user.id;
 }
 
 export function getSession(id: string): Session | undefined {
@@ -174,7 +184,21 @@ export function killSession(id: string): boolean {
 
 const KEY_CACHE_DIR = path.join(os.homedir(), ".cache", "detection-platform", "sar-keys");
 
+// rangeId becomes a filesystem path + a docker cp source; serverIp lands in a local
+// /bin/sh command line. Both must be strictly validated — they come from request bodies.
+const RANGE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const IPV4_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+const HOST_RE = /^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)*$/;
+export function assertSafeRangeId(rangeId: string): void {
+  if (!RANGE_ID_RE.test(String(rangeId || ""))) throw new Error("invalid rangeId");
+}
+export function assertSafeHost(host: string): void {
+  const h = String(host || "");
+  if (!IPV4_RE.test(h) && !HOST_RE.test(h)) throw new Error("invalid server address");
+}
+
 function cacheSarKey(rangeId: string): string {
+  assertSafeRangeId(rangeId);
   mkdirSync(KEY_CACHE_DIR, { recursive: true });
   const cached = path.join(KEY_CACHE_DIR, `${rangeId}.key`);
   if (!existsSync(cached)) {
@@ -190,6 +214,8 @@ function cacheSarKey(rangeId: string): string {
 }
 
 export function buildSshCommand(rangeId: string, serverIp: string, remoteCmd: string): string {
+  assertSafeRangeId(rangeId);
+  assertSafeHost(serverIp);
   const keyPath = cacheSarKey(rangeId);
   const quoted = remoteCmd.replace(/'/g, `'"'"'`);
   const sshFlags = `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o BatchMode=yes`;

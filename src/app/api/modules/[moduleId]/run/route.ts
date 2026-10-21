@@ -8,7 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guard";
+import { requireUser, ownsOr404 } from "@/lib/auth-guard";
+import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/event-log";
 import { materializeScenario } from "@/lib/modules/materialize";
 import { runScenario } from "@/lib/enterprise-use-cases/runner";
@@ -24,6 +25,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ moduleId: 
   const mode = body.mode === "simulate-and-validate" ? "simulate-and-validate" : "simulate-only";
   if (!scenarioName) return NextResponse.json({ error: "scenarioName required" }, { status: 400 });
   if (!environmentId) return NextResponse.json({ error: "environmentId required" }, { status: 400 });
+
+  // Only live (validated/approved) modules may be run by anyone; a draft /
+  // rejected / pending module may only be run by its own publisher (or admin).
+  const mod = await prisma.simulationModule.findUnique({ where: { moduleId }, select: { status: true, ownerId: true } });
+  if (!mod) return NextResponse.json({ error: "module not found" }, { status: 404 });
+  if (mod.status !== "live") {
+    const own = ownsOr404(auth, mod.ownerId);
+    if (!own.ok) return NextResponse.json({ error: `module is ${mod.status}; only live modules can be run` }, { status: 409 });
+  }
+  // Confused-deputy guard: the caller must own the environment they detonate against.
+  const env = await prisma.environmentTarget.findUnique({ where: { id: environmentId }, select: { ownerId: true } });
+  if (!env) return NextResponse.json({ error: "environment not found" }, { status: 404 });
+  const envOwn = ownsOr404(auth, env.ownerId);
+  if (!envOwn.ok) return envOwn.response;
 
   const mat = await materializeScenario({ moduleId, scenarioName, ownerId: auth.user.id });
   if (!mat.ok) return NextResponse.json({ error: mat.error }, { status: 400 });

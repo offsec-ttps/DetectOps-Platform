@@ -1,0 +1,529 @@
+{
+  "gang": "avaddon",
+  "displayName": "Avaddon",
+  "aliases": [],
+  "status": "defunct",
+  "activeSince": "2020",
+  "lineage": "Shut down June 2021 and released decryption keys; ACSC noted TTP overlap with Ako and MedusaLocker",
+  "summary": "Avaddon was a RaaS launched in June 2020 and shut down in June 2021, when it released its master keys. Affiliates relied heavily on mass malspam (including Phorpiex-distributed campaigns) carrying JavaScript downloaders with crude 'compromising photo' lures, which used PowerShell and BITSAdmin to fetch the payload. FBI and ACSC warned in May 2021 of an ongoing campaign that added DDoS threats to double extortion. The locker bypasses UAC via the CMSTPLUA COM interface, avoids CIS-language systems, persists through Run keys and scheduled tasks, stops database/AV services and destroys backups with wmic, wbadmin, bcdedit and vssadmin.",
+  "uniqueTraits": [
+    "Mass malspam with JavaScript (.jpg.js style) attachments and 'compromising photo' lures, partly via the Phorpiex botnet",
+    "JScript downloader chaining PowerShell + BITSAdmin to retrieve the locker",
+    "UAC bypass via the CMSTPLUA COM elevation interface",
+    "GetUserDefaultLCID / keyboard-layout checks to avoid CIS-region victims",
+    "Triple extortion: data leak site plus DDoS threats against non-payers (from Feb 2021)",
+    "Wallpaper changed to point to 'Instruction <id>-readme.html'; .avdn extension"
+  ],
+  "insufficientReporting": false,
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Avaddon (S0640)",
+      "publisher": "MITRE ATT&CK",
+      "date": "2021-08-19",
+      "url": "https://attack.mitre.org/software/S0640/"
+    },
+    {
+      "id": "S2",
+      "title": "2021-003: ACSC Ransomware Profile - Avaddon (Ongoing campaign using Avaddon ransomware)",
+      "publisher": "Australian Cyber Security Centre",
+      "date": "2021-05-08",
+      "url": "https://www.cyber.gov.au/advisory/2021-003-ongoing-campaign-using-avaddon-ransomware"
+    },
+    {
+      "id": "S3",
+      "title": "Ransomware Report: Avaddon and New Techniques Emerge, Industrial Sector Targeted",
+      "publisher": "Trend Micro",
+      "date": "2020-06",
+      "url": "https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/ransomware-report-avaddon-and-new-techniques-emerge-industrial-sector-targeted"
+    },
+    {
+      "id": "S4",
+      "title": "Avaddon ransomware: an in-depth analysis and decryption of infected systems (Yuste & Pastrana)",
+      "publisher": "arXiv / Computers & Security",
+      "date": "2021-02-09",
+      "url": "https://arxiv.org/abs/2102.04796"
+    },
+    {
+      "id": "S5",
+      "title": "FBI and Australia ACSC agencies warn of ongoing Avaddon ransomware attacks",
+      "publisher": "Security Affairs",
+      "date": "2021-05-11",
+      "url": "https://securityaffairs.com/117765/malware/avaddon-targets-orgs-worldwide.html"
+    }
+  ],
+  "chain": [
+    {
+      "order": 1,
+      "tactic": "initial-access",
+      "techniqueId": "T1566.001",
+      "techniqueName": "Phishing: Spearphishing Attachment",
+      "procedure": "Phishing/malspam campaigns deliver malicious JavaScript attachments with low-sophistication lures claiming to contain a compromising photo of the recipient.",
+      "tools": [
+        "malspam",
+        "Phorpiex"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "114ccff9-ae6d-4547-9ead-4cd69f687306",
+          "testNumber": 1,
+          "testName": "Download Macro-Enabled Phishing Attachment",
+          "fidelity": "proxy",
+          "note": "[T1566.001] Phishing attachment download; Avaddon used .js attachments rather than macros."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 2,
+      "tactic": "execution",
+      "techniqueId": "T1059.007",
+      "techniqueName": "Command and Scripting Interpreter: JavaScript",
+      "procedure": "The user opens the JScript downloader attachment, which executes via Windows Script Host.",
+      "tools": [
+        "JScript downloader",
+        "wscript.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "0709945e-4fec-4c49-9faf-c3c292a74484",
+          "testNumber": 2,
+          "testName": "JScript execution to gather local computer information via wscript",
+          "fidelity": "close",
+          "note": "[T1059.007] JScript executed via wscript."
+        },
+        {
+          "testGuid": "01d75adf-ca1b-4dd1-ac96-7c9550ad1035",
+          "testNumber": 1,
+          "testName": "JScript execution to gather local computer information via cscript",
+          "fidelity": "close",
+          "note": "[T1059.007] JScript executed via cscript."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 3,
+      "tactic": "command-and-control",
+      "techniqueId": "T1197",
+      "techniqueName": "BITS Jobs",
+      "procedure": "The downloader runs a PowerShell command and BITSAdmin to fetch and launch the ransomware payload.",
+      "tools": [
+        "PowerShell",
+        "bitsadmin.exe"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "3c73d728-75fb-4180-a12f-6712864d7421",
+          "testNumber": 1,
+          "testName": "Bitsadmin Download (cmd)",
+          "fidelity": "exact",
+          "note": "[T1197] bitsadmin download from cmd."
+        },
+        {
+          "testGuid": "42dc4460-9aa6-45d3-b1a6-3955d34e1fe8",
+          "testNumber": 10,
+          "testName": "Windows - PowerShell Download",
+          "fidelity": "close",
+          "note": "[T1105] PowerShell download of the payload."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 4,
+      "tactic": "discovery",
+      "techniqueId": "T1614.001",
+      "techniqueName": "System Location Discovery: System Language Discovery",
+      "procedure": "Calls GetUserDefaultLCID() and checks keyboard layouts to avoid CIS-region systems.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e39b99e9-ce7f-4b24-9c88-0fbad069e6c6",
+          "testNumber": 8,
+          "testName": "Discover System Language by Windows API Query",
+          "fidelity": "exact",
+          "note": "[T1614.001] System language discovery via Windows API query."
+        },
+        {
+          "testGuid": "631d4cf1-42c9-4209-8fe9-6bd4de9421be",
+          "testNumber": 1,
+          "testName": "Discover System Language by Registry Query",
+          "fidelity": "close",
+          "note": "[T1614.001] System language discovery via registry query."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 5,
+      "tactic": "privilege-escalation",
+      "techniqueId": "T1548.002",
+      "techniqueName": "Abuse Elevation Control Mechanism: Bypass User Account Control",
+      "procedure": "Bypasses UAC through the CMSTPLUA COM interface (with associated registry modifications).",
+      "tools": [
+        "CMSTPLUA COM"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S4"
+      ],
+      "atomics": [
+        {
+          "testGuid": "f3c145f9-3c8d-422c-bd99-296a17a8f567",
+          "testNumber": 19,
+          "testName": "WinPwn - UAC Bypass ccmstp technique",
+          "fidelity": "proxy",
+          "note": "[T1548.002] CMSTP-based UAC bypass; related CMSTP elevation abuse, not the exact CMSTPLUA COM call."
+        },
+        {
+          "testGuid": "8ceab7a2-563a-47d2-b5ba-0995211128d7",
+          "testNumber": 10,
+          "testName": "UACME Bypass Method 23",
+          "fidelity": "proxy",
+          "note": "[T1548.002] UACME bypass method (COM elevation family)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 6,
+      "tactic": "persistence",
+      "techniqueId": "T1547.001",
+      "techniqueName": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+      "procedure": "Writes a registry Run key for persistence.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "e55be3fd-3521-4610-9d1a-e210e42dcf05",
+          "testNumber": 1,
+          "testName": "Reg Key Run",
+          "fidelity": "exact",
+          "note": "[T1547.001] Registry Run key persistence."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 7,
+      "tactic": "persistence",
+      "techniqueId": "T1053.005",
+      "techniqueName": "Scheduled Task/Job: Scheduled Task",
+      "procedure": "Maintains persistence through a Windows scheduled task.",
+      "tools": [
+        "schtasks.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "42f53695-ad4a-4546-abb6-7d837f644a71",
+          "testNumber": 2,
+          "testName": "Scheduled task Local",
+          "fidelity": "close",
+          "note": "[T1053.005] Local scheduled task creation."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 8,
+      "tactic": "defense-evasion",
+      "techniqueId": "T1685",
+      "techniqueName": "Impair Defenses: Disable or Modify Tools",
+      "procedure": "Searches for and attempts to stop anti-malware services.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ],
+      "atomics": [
+        {
+          "testGuid": "a1230893-56ac-4c81-b644-2108e982f8f5",
+          "testNumber": 18,
+          "testName": "Disable Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "[T1685] Disables an arbitrary security service."
+        },
+        {
+          "testGuid": "ae753dda-0f15-4af6-a168-b9ba16143143",
+          "testNumber": 24,
+          "testName": "Stop and Remove Arbitrary Security Windows Service",
+          "fidelity": "close",
+          "note": "[T1685] Stops and removes a security service."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 9,
+      "tactic": "discovery",
+      "techniqueId": "T1016",
+      "techniqueName": "System Network Configuration Discovery",
+      "procedure": "Collects the victim's external IP address.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "fe53e878-10a3-477b-963e-4367348f5af5",
+          "testNumber": 1,
+          "testName": "Get geolocation info through IP-Lookup services using curl Windows",
+          "fidelity": "proxy",
+          "note": "[T1614] IP-lookup service query via curl to obtain the external IP."
+        },
+        {
+          "testGuid": "970ab6a1-0157-4f3f-9a73-ec4166754b23",
+          "testNumber": 1,
+          "testName": "System Network Configuration Discovery on Windows",
+          "fidelity": "proxy",
+          "note": "[T1016] Local network configuration discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 10,
+      "tactic": "discovery",
+      "techniqueId": "T1057",
+      "techniqueName": "Process Discovery",
+      "procedure": "Collects information about running processes prior to terminating blockers.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "c5806a4f-62b8-4900-980b-c7ec004e9908",
+          "testNumber": 2,
+          "testName": "Process Discovery - tasklist",
+          "fidelity": "close",
+          "note": "[T1057] tasklist process discovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 11,
+      "tactic": "discovery",
+      "techniqueId": "T1135",
+      "techniqueName": "Network Share Discovery",
+      "procedure": "Enumerates shared folders and mapped volumes to extend encryption.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1"
+      ],
+      "atomics": [
+        {
+          "testGuid": "20f1097d-81c1-405c-8380-32174d493bbb",
+          "testNumber": 4,
+          "testName": "Network Share Discovery command prompt",
+          "fidelity": "close",
+          "note": "[T1135] Network share discovery from the command prompt."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 12,
+      "tactic": "impact",
+      "techniqueId": "T1489",
+      "techniqueName": "Service Stop",
+      "procedure": "Stops database, backup and other services/processes (e.g. SQL, Exchange, QuickBooks-related) before encryption.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "41274289-ec9c-4213-bea4-e43c4aa57954",
+          "testNumber": 2,
+          "testName": "Windows - Stop service using net.exe",
+          "fidelity": "close",
+          "note": "[T1489] Stops services with net.exe."
+        },
+        {
+          "testGuid": "f3191b84-c38b-400b-867e-3a217a27795f",
+          "testNumber": 3,
+          "testName": "Windows - Stop service by killing process",
+          "fidelity": "close",
+          "note": "[T1489] Stops services by killing the process."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 13,
+      "tactic": "impact",
+      "techniqueId": "T1490",
+      "techniqueName": "Inhibit System Recovery",
+      "procedure": "Deletes backups and shadow copies with wmic SHADOWCOPY, vssadmin Delete Shadows /All /Quiet, wbadmin DELETE SYSTEMSTATEBACKUP and bcdedit recovery-disable commands.",
+      "tools": [
+        "wmic.exe",
+        "vssadmin.exe",
+        "wbadmin.exe",
+        "bcdedit.exe"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+          "testNumber": 2,
+          "testName": "Windows - Delete Volume Shadow Copies via WMI",
+          "fidelity": "exact",
+          "note": "[T1490] Delete shadow copies via WMI (wmic)."
+        },
+        {
+          "testGuid": "584331dd-75bc-4c02-9e0b-17f5fd81c748",
+          "testNumber": 7,
+          "testName": "Windows - wbadmin Delete systemstatebackup",
+          "fidelity": "exact",
+          "note": "[T1490] wbadmin delete systemstatebackup."
+        },
+        {
+          "testGuid": "cf21060a-80b3-4238-a595-22525de4ab81",
+          "testNumber": 4,
+          "testName": "Windows - Disable Windows Recovery Console Repair",
+          "fidelity": "exact",
+          "note": "[T1490] bcdedit disables Windows recovery."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 14,
+      "tactic": "impact",
+      "techniqueId": "T1491.001",
+      "techniqueName": "Defacement: Internal Defacement",
+      "procedure": "Changes the desktop wallpaper to point victims to the 'Instruction <id>-readme.html' note.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "30558d53-9d76-41c4-9267-a7bd5184bed3",
+          "testNumber": 1,
+          "testName": "Replace Desktop Wallpaper",
+          "fidelity": "exact",
+          "note": "[T1491.001] Replaces the desktop wallpaper."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 15,
+      "tactic": "impact",
+      "techniqueId": "T1486",
+      "techniqueName": "Data Encrypted for Impact",
+      "procedure": "Encrypts files with AES-256 using an embedded RSA public key and appends .avdn; data is leaked on the Avaddon site.",
+      "tools": [
+        "Avaddon locker"
+      ],
+      "signature": false,
+      "observed": "historical",
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "atomics": [
+        {
+          "testGuid": "649349c7-9abf-493b-a7a2-b1aa4d141528",
+          "testNumber": 5,
+          "testName": "PureLocker Ransom Note",
+          "fidelity": "proxy",
+          "note": "[T1486] Ransom-note drop simulation (non-encrypting)."
+        }
+      ],
+      "noAtomicReason": ""
+    },
+    {
+      "order": 16,
+      "tactic": "impact",
+      "techniqueId": "T1498",
+      "techniqueName": "Network Denial of Service",
+      "procedure": "Threatens (and from February 2021 conducts) DDoS attacks against victims who refuse to pay.",
+      "tools": [
+        "DDoS"
+      ],
+      "signature": true,
+      "observed": "historical",
+      "sourceRefs": [
+        "S2",
+        "S5"
+      ],
+      "atomics": [],
+      "noAtomicReason": "No local Atomic Red Team test simulates DDoS extortion; validate with network/DDoS-protection telemetry."
+    }
+  ]
+}

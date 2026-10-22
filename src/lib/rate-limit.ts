@@ -60,3 +60,10 @@ export function peekRateLimited(key: string, max: number): { limited: boolean; r
   const limited = b.count >= max;
   return { limited, retryAfterMs: limited ? b.resetAt - now : 0 };
 }
+
+/** Current hit count for `key` in its live window (0 if none/expired), WITHOUT
+ * recording a hit. Used to scale a progressive delay by recent failures. */
+export function peekCount(key: string): number {
+  const b = buckets.get(key);
+  return b && b.resetAt > Date.now() ? b.count : 0;
+}

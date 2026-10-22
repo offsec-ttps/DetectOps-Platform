@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimit, resetRateLimit, peekRateLimited } from "@/lib/rate-limit";
+import { rateLimit, resetRateLimit, peekCount } from "@/lib/rate-limit";
 import { policyRole } from "@/lib/auth-policy";
 import { prisma } from "@/lib/prisma";
 import {
@@ -35,16 +35,16 @@ export async function POST(req: NextRequest) {
   }
   const failUserKey = `login:fail:${email}:${ipKey}`;
   const failAcctKey = `login:fail:acct:${email}`;
-  // Account-wide lockout gate: once FAILURES for this account cross a high
-  // threshold (only failures increment it, below), refuse EVERY further attempt
-  // identically — correct or not — so a (possibly distributed) brute force is
-  // genuinely bounded and the response never reveals whether a guess was right.
-  // The threshold is high + the window short (15 min, auto-resets) so ordinary
-  // mistyping never trips it; a successful login clears it immediately.
-  const ACCT_LOCK_MAX = 50;
-  const lock = peekRateLimited(failAcctKey, ACCT_LOCK_MAX);
-  if (lock.limited) {
-    return NextResponse.json({ error: "Too many failed sign-in attempts for this account. Try again in a few minutes." }, { status: 429, headers: { "Retry-After": String(Math.ceil(lock.retryAfterMs / 1000) || 60) } });
+  // Progressive per-account delay (NOT a hard lock): recent failures for this
+  // account slow EVERY attempt, which bounds a (possibly distributed) brute
+  // force, but a CORRECT password is never rejected — so there is no
+  // account-lockout DoS. The delay grows with the failure count and is capped;
+  // ordinary mistyping (a few fails) adds no meaningful delay, and a successful
+  // login clears the counter. Single-IP flooding is still hard-capped by byIp
+  // and the per-account+IP failure limit below.
+  const acctFails = peekCount(failAcctKey);
+  if (acctFails > 10) {
+    await new Promise((r) => setTimeout(r, Math.min((acctFails - 10) * 500, 5000)));
   }
 
   const user = await prisma.authUser.findUnique({ where: { email } });
@@ -56,16 +56,19 @@ export async function POST(req: NextRequest) {
     // Count the FAILURE (not every attempt). Once failures exceed the window
     // threshold we throttle further wrong guesses — bounding brute force — but a
     // subsequent correct password is still accepted (checked before these keys).
+    // Per-account+IP failures are hard-capped (bounds a single source's brute
+    // force). The account-wide counter is incremented purely to drive the
+    // progressive delay above — it never hard-denies, so a correct password from
+    // a legitimate user is never locked out.
     const fUser = rateLimit(failUserKey, 10, 15 * 60_000);
-    const fAcct = rateLimit(failAcctKey, ACCT_LOCK_MAX, 15 * 60_000);
+    rateLimit(failAcctKey, 100_000, 15 * 60_000);
     void logEvent({
       category: "auth", action: "auth.login.fail",
       actor: email, status: "warn",
       message: "bad password or unknown email",
     });
-    if (!fUser.ok || !fAcct.ok) {
-      const retry = Math.max(fUser.retryAfterMs || 0, fAcct.retryAfterMs || 0);
-      return NextResponse.json({ error: "Too many failed sign-in attempts. Try again in a few minutes." }, { status: 429, headers: { "Retry-After": String(Math.ceil(retry / 1000) || 60) } });
+    if (!fUser.ok) {
+      return NextResponse.json({ error: "Too many failed sign-in attempts from this device. Try again in a few minutes." }, { status: 429, headers: { "Retry-After": String(Math.ceil((fUser.retryAfterMs || 0) / 1000) || 60) } });
     }
     return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
   }

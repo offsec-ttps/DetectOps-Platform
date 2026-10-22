@@ -45,12 +45,25 @@ async function promoteAssessment(a: any): Promise<any> {
   a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { status: "running", startedAt: a.startedAt ?? new Date() } });
   // Pre-simulation snapshot: a rollback point taken BEFORE the first atomic
   // detonates, so the analyst can restore the lab and knows the run is what
-  // changed it. Once only (guarded by empty snapshotName); never blocks the sweep.
+  // changed it. Once only (guarded by empty snapshotName).
+  let includeDestructive = false;
+  try { includeDestructive = JSON.parse(a.scope || "{}")?.includeDestructive === true; } catch { /* */ }
   if (a.snapshotRequested && !a.snapshotName) {
-    try {
-      const snap = await snapshotActiveLab(a.id.slice(0, 8));
-      if (snap.name) a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { snapshotName: snap.name } });
-    } catch { /* best-effort */ }
+    let snapName = "";
+    try { snapName = (await snapshotActiveLab(a.id.slice(0, 8))).name || ""; } catch { snapName = ""; }
+    if (snapName) {
+      a = await prisma.coverageAssessment.update({ where: { id: a.id }, data: { snapshotName: snapName } });
+    } else if (includeDestructive) {
+      // FAIL CLOSED: a destructive sweep (impact/credential/destructive atomics)
+      // must never detonate without a rollback point. If the snapshot could not
+      // be taken, abort the assessment instead of running unprotected.
+      a = await prisma.coverageAssessment.update({
+        where: { id: a.id },
+        data: { status: "failed", error: "destructive run aborted: pre-simulation snapshot could not be taken (no running local lab to roll back)", completedAt: new Date() },
+      });
+      return a;
+    }
+    // Non-destructive runs proceed even without a snapshot (best-effort rollback).
   }
   return a;
 }

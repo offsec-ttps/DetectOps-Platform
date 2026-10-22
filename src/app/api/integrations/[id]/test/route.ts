@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-guard";
 import https from "https";
 import http from "http";
 import { assertSafeOutboundUrl, safeLookup, labOutboundPolicy, type OutboundPolicy } from "@/lib/net/ssrf";
@@ -21,6 +22,10 @@ const TEST_CONFIGS: Record<string, { testPath: string; authStyle: string }> = {
 };
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Admin-only, like the sibling integration write routes: this fetches a
+  // stored integration's URL using its stored credentials.
+  const auth = await requireRole("admin");
+  if (!auth.ok) return auth.response;
   const { id } = await params;
   const item = await prisma.integration.findUnique({ where: { id } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });

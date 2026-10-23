@@ -67,6 +67,13 @@ export function getHecStatus() {
   };
 }
 
+/** A Git-LFS pointer stub (clone without blobs) looks like a tiny text file that
+ * begins with the LFS spec header — never real log data. */
+export function isLfsPointer(buf: Buffer): boolean {
+  if (buf.length > 1024) return false;
+  return buf.subarray(0, 45).toString("latin1").startsWith("version https://git-lfs.github.com/spec/v1");
+}
+
 /** Validate that the file path is under the configured attack_data root. */
 export function isPathSafe(dataFilePath: string): boolean {
   if (!dataFilePath) return false;
@@ -122,6 +129,17 @@ export async function replayToHec(input: ReplayInput): Promise<ReplayResult> {
     body = fs.readFileSync(input.dataFilePath);
   } catch (err: any) {
     return { success: false, bytesSent: 0, durationMs: 0, hecChannel, splunkUrl: "", error: `Read failed: ${err.message}` };
+  }
+
+  // Guard: attack_data log files are stored in Git-LFS. If the repo was cloned
+  // without pulling blobs, the "file" is a ~130-byte LFS pointer, not real logs —
+  // HEC would accept it (200) but index garbage. Refuse with a fix-it hint.
+  if (isLfsPointer(body)) {
+    return {
+      success: false, bytesSent: 0, durationMs: 0, hecChannel, splunkUrl: "",
+      error: "dataset not downloaded — the file is a Git-LFS pointer, not the log data",
+      hint: `Fetch this dataset first: (cd "${resolveRepoRoot(ATTACK_DATA_ROOT).root || ATTACK_DATA_ROOT}" && git lfs pull --include="<relative/path.log>")`,
+    };
   }
 
   const params = new URLSearchParams({

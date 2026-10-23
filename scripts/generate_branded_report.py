@@ -188,6 +188,9 @@ CSS = """
 }
 *{box-sizing:border-box}
 @page{ size:A4; margin:14mm; }
+/* Zero-margin page for the full-bleed cover / back cover so the branding fills
+   the sheet edge-to-edge (content pages keep the 14mm margin above). */
+@page fullbleed{ size:A4; margin:0; }
 html,body{margin:0;padding:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1a2233;font-size:10.2pt;line-height:1.5;}
 a{color:var(--accent);text-decoration:none}
 h1,h2,h3{margin:0}
@@ -198,8 +201,10 @@ h1,h2,h3{margin:0}
 .pghead .meta{font-size:8pt;color:var(--muted)}
 .pgfoot{display:flex;justify-content:space-between;color:var(--muted);font-size:8pt;border-top:1px solid var(--line);margin-top:16px;padding-top:6px}
 .mark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:inline-block}
-/* full-bleed dark pages (cover / back) — negative margins to beat @page margins */
-.sheet-dark{position:relative;background:var(--ink);color:#fff;margin:-14mm;height:297mm;padding:20mm 18mm;page-break-after:always;overflow:hidden}
+/* full-bleed dark pages (cover / back): rendered on the zero-margin `fullbleed`
+   page so they reach the true paper edge — no negative-margin hack, which the
+   Chrome PDF engine did not reliably bleed (left a white border on all sides). */
+.sheet-dark{page:fullbleed;position:relative;background:var(--ink);color:#fff;margin:0;width:210mm;height:297mm;padding:20mm 18mm;page-break-after:always;overflow:hidden}
 .sheet-dark::before{content:"";position:absolute;inset:0;background:
   radial-gradient(900px 500px at 78% 8%, rgba(79,125,255,.22), transparent 60%),
   radial-gradient(700px 500px at 10% 90%, rgba(34,211,238,.14), transparent 60%);}

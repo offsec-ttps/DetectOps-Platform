@@ -52,6 +52,7 @@ export interface ReplayDatasetRow {
   replay_now_available: boolean;
   data_file_exists: boolean;
   data_file_size_bytes: number;
+  needs_download: boolean;       // present on disk only as a Git-LFS pointer — must be pulled before replay
   category: string | null;     // top-level subfolder under datasets/
   author: string | null;
   date: string | null;
@@ -266,11 +267,24 @@ function parseYamlFile(
 
     let exists = false;
     let size = 0;
+    let isPointer = false;
     if (dataFilePath) {
       try {
         const st = fs.statSync(dataFilePath);
-        exists = true;
         size = st.size;
+        // A small file may be a Git-LFS pointer (clone without blobs) rather than
+        // real logs — read the head and check, so the catalog doesn't advertise a
+        // not-yet-downloaded dataset as replayable (HEC would ingest the pointer).
+        if (st.size > 0 && st.size <= 1024) {
+          try {
+            const fd = fs.openSync(dataFilePath, "r");
+            const head = Buffer.alloc(45);
+            fs.readSync(fd, head, 0, 45, 0);
+            fs.closeSync(fd);
+            isPointer = head.toString("latin1").startsWith("version https://git-lfs.github.com/spec/v1");
+          } catch { /* ignore */ }
+        }
+        exists = !isPointer;   // a pointer stub is NOT a usable data file
       } catch { /* missing */ }
     }
 
@@ -296,7 +310,8 @@ function parseYamlFile(
       build_replay_available: REPLAY_BUILD_ENABLED && exists,
       replay_now_available: exists,
       data_file_exists: exists,
-      data_file_size_bytes: size,
+      data_file_size_bytes: isPointer ? 0 : size,
+      needs_download: isPointer,
       category,
       author: parsed!.author || null,
       date: dateStr,

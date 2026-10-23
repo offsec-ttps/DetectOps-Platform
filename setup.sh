@@ -148,7 +148,7 @@ bootstrap_app(){
   if [ "${ENABLE_ENV:-0}" = 1 ]; then
     if [ -f .env ]; then ok ".env present"
     elif [ "$CHECK_ONLY" = "1" ]; then warn ".env would be created from .env.example"
-    elif [ -f .env.example ]; then cp .env.example .env; ok ".env created from .env.example — EDIT IT (set CREDENTIAL_VAULT_KEY, ADMIN_EMAILS)"
+    elif [ -f .env.example ]; then (umask 077; cp .env.example .env); chmod 600 .env 2>/dev/null || true; ok ".env created from .env.example (perms 600) — EDIT IT (set CREDENTIAL_VAULT_KEY, ADMIN_EMAILS)"
     else warn ".env.example missing — cannot seed .env"; fi
     # Seed a persistent vault key if still a placeholder (so creds survive restarts).
     if [ -f .env ] && [ "$CHECK_ONLY" = "0" ] && grep -q '^CREDENTIAL_VAULT_KEY="change-me' .env 2>/dev/null && have openssl; then

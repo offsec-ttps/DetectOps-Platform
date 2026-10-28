@@ -112,3 +112,11 @@ __pycache__/
 *.bak
 *.swp
 Thumbs.db
+
+# Local audio/media artefacts (not platform content)
+clone_personal_clear.wav
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac

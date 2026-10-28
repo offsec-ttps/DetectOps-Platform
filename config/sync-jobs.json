@@ -1,0 +1,126 @@
+{
+  "$comment": "Scheduled content-sync configuration. The platform's sync scheduler reads this file and automatically runs each ENABLED job on its schedule. Set `enabled` (the master switch) and each job's `enabled` to true to turn syncing on. Schedule a job with EITHER `cron` (5-field: min hour day-of-month month day-of-week; supports * , ranges a-b, steps */n and lists) OR `intervalMinutes` (run every N minutes). Edits are picked up on the next tick (no restart). State (last run / status) is tracked in config/.sync-state.json.",
+  "enabled": false,
+  "timezone": "local",
+  "defaults": {
+    "timeoutSec": 900
+  },
+  "jobs": [
+    {
+      "id": "atomic-red-team",
+      "label": "Atomic Red Team tests",
+      "endpoint": "/api/atomic-tests/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 3 * * *",
+      "intervalMinutes": null,
+      "note": "Pull the latest Atomic Red Team test catalogue (daily 03:00)."
+    },
+    {
+      "id": "community-rules-all",
+      "label": "Community detection rules \u2014 refresh all sources",
+      "endpoint": "/api/community/refresh-all",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 4 * * *",
+      "intervalMinutes": null,
+      "note": "Refreshes every community source at once (SigmaHQ, Elastic, Splunk ESCU, MITRE CAR). Prefer this over the per-source jobs below."
+    },
+    {
+      "id": "sigmahq",
+      "label": "SigmaHQ rules sync",
+      "endpoint": "/api/community/sigmahq/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 4 * * 1",
+      "intervalMinutes": null,
+      "note": "Per-source alternative to community-rules-all (weekly Mon)."
+    },
+    {
+      "id": "elastic",
+      "label": "Elastic rules sync",
+      "endpoint": "/api/community/elastic/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 4 * * 2",
+      "intervalMinutes": null
+    },
+    {
+      "id": "splunk-escu",
+      "label": "Splunk ESCU rules sync",
+      "endpoint": "/api/community/splunk/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 4 * * 3",
+      "intervalMinutes": null
+    },
+    {
+      "id": "mitre-car",
+      "label": "MITRE CAR analytics sync",
+      "endpoint": "/api/community/mitre-car/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 4 * * 4",
+      "intervalMinutes": null
+    },
+    {
+      "id": "splunk-detections",
+      "label": "Splunk Security Content detections",
+      "endpoint": "/api/splunk-detections/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 5 * * 1",
+      "intervalMinutes": null
+    },
+    {
+      "id": "stratus-attacks",
+      "label": "Stratus Red Team attack techniques",
+      "endpoint": "/api/stratus-attacks/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 5 * * 2",
+      "intervalMinutes": null
+    },
+    {
+      "id": "purplesharp-templates",
+      "label": "PurpleSharp templates",
+      "endpoint": "/api/purplesharp-templates/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": "0 5 * * 3",
+      "intervalMinutes": null
+    },
+    {
+      "id": "threat-intel",
+      "label": "Threat intelligence feeds",
+      "endpoint": "/api/threat-intel/sync",
+      "method": "POST",
+      "enabled": false,
+      "cron": null,
+      "intervalMinutes": 360,
+      "note": "Aggregates configured TI vendor feeds (every 6 hours)."
+    },
+    {
+      "id": "ransomware-intel",
+      "label": "Ransomware intelligence (gangs / victims / leak sites)",
+      "endpoint": "/api/ransomware-intel/collect",
+      "method": "POST",
+      "enabled": false,
+      "cron": null,
+      "intervalMinutes": 720,
+      "body": {},
+      "note": "Runs the ransomware-intel collectors (every 12 hours)."
+    },
+    {
+      "id": "ti-watcher",
+      "label": "Threat-Intelligence \u2192 Simulation-Library watcher",
+      "endpoint": "/api/ti-watcher/scan",
+      "method": "POST",
+      "enabled": false,
+      "cron": "30 4 * * *",
+      "intervalMinutes": null,
+      "body": {},
+      "note": "Routes new TI techniques into the attack-sim libraries (review-gated). Daily 04:30."
+    }
+  ]
+}

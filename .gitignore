@@ -95,3 +95,20 @@ reports/unicornsecrets-*
 reports/coverage-assessments/
 # Working source documents (not platform content)
 /*.docx
+
+# Scheduled-sync runtime state (last run/status)
+config/.sync-state.json
+
+# Dev-artefact reports (one-off outputs, not platform content)
+reports/atomic-dependency-inventory.*
+reports/atomic-prereq-staging.*
+reports/detection-improvement-recommendations.md
+
+# Extra safety for public release — never commit these
+*.pyc
+*.pyo
+__pycache__/
+*.tmp
+*.bak
+*.swp
+Thumbs.db

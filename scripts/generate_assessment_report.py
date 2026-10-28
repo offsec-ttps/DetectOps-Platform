@@ -239,6 +239,84 @@ def siem_label(siem):
     return "Splunk (SPL)"
 
 
+# ── References ───────────────────────────────────────────────────────────────
+def mitre_url(tech):
+    """Canonical MITRE ATT&CK technique page (handles sub-techniques Txxxx.yyy)."""
+    t = re.sub(r"[^T0-9.]", "", str(tech or ""))
+    if not re.match(r"^T\d{4}", t): return "https://attack.mitre.org/techniques/"
+    return "https://attack.mitre.org/techniques/" + t.replace(".", "/")
+
+
+# Telemetry-source documentation, keyed to the Windows log the recommendation relies on.
+TELEMETRY_REFS = {
+    "sysmon_proc": ("Sysmon EID 1 — Process creation (command line)", "https://learn.microsoft.com/sysinternals/downloads/sysmon#event-id-1-process-creation"),
+    "sysmon_reg":  ("Sysmon EID 12/13 — Registry add/set", "https://learn.microsoft.com/sysinternals/downloads/sysmon#event-id-12-registryevent-object-createdelete"),
+    "sysmon_file": ("Sysmon EID 11 — File create", "https://learn.microsoft.com/sysinternals/downloads/sysmon#event-id-11-filecreate"),
+    "ps_sbl":      ("PowerShell Script Block Logging — EID 4104", "https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_logging_windows"),
+    "sec_4688":    ("Security EID 4688 — Process creation + command line auditing", "https://learn.microsoft.com/windows-server/identity/ad-ds/manage/component-updates/command-line-process-auditing"),
+    "svc_7045":    ("Security/System EID 7045 — Service installed", "https://learn.microsoft.com/windows/security/threat-protection/auditing/event-7045"),
+    "schtask":     ("Security EID 4698 — Scheduled task created", "https://learn.microsoft.com/windows/security/threat-protection/auditing/event-4698"),
+}
+
+def telemetry_ref(r):
+    """Pick the telemetry doc that matches the recommended detection for this row."""
+    inds = [i for i in (r.get("indicators") or []) if i]
+    low = (" ".join(inds) + " " + (r.get("name", "") or "") + " " + " ".join(str(c) for c in (r.get("event_codes") or []))).lower()
+    tech = (r.get("tech", "") or "")
+    if any(k in low for k in ["12", "13", "hkcu", "hklm", "registry", "software\\", "mppreference", "uacdisable"]): return TELEMETRY_REFS["sysmon_reg"]
+    if any(k in low for k in ["4104", "powershell", "invoke-", ".ps1", "scriptblock"]): return TELEMETRY_REFS["ps_sbl"]
+    if "7045" in low or "service" in low or tech.startswith("T1543"): return TELEMETRY_REFS["svc_7045"]
+    if "4698" in low or "schtask" in low or tech.startswith("T1053"): return TELEMETRY_REFS["schtask"]
+    if "11" in low or ".dll" in low or "filecreate" in low: return TELEMETRY_REFS["sysmon_file"]
+    return TELEMETRY_REFS["sec_4688"]
+
+
+def finding_block(r, cmds, siem, libmap):
+    """A complete, SOC-implementable finding for ONE simulation: what ran (command),
+    what was detected, what was missed, how to remediate, and references."""
+    tech = r.get("tech", ""); num = r.get("num", "")
+    key = (tech, int(num) if str(num).isdigit() else 1)
+    cmd, ex = cmds.get(key, ("", ""))
+    lib = r.get("library") or ", ".join(list(libmap.get(tech, ()))[:1]) or "—"
+    tactic = (r.get("tactic") or "").replace("-", " ").title()
+    status = r.get("status", ""); b = r.get("vis_bucket", "")
+    inds = [i for i in (r.get("indicators") or []) if i]
+    mref = mitre_url(tech); tref = telemetry_ref(r)
+    L = [f"#### {esc(tech)} #{esc(num)} — {esc(r.get('name',''))}\n"]
+    L.append(f"- **Tactic / Library:** {esc(tactic) or '—'} · {esc(lib)}   **Executor:** {esc(ex or '—')}")
+    # What was SIMULATED
+    if cmd:
+        L.append("- **Simulated — command executed:**")
+        L.append(""); L.append(code_block(cmd.strip()[:800])); L.append("")
+    else:
+        L.append("- **Simulated:** (command not in local catalogue)")
+    # Outcome: detected / missed / not simulated
+    if status == "n/a":
+        L.append("- **Result:** ⚠️ **Not simulated** — the test is not present in the host's Atomic Red Team install.")
+        L.append(f"- **Remediation:** update the atomics folder on the lab host (`Install-AtomicRedTeam -getAtomics -Force`) and re-run; or treat as catalogue-only.")
+    elif not r.get("executed"):
+        tail = re.sub(r"\s+", " ", str(r.get("tail", "")))[:160]
+        L.append(f"- **Result:** ❌ **Not simulated** — the atomic did not execute. Detail: {code_inline(tail or 'no output within the per-atomic timeout')}")
+        L.append("- **Remediation:** re-run with a longer per-atomic timeout; satisfy prerequisites (`-GetPrereqs`); some atomics need elevation / a domain / interactive session.")
+    elif b == "visible":
+        L.append(f"- **Detected:** ✅ distinctive indicator reached the SIEM — {code_inline(', '.join(inds[:3]) or 'indicator')}  ·  observed on **{evids(r)}**")
+        L.append("- **Missed:** nothing — this activity is detectable with a rule keyed to the indicator above.")
+        L.append(f"- **Maintain the detection ({esc(siem_label(siem))}):** {siem_reco(r, siem)}")
+        L.append("- **Deployable Sigma:**"); L.append(""); L.append(code_block(sigma_rule(r))); L.append("")
+    else:  # generic-only or absent
+        if b == "generic-only":
+            L.append(f"- **Detected:** ➖ only **generic process telemetry** (e.g. `powershell.exe`/`cmd.exe`) — not the distinctive indicator {code_inline(', '.join(inds[:3]) or '(none extracted)')}.")
+            L.append("- **Missed:** the specific artefact that identifies THIS technique never reached the SIEM, so a precise rule cannot fire (a broad rule would be noisy).")
+        else:
+            L.append("- **Detected:** ❌ **blind spot** — the atomic ran but produced no matching telemetry in the SIEM.")
+            L.append("- **Missed:** no attributable event for this activity at all.")
+        L.append(f"- **Remediation — enable telemetry:** {tref[0]} (and forward it to the SIEM).")
+        L.append(f"- **Remediation — detection ({esc(siem_label(siem))}):** {siem_reco(r, siem)}")
+        L.append("- **Deployable Sigma (fires once the telemetry is flowing):**"); L.append(""); L.append(code_block(sigma_rule(r))); L.append("")
+    L.append(f"- **References:** [MITRE ATT&CK {esc(tech)}]({mref}) · [{esc(tref[0])}]({tref[1]})\n")
+    return "\n".join(L)
+
+
 def cover(brand, client, assessor, lab, siem, title, today):
     brand, client, assessor, lab = esc(brand), esc(client), esc(assessor), esc(lab)
     L = [f"# {brand} — {title}", ""]
@@ -350,6 +428,7 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
               "Coverage by simulation library", "Execution detail (what ran)",
               "What was detected", "What was missed — blind spots & how to detect them",
               "Scope → outcome map (simulated vs. detected)",
+              "Per-simulation findings (detailed)",
               "Recommendations", "Scope and limitations"])
     L.append("## Methodology\n")
     L.append(f"Each atomic was detonated on **{args.lab}** over the configured transport, then re-queried "
@@ -443,6 +522,25 @@ def technical_report(rows, runnable, executed, buckets, na, args, today, cmds, l
         ran = "✅" if r.get("executed") else "❌"
         L.append(f"| {esc(r['tech'])} #{esc(r.get('num',''))} | {esc(r.get('name','')[:40])} | {esc(lib)} | "
                  f"{cmd_disp} | {ran} | {outcome(r)} | {evids(r)} |")
+    L.append("")
+
+    # Per-simulation findings — a complete, SOC-implementable entry for EVERY
+    # atomic in scope (simulated command, what detected, what missed, remediation,
+    # references), grouped by library then technique so an engineer can act on each.
+    L.append("## Per-simulation findings (detailed)\n")
+    L.append("One entry per simulation: the exact command executed, what telemetry was detected, what was "
+             "missed, the remediation (telemetry to enable + a deployable query/Sigma rule), and references — "
+             "so a SOC engineer can reproduce and close each gap directly in their infrastructure.\n")
+    def _libkey(r):
+        return r.get("library") or (", ".join(list(libmap.get(r["tech"], ()))[:1]) or "General")
+    groups = collections.defaultdict(list)
+    for r in rows:
+        groups[_libkey(r)].append(r)
+    for lib in sorted(groups):
+        grp = sorted(groups[lib], key=lambda r: (r.get("tech", ""), int(r.get("num", 1)) if str(r.get("num", "")).isdigit() else 0))
+        L.append(f"### {esc(lib)}  ({len(grp)} simulations)\n")
+        for r in grp:
+            L.append(finding_block(r, cmds, args.siem, libmap))
     L.append("")
 
     L.append("## Recommendations\n")

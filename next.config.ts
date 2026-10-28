@@ -24,9 +24,14 @@ const nextConfig: NextConfig = {
   // Allow the dashboard to be opened in dev from other hosts on the lab LAN
   // (e.g. a browser on another machine hitting the dev server by its LAN IP),
   // not just localhost. Dev-only; has no effect on a production build.
-  allowedDevOrigins: ["192.168.1.7"],
+  // Extra hosts allowed to reach the dev server cross-origin (HMR), beyond
+  // localhost — e.g. a LAN IP or the server's public IP. Set ALLOWED_DEV_ORIGINS
+  // (comma-separated) for your deployment. Dev-only; no effect on a prod build.
+  allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS
+    ? process.env.ALLOWED_DEV_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
+    : [],
   turbopack: {
-    root: "/media/nested/SamsungEvo/Test-Projects/detection-platform",
+    root: process.env.TURBOPACK_ROOT || process.cwd(),
   },
   async rewrites() {
     const backendUrl = process.env.SENTINELFLOW_API_URL || "http://localhost:8000";

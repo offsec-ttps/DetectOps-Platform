@@ -44,6 +44,9 @@ ENABLE_ENV=1             # create .env from .env.example if missing
 ENABLE_NPM_INSTALL=1     # npm install
 ENABLE_PRISMA=1          # prisma generate + db push
 ENABLE_SIGMA_VENV=1      # backend/.venv with sigma-cli (Rule Workspace conversion)
+ENABLE_CLOUD_LAB_APP=1   # cloud-lab-app .venv + app/node_modules (Cloud Controller), if present
+# ── Optional host changes (OFF by default — review before enabling) ──
+ENABLE_UFW_PORTS=0       # open UFW ports 3000/4321/8000 (exposes the app on the network)
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 
 CHECK_ONLY=0; ASSUME_YES=0
@@ -96,15 +99,52 @@ ins_node(){ [ "${ENABLE_NODE:-0}" = 1 ] || return 0
   if have node && [ "$(node -v | sed -E 's/^v([0-9]+).*/\1/')" -ge 22 ]; then ok "Node.js $(node -v) present"; return 0; fi
   step "Installing Node.js 22"
   if [ "$PM" = "apt" ] && [ "$CHECK_ONLY" = "0" ]; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - >/dev/null 2>&1 || warn "NodeSource setup failed; falling back to distro node"
-    pm_install "Node.js" "nodejs" && ok "Node.js $(node -v 2>/dev/null) installed" || err "Node install failed"
+    # Ubuntu/Debian ship Node 18/20 — too old for Next.js 16. Register the
+    # NodeSource 22.x repo FIRST so `apt-get install nodejs` pulls v22 instead of
+    # the distro package. If this step fails, the distro fallback is unusable.
+    if ! curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - >/tmp/nodesource-setup.log 2>&1; then
+      warn "NodeSource 22.x setup failed (see /tmp/nodesource-setup.log)"
+    fi
+    pm_install "Node.js" "nodejs" || err "Node install failed"
   else pm_install "Node.js 22" "nodejs npm" "nodejs npm" "nodejs npm" "node@22"; fi
+  # Verify we actually got >=22 — the distro package (v18/20) would otherwise be
+  # reported as "installed" and only fail much later at runtime.
+  if [ "$CHECK_ONLY" = "0" ]; then
+    if have node && [ "$(node -v | sed -E 's/^v([0-9]+).*/\1/')" -ge 22 ]; then
+      ok "Node.js $(node -v) installed"
+    else
+      err "Node.js is $(node -v 2>/dev/null || echo absent) but v22+ is required (Next.js 16)."
+      err "NodeSource 22.x did not take — install manually: https://github.com/nodesource/distributions"
+    fi
+  fi
 }
 ins_simple(){ # ins_simple FLAG bin "display" "apt" [dnf] [pac] [brew]
   local flag="$1" bin="$2" disp="$3" apt="$4"
   [ "${!flag:-0}" = 1 ] || return 0
   if have "$bin"; then ok "$disp present"; return 0; fi
   step "Installing $disp"; pm_install "$disp" "$apt" "${5:-$apt}" "${6:-$apt}" "${7:-$apt}" && ok "$disp installed" || warn "$disp install failed"
+}
+# python3 needs its venv + pip MODULES, not just the interpreter. On Ubuntu
+# `have python3` is true out of the box while python3-venv/python3-pip are absent,
+# so a bare presence check silently skips them and later steps die with
+# "No module named pip" / "venv". Check the modules and install if missing.
+ins_python(){ [ "${ENABLE_PYTHON:-0}" = 1 ] || return 0
+  if ! have python3; then
+    step "Installing python3"
+    pm_install "python3" "python3 python3-venv python3-pip" "python3 python3-pip" "python python-pip" "python@3.12" || warn "python3 install failed"
+  fi
+  have python3 || { warn "python3 unavailable — skipping venv/pip check"; return 0; }
+  local need_venv=0 need_pip=0
+  python3 -c "import venv" >/dev/null 2>&1 || need_venv=1
+  python3 -m pip --version >/dev/null 2>&1 || need_pip=1
+  if [ "$need_venv" = 1 ] || [ "$need_pip" = 1 ]; then
+    if [ "$CHECK_ONLY" = "1" ]; then warn "python3-venv / python3-pip would be installed"
+    elif [ "$PM" = "apt" ]; then step "Installing python3-venv + python3-pip"; pm_install "python3 venv/pip" "python3-venv python3-pip" || warn "python3-venv/pip install failed"
+    else warn "python3 present but venv/pip missing — install your distro's python3-venv / python3-pip"; fi
+  fi
+  if python3 -c "import venv" >/dev/null 2>&1 && python3 -m pip --version >/dev/null 2>&1; then
+    ok "python3 $(python3 -V 2>&1 | awk '{print $2}') (venv + pip ready)"
+  else warn "python3 present but venv/pip still unavailable"; fi
 }
 
 install_tools(){
@@ -113,7 +153,7 @@ install_tools(){
   ins_node
   ins_simple ENABLE_GIT        git         "git"          "git"
   ins_simple ENABLE_GIT_LFS    git-lfs     "git-lfs"      "git-lfs"
-  ins_simple ENABLE_PYTHON     python3     "python3"      "python3 python3-venv python3-pip" "python3 python3-pip" "python python-pip" "python@3.12"
+  ins_python
   ins_simple ENABLE_PANDOC     pandoc      "pandoc"       "pandoc"
   ins_simple ENABLE_LIBREOFFICE libreoffice "libreoffice" "libreoffice" "libreoffice" "libreoffice" "--cask libreoffice"
   ins_simple ENABLE_SQLITE     sqlite3     "sqlite3"      "sqlite3"
@@ -121,7 +161,18 @@ install_tools(){
   # Chrome/Chromium: prefer an existing chrome/chromium; else install chromium.
   if [ "${ENABLE_CHROME:-0}" = 1 ]; then
     if have google-chrome || have google-chrome-stable || have chromium || have chromium-browser; then ok "Chrome/Chromium present"
-    else step "Installing Chromium"; pm_install "Chromium" "chromium-browser" "chromium" "chromium" "--cask chromium" || pm_install "Chromium" "chromium" || warn "Chromium install failed"; fi
+    elif [ "$CHECK_ONLY" = "1" ]; then warn "Chrome/Chromium would be installed"
+    elif [ "$PM" = "apt" ]; then
+      # On Ubuntu `chromium`/`chromium-browser` are snap shim packages that fail on
+      # minimal servers where snapd is disabled. Install Google Chrome's native
+      # .deb (apt resolves its dependencies); fall back to chromium if that fails.
+      step "Installing Google Chrome (native .deb — avoids the snap shim)"
+      local tmpd deb; tmpd="$(mktemp -d)"; deb="$tmpd/google-chrome-stable_current_amd64.deb"
+      if curl -fsSL -o "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+         && $SUDO apt-get install -y "$deb" >/dev/null 2>&1; then ok "Google Chrome installed"
+      else warn "Google Chrome .deb failed — trying chromium"; pm_install "Chromium" "chromium" || warn "Chromium install failed"; fi
+      rm -rf "$tmpd"
+    else step "Installing Chromium"; pm_install "Chromium" "chromium" "chromium" "chromium" "--cask chromium" || warn "Chromium install failed"; fi
   fi
   # git-lfs needs a one-time init
   if [ "${ENABLE_GIT_LFS:-0}" = 1 ] && have git-lfs && [ "$CHECK_ONLY" = "0" ]; then git lfs install --skip-repo >/dev/null 2>&1 || true; fi
@@ -129,7 +180,16 @@ install_tools(){
   if [ "${ENABLE_PYWINRM:-0}" = 1 ]; then
     if python3 -c "import winrm" >/dev/null 2>&1; then ok "pywinrm present"
     elif [ "$CHECK_ONLY" = "1" ]; then warn "pywinrm would be installed (pip --user pywinrm)"
-    else step "Installing pywinrm (pip --user)"; python3 -m pip install --user --quiet pywinrm >/dev/null 2>&1 && ok "pywinrm installed" || warn "pywinrm install failed (pip)"; fi
+    else
+      step "Installing pywinrm (pip --user)"
+      # Python 3.12 on Ubuntu 24.04 enforces PEP 668 and rejects a plain --user
+      # install into the externally-managed env. Retry with --break-system-packages
+      # (kept --user, so distro site-packages are untouched).
+      if python3 -m pip install --user --quiet pywinrm >/dev/null 2>&1 \
+         || python3 -m pip install --user --break-system-packages --quiet pywinrm >/dev/null 2>&1; then
+        ok "pywinrm installed"
+      else warn "pywinrm install failed — try: python3 -m pip install --user --break-system-packages pywinrm"; fi
+    fi
   fi
   # Optional lab/cloud engines
   ins_simple ENABLE_DOCKER     docker      "Docker"       "docker.io" "docker" "docker" "--cask docker"
@@ -168,6 +228,39 @@ bootstrap_app(){
     elif have python3 && [ -f backend/requirements.txt ]; then step "Installing Sigma CLI (backend/.venv)"; python3 -m venv backend/.venv >/dev/null 2>&1 && backend/.venv/bin/pip install --quiet -r backend/requirements.txt >/dev/null 2>&1 && ok "Sigma CLI installed" || warn "Sigma CLI venv install failed"
     fi
   fi
+  # Cloud Controller (cloud-lab-app) — its own Python venv + Astro/Node deps. Only
+  # bootstrapped when the directory is present; start-server.sh otherwise warns
+  # that cloud-lab-app/.venv and app/node_modules are missing.
+  if [ "${ENABLE_CLOUD_LAB_APP:-0}" = 1 ] && [ "$CHECK_ONLY" = "0" ] && [ -d cloud-lab-app ]; then
+    if [ -x cloud-lab-app/.venv/bin/python ]; then ok "cloud-lab-app/.venv present"
+    elif [ -f cloud-lab-app/requirements.txt ] && have python3; then
+      step "Cloud Lab app: creating .venv + installing requirements"
+      python3 -m venv cloud-lab-app/.venv >/dev/null 2>&1 \
+        && cloud-lab-app/.venv/bin/pip install --quiet --upgrade pip >/dev/null 2>&1 \
+        && cloud-lab-app/.venv/bin/pip install --quiet -r cloud-lab-app/requirements.txt >/dev/null 2>&1 \
+        && ok "cloud-lab-app/.venv ready" || warn "cloud-lab-app/.venv setup failed"
+    fi
+    if [ -d cloud-lab-app/app/node_modules ]; then ok "cloud-lab-app/app node_modules present"
+    elif [ -f cloud-lab-app/app/package.json ]; then
+      step "Cloud Lab app: npm install (app/)"
+      ( cd cloud-lab-app/app && npm install --no-audit --no-fund >/dev/null 2>&1 ) && ok "cloud-lab-app/app deps installed" || warn "cloud-lab-app/app npm install failed"
+    fi
+  fi
+}
+
+# ── Optional: open the app's ports in UFW (OFF by default) ──
+# Only runs when ENABLE_UFW_PORTS=1. This EXPOSES the app on the network — enable
+# it deliberately, and prefer a reverse proxy / VPN for anything internet-facing.
+open_firewall(){
+  [ "${ENABLE_UFW_PORTS:-0}" = 1 ] || return 0
+  header "Firewall (UFW)"
+  if [ "$CHECK_ONLY" = "1" ]; then warn "Would open UFW ports 3000/4321/8000 (ENABLE_UFW_PORTS=1)"; return 0; fi
+  have ufw || { warn "ufw not installed — skipping firewall rules"; return 0; }
+  step "Opening app ports (3000 Web UI · 4321 Cloud UI · 8000 Docs)"
+  $SUDO ufw allow 3000/tcp comment "DetectOps Web UI"   >/dev/null 2>&1 || true
+  $SUDO ufw allow 4321/tcp comment "DetectOps Cloud UI" >/dev/null 2>&1 || true
+  $SUDO ufw allow 8000/tcp comment "DetectOps Docs"     >/dev/null 2>&1 || true
+  ok "UFW rules added — these expose the app on the network (remove: ufw delete allow <port>/tcp)"
 }
 
 # ── Final requirements check (shared gate used by start-server.sh too) ──
@@ -192,6 +285,7 @@ printf "${C_D}project:${C_0} %s\n" "$PROJECT_ROOT"
 [ "$CHECK_ONLY" = "1" ] && printf "${C_D}mode:${C_0} check-only (no installs)\n"
 [ "$CHECK_ONLY" = "0" ] && install_tools
 [ "$CHECK_ONLY" = "0" ] && bootstrap_app
+open_firewall
 check_requirements
 if [ "$REQUIREMENTS_OK" = "1" ]; then
   printf "\n${C_G}${C_W}✓ Requirements met.${C_0} Start the server with: ${C_W}./start-server.sh${C_0}\n"

@@ -30,7 +30,9 @@ cd "$PROJECT_ROOT"
 # ── Config ──
 VENV="$PROJECT_ROOT/.venv-docs"
 REQ="$PROJECT_ROOT/docs/requirements.txt"
-HOST="127.0.0.1"
+# Bind 127.0.0.1 by default (not reachable off-box). Set DOCS_HOST=0.0.0.0 (or use
+# --host 0.0.0.0) to expose the docs on the LAN / server IP.
+HOST="${DOCS_HOST:-127.0.0.1}"
 PORT="${DOCS_PORT:-8000}"
 PID_FILE="$PROJECT_ROOT/.mkdocs-serve.pid"
 LOG_FILE="$PROJECT_ROOT/.mkdocs-serve.log"
@@ -134,7 +136,7 @@ ensure_env() {
   if "$VENV/bin/pip" install --quiet --upgrade -r "$REQ" > "$TMPDIR/pip.log" 2>&1; then
     after="$("$VENV/bin/pip" freeze 2>/dev/null | grep -iE '^(mkdocs|mkdocs-material|pymdown-extensions)==' || true)"
     if [ "$before" = "$after" ]; then ok "Docs toolchain already up to date"; else
-      ok "Docs toolchain updated:"; diff <(printf "%s\n" "$before") <(printf "%s\n" "$after") | grep '^>' | sed 's/^> /    now /'
+      ok "Docs toolchain updated:"; (diff <(printf "%s\n" "$before") <(printf "%s\n" "$after") || true) | grep '^>' | sed 's/^> /    now /' || true
     fi
   else
     warn "pip install had issues — tail of $TMPDIR/pip.log:"; tail -8 "$TMPDIR/pip.log" | sed 's/^/    /' >&2

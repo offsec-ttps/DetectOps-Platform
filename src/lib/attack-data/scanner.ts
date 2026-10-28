@@ -14,6 +14,7 @@
 
 import * as path from "path";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import * as yaml from "js-yaml";
 
 // ── Config ──
@@ -176,11 +177,16 @@ function resolveDatasetPath(repoRoot: string, datasetPath: string): string {
 }
 
 /** Stable row ID derived from metadata file + dataset name. */
-function makeRowId(metadataPath: string, datasetName: string, idx: number): string {
-  // shortened, deterministic
+function makeRowId(metadataPath: string, repoRoot: string, datasetName: string, idx: number): string {
+  // Shortened but GLOBALLY unique & deterministic. The attack_data repo has many
+  // identically-named metadata files (e.g. remcom.yml) under different technique
+  // directories, so the basename alone collides. Fold a short hash of the full
+  // repo-relative path into the id to disambiguate while keeping it readable.
   const base = path.basename(metadataPath, path.extname(metadataPath));
   const safeName = (datasetName || `ds${idx}`).replace(/[^a-zA-Z0-9_-]/g, "_");
-  return `${base}__${safeName}__${idx}`;
+  const rel = path.relative(repoRoot, metadataPath) || metadataPath;
+  const pathHash = crypto.createHash("sha1").update(rel).digest("hex").slice(0, 8);
+  return `${base}__${safeName}__${idx}__${pathHash}`;
 }
 
 // ── Parse a single YAML ──
@@ -292,7 +298,7 @@ function parseYamlFile(
     const logType = inferLogType(sourcetype);
 
     rows.push({
-      row_id: makeRowId(filePath, dsName, idx),
+      row_id: makeRowId(filePath, repoRoot, dsName, idx),
       dataset_id: parsed!.id || path.basename(filePath, path.extname(filePath)),
       dataset_name: dsName,
       title: dsName,
